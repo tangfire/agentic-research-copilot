@@ -1,6 +1,6 @@
 # Agentic Research Copilot
 
-Clean-room multi-agent research assistant inspired by `open_deep_research` and `PraisonAI`.
+Multi-agent research assistant built from MIT-licensed open-source references and original glue code.
 
 It turns a user question into a citation-backed report by combining:
 
@@ -15,7 +15,7 @@ It turns a user question into a citation-backed report by combining:
 
 - It is a strong way to learn agent, RAG, memory, and tool calling.
 - It is easier to explain in interviews than a generic chat bot.
-- It can be packaged honestly as a clean-room implementation based on open source references.
+- It can be packaged honestly as a derivative/assembly project with clear attribution.
 
 ## MVP Scope
 
@@ -60,6 +60,12 @@ agentic-research-copilot/
 
 Use wording like:
 
-> Clean-room implementation of a multi-agent research copilot, inspired by open source research and agent frameworks.
+> Built a multi-agent research copilot by assembling and extending MIT-licensed open-source agent and research frameworks.
 
 Do not present upstream code as your original work.
+
+## Source Map
+
+- `open_deep_research`: research planning, multi-agent research, citation-backed reports
+- `praisonaiagents`: memory, handoff, RAG, tracing, workflow primitives
+- this repo: product shape, API, storage model, UI, run ledger, evaluation, deployment
