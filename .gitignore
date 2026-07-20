@@ -9,8 +9,11 @@ build/
 *.egg-info/
 .env
 .env.*
+!.env.example
+!.env.real.example
 node_modules/
 .DS_Store
 coverage.xml
 htmlcov/
-
+.arc/
+*.sqlite

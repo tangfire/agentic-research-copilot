@@ -1,5 +1,4 @@
-from .planner import PlannerAgent
-from .researcher import ResearchAgent
-from .verifier import VerifierAgent
-from .reporter import ReporterAgent
-
+from .planner import PlannerAgent as PlannerAgent
+from .researcher import ResearchAgent as ResearchAgent
+from .verifier import VerifierAgent as VerifierAgent
+from .reporter import ReporterAgent as ReporterAgent

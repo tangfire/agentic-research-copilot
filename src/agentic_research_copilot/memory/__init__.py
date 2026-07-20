@@ -1,2 +1,1 @@
-from .store import MemoryStore
-
+from .store import MemoryStore as MemoryStore

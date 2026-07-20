@@ -2,9 +2,118 @@ services:
   api:
     image: python:3.11-slim
     working_dir: /workspace
-    command: bash -lc "pip install -e . && uvicorn agentic_research_copilot.server:app --host 0.0.0.0 --port 8000 --reload"
+    command: bash -lc "pip install -e .[queue] && uvicorn agentic_research_copilot.server:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "8000:8000"
+    environment:
+      ARC_STORAGE_PATH: /workspace/.arc/agentic_research.db
+      ARC_ORCHESTRATION_RUNTIME: ${ARC_ORCHESTRATION_RUNTIME:-langgraph}
+      ARC_SEARCH_PROVIDER: ${ARC_SEARCH_PROVIDER:-none}
+      ARC_SEARCH_API_KEY: ${ARC_SEARCH_API_KEY:-}
+      ARC_SEARCH_BASE_URL: ${ARC_SEARCH_BASE_URL:-}
+      ARC_SEARCH_MODEL: ${ARC_SEARCH_MODEL:-}
+      ARC_SEARCH_DEPTH: ${ARC_SEARCH_DEPTH:-basic}
+      ARC_SEARCH_MAX_RESULTS: ${ARC_SEARCH_MAX_RESULTS:-5}
+      ARC_RESEARCH_MAX_WORKERS: ${ARC_RESEARCH_MAX_WORKERS:-4}
+      ARC_JOB_QUEUE_BACKEND: ${ARC_JOB_QUEUE_BACKEND:-in_process}
+      ARC_CELERY_BROKER_URL: redis://redis:6379/0
+      ARC_CELERY_RESULT_BACKEND: redis://redis:6379/1
+      ARC_MODEL_PROVIDER: ${ARC_MODEL_PROVIDER:-deterministic}
+      ARC_MODEL_BASE_URL: ${ARC_MODEL_BASE_URL:-}
+      ARC_MODEL_API_KEY: ${ARC_MODEL_API_KEY:-}
+      ARC_MODEL_CHAT_MODEL: ${ARC_MODEL_CHAT_MODEL:-gpt-4o-mini}
+      ARC_MODEL_EMBEDDING_MODEL: ${ARC_MODEL_EMBEDDING_MODEL:-text-embedding-3-small}
+      ARC_EMBEDDING_PROVIDER: ${ARC_EMBEDDING_PROVIDER:-model}
+      ARC_EMBEDDING_BASE_URL: ${ARC_EMBEDDING_BASE_URL:-}
+      ARC_EMBEDDING_API_KEY: ${ARC_EMBEDDING_API_KEY:-}
+      ARC_EMBEDDING_MODEL: ${ARC_EMBEDDING_MODEL:-qwen3.7-text-embedding}
+      ARC_EMBEDDING_DIMENSIONS: ${ARC_EMBEDDING_DIMENSIONS:-256}
+      ARC_QDRANT_URL: http://qdrant:6333
+      ARC_QDRANT_PREFER_LOCAL: "false"
+      ARC_RAG_MAX_QUERY_REWRITES: ${ARC_RAG_MAX_QUERY_REWRITES:-2}
+      ARC_RAG_MIN_EVIDENCE_PER_ITEM: ${ARC_RAG_MIN_EVIDENCE_PER_ITEM:-2}
+      ARC_RAG_MIN_SOURCE_DIVERSITY: ${ARC_RAG_MIN_SOURCE_DIVERSITY:-2}
+      ARC_RERANK_PROVIDER: ${ARC_RERANK_PROVIDER:-dashscope}
+      ARC_RERANK_BASE_URL: ${ARC_RERANK_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      ARC_RERANK_API_KEY: ${ARC_RERANK_API_KEY:-}
+      ARC_RERANK_MODEL: ${ARC_RERANK_MODEL:-qwen3-rerank}
+      ARC_LANGGRAPH_CHECKPOINTER: ${ARC_LANGGRAPH_CHECKPOINTER:-sqlite}
+      ARC_LANGGRAPH_CHECKPOINT_PATH: /workspace/.arc/langgraph_checkpoints.sqlite
+    volumes:
+      - ./:/workspace
+    depends_on:
+      - qdrant
+      - redis
+
+  worker:
+    image: python:3.11-slim
+    working_dir: /workspace
+    command: bash -lc "pip install -e .[queue] && celery -A agentic_research_copilot.celery_app worker --loglevel=INFO --pool=solo"
+    profiles:
+      - worker
+    environment:
+      ARC_STORAGE_PATH: /workspace/.arc/agentic_research.db
+      ARC_ORCHESTRATION_RUNTIME: ${ARC_ORCHESTRATION_RUNTIME:-langgraph}
+      ARC_JOB_QUEUE_BACKEND: celery
+      ARC_CELERY_BROKER_URL: redis://redis:6379/0
+      ARC_CELERY_RESULT_BACKEND: redis://redis:6379/1
+      ARC_QDRANT_URL: http://qdrant:6333
+      ARC_QDRANT_PREFER_LOCAL: "false"
+      ARC_MODEL_PROVIDER: ${ARC_MODEL_PROVIDER:-deterministic}
+      ARC_MODEL_BASE_URL: ${ARC_MODEL_BASE_URL:-}
+      ARC_MODEL_API_KEY: ${ARC_MODEL_API_KEY:-}
+      ARC_MODEL_CHAT_MODEL: ${ARC_MODEL_CHAT_MODEL:-gpt-4o-mini}
+      ARC_EMBEDDING_PROVIDER: ${ARC_EMBEDDING_PROVIDER:-model}
+      ARC_EMBEDDING_BASE_URL: ${ARC_EMBEDDING_BASE_URL:-}
+      ARC_EMBEDDING_API_KEY: ${ARC_EMBEDDING_API_KEY:-}
+      ARC_EMBEDDING_MODEL: ${ARC_EMBEDDING_MODEL:-qwen3.7-text-embedding}
+      ARC_EMBEDDING_DIMENSIONS: ${ARC_EMBEDDING_DIMENSIONS:-256}
+      ARC_RERANK_PROVIDER: ${ARC_RERANK_PROVIDER:-dashscope}
+      ARC_RERANK_BASE_URL: ${ARC_RERANK_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      ARC_RERANK_API_KEY: ${ARC_RERANK_API_KEY:-}
+      ARC_RERANK_MODEL: ${ARC_RERANK_MODEL:-qwen3-rerank}
+      ARC_LANGGRAPH_CHECKPOINTER: ${ARC_LANGGRAPH_CHECKPOINTER:-sqlite}
+      ARC_LANGGRAPH_CHECKPOINT_PATH: /workspace/.arc/langgraph_checkpoints.sqlite
+    volumes:
+      - ./:/workspace
+    depends_on:
+      - redis
+      - qdrant
+
+  eval:
+    image: python:3.11-slim
+    working_dir: /workspace
+    command: bash -lc "pip install -e .[eval] && python scripts/run_ragas_eval.py --report examples/demo-report.md --trace examples/demo-trace.json"
+    profiles:
+      - eval
+    environment:
+      ARC_LOAD_DOTENV: "true"
+      ARC_MODEL_PROVIDER: ${ARC_MODEL_PROVIDER:-openai_compatible}
+      ARC_MODEL_BASE_URL: ${ARC_MODEL_BASE_URL:-}
+      ARC_MODEL_API_KEY: ${ARC_MODEL_API_KEY:-}
+      ARC_MODEL_CHAT_MODEL: ${ARC_MODEL_CHAT_MODEL:-}
+      ARC_EMBEDDING_PROVIDER: ${ARC_EMBEDDING_PROVIDER:-openai_compatible}
+      ARC_EMBEDDING_BASE_URL: ${ARC_EMBEDDING_BASE_URL:-}
+      ARC_EMBEDDING_API_KEY: ${ARC_EMBEDDING_API_KEY:-}
+      ARC_EMBEDDING_MODEL: ${ARC_EMBEDDING_MODEL:-qwen3.7-text-embedding}
+      ARC_EMBEDDING_DIMENSIONS: ${ARC_EMBEDDING_DIMENSIONS:-256}
     volumes:
       - ./:/workspace
 
+  qdrant:
+    image: ghcr.io/qdrant/qdrant/qdrant:v1.18.0
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  qdrant-data:
+  redis-data:

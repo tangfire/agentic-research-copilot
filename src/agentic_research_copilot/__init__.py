@@ -1,9 +1,11 @@
-"""Agentic Research Copilot.
+"""AI Research Copilot.
 
-Clean-room multi-agent research assistant inspired by open source research
-and agent frameworks.
+Clean-room research assistant inspired by open source research and agent
+frameworks.
 """
 
-__all__ = ["__version__"]
-__version__ = "0.1.0"
+from .ledger import JobLedger, RunLedger
+from .pipeline import ResearchCopilot
 
+__all__ = ["__version__", "ResearchCopilot", "RunLedger", "JobLedger"]
+__version__ = "0.1.0"

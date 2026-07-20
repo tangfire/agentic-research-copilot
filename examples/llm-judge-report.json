@@ -1,0 +1,36 @@
+{
+  "report": "examples\\demo-report.md",
+  "context": "examples\\demo-trace.json",
+  "model": "cbcn/deepseek-v4-flash",
+  "usage": {
+    "prompt_tokens": 9062,
+    "completion_tokens": 324,
+    "latency_ms": 5465
+  },
+  "scores": {
+    "research_depth": 3,
+    "source_quality": 3,
+    "analytical_rigor": 3,
+    "structure": 4,
+    "groundedness": 3,
+    "completeness": 3,
+    "reasoning": "The report provides a clear overview of the system's architecture and positioning strategy, but lacks deep analysis of trade-offs, alternative approaches, or critical evaluation of the sources. Many claims are supported by memory entries rather than external evidence, and the external sources are mostly blog posts and tutorials rather than peer-reviewed or authoritative references. The structure is logical, but the analysis is shallow and repetitive, with limited critical thinking. Groundedness is moderate: citations exist but many are to the system's own memory, reducing independent verification. Completeness is adequate for a demo report but misses deeper discussion of failure modes, scalability, or comparison with other approaches.",
+    "weaknesses": [
+      "Heavy reliance on memory entries as sources rather than external authoritative references.",
+      "External sources are predominantly blog posts and tutorials, lacking peer-reviewed or industry-standard references.",
+      "Analysis is shallow and repetitive, with key points restated across sections without deeper insight.",
+      "Lacks critical evaluation of trade-offs, limitations, or alternative architectures.",
+      "No discussion of failure modes, edge cases, or scalability challenges.",
+      "Groundedness is weakened by citing the system's own memory as evidence for claims.",
+      "Completeness is limited; missing sections on performance benchmarks, comparison with other systems, or practical deployment considerations."
+    ]
+  },
+  "normalized": {
+    "research_depth_score": 0.6,
+    "source_quality_score": 0.6,
+    "analytical_rigor_score": 0.6,
+    "structure_score": 0.8,
+    "groundedness_score": 0.6,
+    "completeness_score": 0.6
+  }
+}
