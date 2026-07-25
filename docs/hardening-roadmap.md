@@ -3,8 +3,19 @@
 ## Current Position
 
 This repository should be presented as an **AI Research Copilot for complex questions**:
-it plans research, routes between external search/contextual retrieval/memory, verifies
-citations, evaluates RAG quality, and persists inspectable traces.
+it plans research, searches and reads sources, routes between contextual
+retrieval/memory when useful, verifies citations, evaluates quality, and persists
+inspectable traces.
+
+Short positioning:
+
+> An AI Research Copilot for complex questions that uses planning, search,
+> reading, retrieval augmentation, memory recall, citation verification, and
+> evaluation replay to generate traceable research reports.
+
+The main product path is **planning -> search/reading -> synthesis ->
+verification/evaluation -> replay**. RAG is a contextual grounding, already-read
+evidence cache, and memory-recall layer; it is not the only or primary path.
 
 It should not be described as a production-grade generic agent platform. The current
 architecture is intentionally product-specific: strong enough for an interview demo,
@@ -19,6 +30,8 @@ The local Open Deep Research reference is strongest in these areas:
 - LangGraph-first research orchestration.
 - Supervisor/researcher split with parallel delegated research.
 - Tool-calling research loop with reflection.
+- Tavily search with provider-returned `raw_content` that is compressed before
+  final report writing.
 - Compression of research findings before final report writing.
 - Citation-backed final reports.
 - Evaluation with overall quality, source quality, groundedness, correctness,
@@ -30,11 +43,21 @@ before report generation. This repo follows that shape for v1: source quality is
 and surfaced in traces/evaluation, while provider ranking and user-selected sources stay
 outside a hard-coded local policy.
 
+ODR's supervisor uses an LLM tool loop with `think_tool`, `ConductResearch`, and
+`ResearchComplete`. This repo now mirrors that boundary in the runtime: the
+research supervisor emits those tool-call-shaped decisions, and each
+`ConductResearch` call carries selected tools, query rewrites, grounding mode,
+and sufficiency criteria. Deterministic route hints remain only for offline tests
+and defensive fallback behavior.
+
 ### PraisonAI
 
-The local PraisonAI reference is strongest in these areas:
+PraisonAI is a secondary reference, not the main project target. The useful inspected
+ideas are strongest in these areas:
 
 - Broad memory runtime with short-term, long-term, entity, and user memory.
+- Reader registry and document ingestion concepts for file/URL sources.
+- MarkItDown-backed document conversion and chunking strategies for knowledge ingestion.
 - Quality-aware memory writes and searches.
 - Rerank hooks on retrieval/memory search.
 - Session, checkpoint, replay, trace, and persistence concepts.
@@ -42,7 +65,31 @@ The local PraisonAI reference is strongest in these areas:
 
 This repo should not copy PraisonAI as a runtime dependency or broaden into that kind of
 SDK. The useful subset is memory governance, quality-aware recall, trace/replay concepts,
-and the pluggable reranker interface.
+the pluggable reranker interface, and a reader/parser extension shape.
+
+## ODR-Aligned Boundary Ledger
+
+These are the boundaries to keep clear when presenting the project:
+
+| Area | ODR reference shape | This repo's current shape | How to present it |
+| --- | --- | --- | --- |
+| Product path | Plan/research/compress/report/evaluate | Plan, search/read, retrieve, synthesize, verify/evaluate, replay | ODR-style AI Research Copilot, not plain RAG |
+| Supervisor/tool loop | LLM supervisor delegates with `think_tool`, `ConductResearch`, and `ResearchComplete` | LLM planner plus ODR-style research supervisor; `ConductResearch` carries tools, queries, mode, and sufficiency criteria | Main orchestration is ODR-aligned; deterministic hints are fallback/test scaffolding |
+| Web reader | Tavily/provider `raw_content` and compression | Tavily/provider `raw_content` with extract/model/chunk-rerank compression plus neighbor expansion | ODR-level v1 reading boundary, not browser automation |
+| Source quality | Evaluation/judge surface, not runtime blocking | Runtime metrics and optional judge artifacts expose weak sources | Do not claim permanent high-quality source filtering |
+| Report synthesis | Model-generated report from compressed findings | Citation-aware model sections with backend-locked evidence IDs | Strong; this is one of the main ODR-aligned upgrades |
+| Local RAG | Not the primary ODR path | Added product-specific grounding with document reader and Qdrant | RAG is grounding/cache/memory, not the main deep-research engine |
+| PDF/document reader | Not an enterprise document platform | Text/Markdown/HTML plus block/table-aware PDF page metadata before chunking | Credible v1 reader; future OCR/scanned-document/layout work is honest roadmap |
+| Evaluation | Deep Research Bench / LLM judge style | Proxy metrics, optional LLM judge artifact, optional Ragas artifact | Demo artifact, not a full public benchmark |
+| Deployment | Local graph/checkpoint examples | Single-node FastAPI/Celery/Redis/SQLite/Qdrant | Personal/local deployment; do not call it distributed |
+
+Demo artifact warning: old `examples/llm-judge-report.json` and
+`examples/ragas-report.json` may contain realistic weak spots such as shallow analysis,
+mixed source quality, weak source candidates, or mediocre faithfulness/context precision.
+That does not automatically mean the architecture is wrong; search APIs can return mixed
+sources and small demos are sensitive to question choice. Before interviews, regenerate a
+cleaner demo using questions that naturally retrieve papers, official docs, technical
+reports, standards, or primary-source pages.
 
 ## Next Optimizations
 
@@ -60,7 +107,10 @@ Target coverage:
 - product positioning
 - LangGraph runtime and checkpoint boundary
 - routing/tool selection/query rewrite
-- dense/sparse Qdrant hybrid retrieval
+- indexing-time contextual retrieval prefixing
+- Qdrant dense retrieval plus SQLite FTS5/BM25 keyword retrieval
+- parent-child retrieval with parent/neighbor context expansion
+- LightRAG-inspired entity/relation graph signal fused before reranking
 - citation and evidence verification
 - memory governance and conflict review
 - source-quality evaluation boundary
@@ -72,7 +122,7 @@ Target coverage:
 
 Status: implemented for v1.
 
-Why: current retrieval already uses Qdrant dense/sparse fusion plus a pluggable reranker
+Why: current retrieval already uses indexing-time contextual retrieval prefixes, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, and a pluggable reranker
 interface. The default runtime attempts a real Qwen/DashScope rerank call. Deterministic
 diversity/chunk-position scoring remains available for tests/offline runs, while
 `ARC_STRICT_PROVIDERS=true` disables rerank fallback for demos.
@@ -193,13 +243,123 @@ valuable for CI, but they should not silently hide missing keys during demos.
 - `GET /v1/runtime/provider-check` and `scripts/check_real_providers.py`
 - `scripts/start_real.ps1` for local strict startup without committing secrets
 
+### P1: Provider Raw-Content Reading
+
+Status: implemented for Tavily with extraction and optional model compression.
+
+Why: deep research should not rely only on search snippets. Open Deep Research's
+Tavily tool requests raw page content and compresses it before final synthesis.
+This repo follows that boundary without adding a separate browser stack in v1:
+Tavily can request `raw_content`, the source reader converts it into citation-ready
+evidence, and report synthesis receives compact evidence instead of raw pages.
+
+- `ARC_SEARCH_INCLUDE_RAW_CONTENT=true`
+- `ARC_SOURCE_READER_ENABLED=true`
+- `ARC_SOURCE_READER_STRATEGY=extract | model_compress | chunk_rerank_compress`
+- `ARC_SOURCE_READER_MAX_CHARS=50000`
+- `ARC_SOURCE_READER_EXCERPT_CHARS=1600`
+- `extract` uses deterministic query-relevant sentence selection for tests/offline runs
+- `model_compress` calls the configured chat model and returns a structured
+  `summary/key_excerpts/relevance/limitations` contract
+- `chunk_rerank_compress` follows the Open Deep Research legacy direction:
+  split raw content into overlapping chunks, rerank candidate chunks by query
+  relevance, expand selected chunks with a configurable neighbor window, stitch
+  the expanded context in source order, then run structured model compression
+- trace/evidence metadata records `read_strategy`, raw-content size, compression model
+  usage, chunk counts, neighbor expansion, rerank method, compressed size, and
+  excerpt size when available
+
+This is still a provider reading layer, not a full browser/PDF reader. If the product
+needs stronger document fidelity later, add a dedicated source-reader adapter for HTML
+and PDFs behind the same contract instead of mixing parser logic into the researcher.
+
+### P1: Local Document Reader And Chunking Boundary
+
+Status: implemented for local text/Markdown/HTML files, heading-aware section
+segmentation, and optional PyMuPDF-backed PDF block/table-aware page parsing.
+
+Why: internal RAG quality depends heavily on parsing and chunking. A strong
+retrieval stack cannot recover evidence that was lost during ingestion, so the
+local grounding path keeps parsing, segmenting, chunking, indexing, retrieval,
+and report synthesis as explicit stages.
+
+- `POST /v1/documents/ingest` parses a local file path into grounding documents
+- text, CSV/JSON/XML/YAML-like files are read as normalized text
+- Markdown headings are used to create section segments before vector chunking
+- HTML is converted to visible text with script/style noise removed; headings are
+  preserved as Markdown-style section boundaries before segmentation
+- Markdown/HTML section segments preserve `section_heading`, `section_level`,
+  `section_path`, `section_path_parts`, `section_index`, and `section_count`
+- PDFs use PyMuPDF when `.[documents]` is installed
+- PDF pages become separate document segments with `page_number`, `page_count`,
+  `segment_kind=page`, and parser metadata before vector chunking
+- PDF parsing prefers PyMuPDF block extraction for reading-order recovery and
+  falls back to plain page text when block extraction is unavailable
+- PDF metadata includes `pdf_text_parse_method`, `text_block_count`,
+  `line_count`, `heading_hints`, page width/height, and page rotation when
+  available
+- PyMuPDF `find_tables()` is used opportunistically; detected tables are
+  converted into compact Markdown-like text and table metadata records
+  `table_count`, `table_cell_count`, and `has_tables`
+- `DocumentStore` still owns paragraph-aware child chunking, chunk overlap,
+  indexing-time contextual retrieval prefixing, title/source/chunk metadata injection, Qdrant dense indexing,
+  SQLite FTS5/BM25 keyword indexing, a lightweight entity/relation graph index, RRF/DBSF fusion,
+  graph-score fusion, reranking, and same-document parent/neighbor context
+  expansion after child retrieval
+- long-paragraph sentence splitting uses explicit English and Chinese punctuation
+  boundaries instead of a corrupted regex literal
+
+This is now a credible v1 local knowledge reader, but it should still be described
+honestly: it is not a full enterprise document intelligence pipeline. Future
+hardening can add OCR for scanned PDFs, figure captions, stronger layout-aware
+chunking, table-position citations, and stronger page/section citation rendering.
+
+### P1: LightRAG-Inspired Graph-Augmented Retrieval
+
+Status: implemented as a lightweight graph signal inside the existing grounding
+layer.
+
+Why: plain vector top-k retrieval can miss short proper nouns, component names,
+and cross-chunk relationships. LightRAG is useful as a reference because it
+pushes graph-enhanced indexing and retrieval instead of relying only on semantic
+similarity. This repo keeps the implementation smaller and product-specific:
+local document chunks are still the primary retrievable units, but ingestion also
+extracts entity labels from each child chunk and records chunk/entity and
+entity/entity co-occurrence edges.
+
+Current behavior:
+
+- extracts lightweight entities from chunk titles, sources, and raw chunk text
+- avoids indexing contextual wrapper labels such as `Document`, `Metadata`, or
+  `Excerpt` as graph entities
+- keeps chunk -> entity, entity -> chunk, and entity -> neighbor entity indexes in
+  memory alongside the Qdrant/local vector index
+- expands a query through matched entities and neighboring relation entities
+- fuses `graph_score` into the dense/BM25 candidate set before reranking
+- preserves graph metadata such as `graph_query_entities`,
+  `graph_matched_entities`, `graph_expanded_entities`, and
+  `graph_augmented_retrieval` for trace and demo inspection
+
+How to present it:
+
+> The project does not claim to be a full LightRAG clone. It adopts the useful
+> idea of graph-enhanced retrieval: dense vectors provide semantic recall, BM25
+> keyword retrieval preserves exact terms, the lightweight entity/relation graph improves
+> cross-chunk recall, and the reranker decides the final evidence order.
+
+Future hardening can add LLM-based entity/relation extraction, persistent graph
+storage, relation typing, graph traversal depth control, and offline retrieval
+ablation experiments. Those are useful research directions, but not required for
+the current single-node AI Research Copilot demo.
+
 ## Resume-Safe Boundary
 
 Strong phrasing:
 
 > Built a LangGraph-based AI Research Copilot that decomposes complex questions, routes
-> between external search/contextual retrieval/memory, uses Qdrant dense+sparse hybrid
-> RAG, verifies citations, evaluates RAG quality, and persists traceable research reports.
+> between external search/reading, contextual retrieval, and memory, uses Qdrant
+> dense+BM25 hybrid grounding, verifies citations, evaluates RAG/source quality,
+> and persists traceable research reports.
 
 Avoid:
 
@@ -208,3 +368,6 @@ Avoid:
 - "full Ragas benchmark" unless a larger labeled dataset is added
 - "cross-encoder reranking" until that provider is actually wired
 - "runtime source-quality policy" because v1 keeps source quality in evaluation
+- "fully autonomous browser-scale research platform" because v1 uses ODR-style supervisor delegation but not browser automation or distributed crawling
+- "browser-level source reader" because v1 uses provider raw content and compression
+- "enterprise PDF/OCR/document-intelligence parser" because v1 preserves page/block/table metadata but does not solve scanned PDFs or complex layout intelligence

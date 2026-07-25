@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from ..providers import DeterministicResearchModelProvider, ResearchModelProvider
-from ..schemas import CorpusProfile, EvidenceItem
+from ..providers import DeterministicResearchModelProvider, ModelUsage, ResearchModelProvider
+from ..schemas import ChunkContextContract, CorpusProfile, EvidenceItem
+from .fulltext import SQLiteBM25Index
 from .rerank import BaseReranker, RuleBasedReranker
 
 try:  # pragma: no cover - import availability is environment specific
@@ -21,10 +22,47 @@ except Exception:  # pragma: no cover - exercised when qdrant-client is unavaila
 
 
 TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9_]+|[\u4e00-\u9fff]")
+SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[.!?\u3002\uff01\uff1f])\s+")
 DEFAULT_CHUNK_SIZE = 900
 DEFAULT_CHUNK_OVERLAP = 160
+DEFAULT_PARENT_CONTEXT_WINDOW = 1
+DEFAULT_PARENT_CONTEXT_MAX_CHARS = 2400
+DEFAULT_GRAPH_MAX_ENTITIES_PER_CHUNK = 12
+DEFAULT_GRAPH_NEIGHBOR_LIMIT = 8
 DENSE_VECTOR_NAME = "dense"
-SPARSE_VECTOR_NAME = "sparse"
+CONTEXTUALIZER_PROMPT_VERSION = "contextual-retrieval-v1"
+STOPWORDS = {
+    "about",
+    "after",
+    "also",
+    "and",
+    "are",
+    "before",
+    "between",
+    "but",
+    "can",
+    "for",
+    "from",
+    "how",
+    "into",
+    "not",
+    "that",
+    "the",
+    "this",
+    "through",
+    "with",
+    "when",
+    "where",
+    "which",
+    "while",
+    "will",
+}
+
+
+@dataclass(frozen=True)
+class GraphEntity:
+    key: str
+    label: str
 
 
 @dataclass(frozen=True)
@@ -57,8 +95,14 @@ class DocumentStore:
         qdrant_prefer_local: bool = True,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+        parent_context_window: int = DEFAULT_PARENT_CONTEXT_WINDOW,
+        parent_context_max_chars: int = DEFAULT_PARENT_CONTEXT_MAX_CHARS,
+        graph_enabled: bool = True,
+        graph_max_entities_per_chunk: int = DEFAULT_GRAPH_MAX_ENTITIES_PER_CHUNK,
+        graph_neighbor_limit: int = DEFAULT_GRAPH_NEIGHBOR_LIMIT,
         hybrid_fusion: str = "rrf",
         reranker: BaseReranker | None = None,
+        contextualizer_provider: ResearchModelProvider | None = None,
         allow_local_fallback: bool = True,
     ) -> None:
         self._docs: list[EvidenceItem] = []
@@ -67,16 +111,32 @@ class DocumentStore:
         self.collection_name = collection_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.parent_context_window = max(0, parent_context_window)
+        self.parent_context_max_chars = max(320, parent_context_max_chars)
+        self.graph_enabled = graph_enabled
+        self.graph_max_entities_per_chunk = max(2, graph_max_entities_per_chunk)
+        self.graph_neighbor_limit = max(0, graph_neighbor_limit)
         self.hybrid_fusion = hybrid_fusion if hybrid_fusion in {"rrf", "dbsf"} else "rrf"
         self.reranker = reranker or RuleBasedReranker()
+        self.contextualizer_provider = contextualizer_provider or self.embedding_provider
+        self._fallback_contextualizer = DeterministicResearchModelProvider(
+            embedding_dimensions=getattr(self.embedding_provider, "embedding_dimensions", 256)
+        )
         self.allow_local_fallback = allow_local_fallback
+        self._contextualization_cache: dict[str, tuple[ChunkContextContract, ModelUsage]] = {}
+        self._entity_chunks: dict[str, set[str]] = defaultdict(set)
+        self._entity_labels: dict[str, str] = {}
+        self._entity_neighbors: dict[str, Counter[str]] = defaultdict(Counter)
+        self._chunk_entities: dict[str, tuple[str, ...]] = {}
+        self._keyword_index = SQLiteBM25Index()
+        self._keyword_backend = self._keyword_index.backend
         self._client = self._build_client(
             qdrant_url=qdrant_url,
             qdrant_api_key=qdrant_api_key,
             qdrant_location=qdrant_location,
             qdrant_prefer_local=qdrant_prefer_local,
         )
-        self._vector_backend = "qdrant_dense_sparse" if self._client is not None else "local"
+        self._vector_backend = "qdrant_dense" if self._client is not None else "local_dense"
         self._collection_ready = False
         self._ensure_collection()
 
@@ -99,17 +159,16 @@ class DocumentStore:
             score=1.0,
             metadata=metadata or {},
         )
+        doc = self._with_document_id(doc)
         self._docs.append(doc)
         self._index_document(doc)
         return doc
 
     def extend(self, docs: list[EvidenceItem]) -> None:
-        known = {
-            doc.url or f"{doc.source}:{doc.title}:{doc.snippet or doc.content or ''}"
-            for doc in self._docs
-        }
+        known = {_document_identity(doc) for doc in self._docs}
         for doc in docs:
-            identity = doc.url or f"{doc.source}:{doc.title}:{doc.snippet or doc.content or ''}"
+            doc = self._with_document_id(doc)
+            identity = _document_identity(doc)
             if identity not in known:
                 self._docs.append(doc)
                 self._index_document(doc)
@@ -137,37 +196,52 @@ class DocumentStore:
         else:
             scored_chunks.extend(self._search_local(query, query_text, query_tokens, query_embedding))
 
+        scored_chunks = self._merge_keyword_candidates(query, query_text, query_tokens, scored_chunks, limit)
+        scored_chunks = self._merge_graph_candidates(query_text, query_tokens, scored_chunks)
         reranked = self._rerank(query_text, scored_chunks, limit)
-        return [
-            EvidenceItem(
-                title=f"{chunk.title} #chunk-{chunk.chunk_index + 1}",
-                source=chunk.source,
-                kind="document-chunk",
-                url=chunk.url,
-                snippet=_trim(chunk.text, 320),
-                content=chunk.contextual_text,
-                score=round(score, 4),
-                metadata={
-                    **chunk.metadata,
-                    **scores,
-                    "document_id": chunk.document_id,
-                    "chunk_id": chunk.chunk_id,
-                    "chunk_index": chunk.chunk_index,
-                    "total_chunks": chunk.total_chunks,
-                    "matched_query": query,
-                    "grounding_query": query_text,
-                    "query_context": context,
-                    "query_purpose": purpose,
-                    "context_used": bool(context),
-                    "purpose": purpose,
-                    "retrieval_strategy": "contextual_dense_sparse_fusion_rerank",
-                    "retrieval_backend": f"{self._vector_backend}_embedding_hybrid",
-                    "hybrid_fusion": self.hybrid_fusion,
-                    "embedding_dimensions": len(chunk.embedding),
-                },
+        evidence: list[EvidenceItem] = []
+        for score, chunk, scores in reranked:
+            parent_context = self._parent_context_for_child(chunk)
+            evidence.append(
+                EvidenceItem(
+                    title=f"{chunk.title} #chunk-{chunk.chunk_index + 1}",
+                    source=chunk.source,
+                    kind="document-chunk",
+                    url=chunk.url,
+                    snippet=_trim(chunk.text, 320),
+                    content=parent_context,
+                    score=round(score, 4),
+                    metadata={
+                        **chunk.metadata,
+                        **scores,
+                        "document_id": chunk.document_id,
+                        "parent_id": chunk.document_id,
+                        "parent_title": chunk.title,
+                        "chunk_id": chunk.chunk_id,
+                        "chunk_index": chunk.chunk_index,
+                        "total_chunks": chunk.total_chunks,
+                        "child_text_chars": len(chunk.text),
+                        "parent_context_chars": len(parent_context),
+                        "parent_context_window": self.parent_context_window,
+                        "matched_query": query,
+                        "grounding_query": query_text,
+                        "query_context": context,
+                        "query_purpose": purpose,
+                        "context_used": bool(context),
+                        "purpose": purpose,
+                        "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+                        "parent_child_retrieval": True,
+                        "child_retrieval": "dense_bm25_fusion_rerank",
+                        "parent_expansion": "same-document_neighbor_window",
+                        "graph_augmented_retrieval": self.graph_enabled,
+                        "retrieval_backend": f"{self._vector_backend}_embedding_hybrid",
+                        "hybrid_fusion": self.hybrid_fusion,
+                        "keyword_backend": self._keyword_backend,
+                        "embedding_dimensions": len(chunk.embedding),
+                    },
+                )
             )
-            for score, chunk, scores in reranked
-        ]
+        return evidence
 
     def list(self) -> list[EvidenceItem]:
         return sorted(self._docs, key=lambda doc: (doc.source, doc.title))
@@ -198,6 +272,7 @@ class DocumentStore:
             has_private_docs=bool(self._docs),
             has_reference_docs=has_reference_docs,
             vector_backend=self._vector_backend,
+            keyword_backend=self._keyword_backend,
             embedding_dimensions=getattr(self.embedding_provider, "embedding_dimensions", 0),
             collection_name=self.collection_name,
             last_updated=datetime.now(timezone.utc).isoformat(),
@@ -206,6 +281,9 @@ class DocumentStore:
     def clear(self) -> None:
         self._docs.clear()
         self._chunks.clear()
+        self._contextualization_cache.clear()
+        self._keyword_index.clear()
+        self._clear_graph_index()
         if self._client is not None and qmodels is not None:
             try:
                 if self._collection_exists():
@@ -215,7 +293,22 @@ class DocumentStore:
         self._collection_ready = False
         self._ensure_collection()
 
+    def delete(self, document_id: str) -> bool:
+        kept_docs = [doc for doc in self._docs if _document_identity(doc) != document_id]
+        if len(kept_docs) == len(self._docs):
+            return False
+        self._docs = kept_docs
+        self._chunks = [chunk for chunk in self._chunks if chunk.document_id != document_id]
+        self._contextualization_cache = {
+            key: value for key, value in self._contextualization_cache.items() if not key.startswith(f"{document_id}:")
+        }
+        self._keyword_index.delete_document(document_id)
+        self._rebuild_graph_index()
+        self._delete_qdrant_document(document_id)
+        return True
+
     def close(self) -> None:
+        self._keyword_index.close()
         if self._client is None:
             return
         try:
@@ -230,11 +323,37 @@ class DocumentStore:
         if not text:
             return
 
-        document_id = _stable_id(doc.url or f"{doc.source}:{doc.title}:{text[:120]}")
+        doc = self._with_document_id(doc)
+        document_id = _document_identity(doc)
         chunks = _chunk_text(text, self.chunk_size, self.chunk_overlap)
         total_chunks = len(chunks)
         for index, chunk_text in enumerate(chunks):
-            contextual_text = _build_contextual_text(doc, chunk_text, index, total_chunks)
+            chunk_context, context_usage = self._contextualize_chunk(
+                doc=doc,
+                document_text=text,
+                chunk_text=chunk_text,
+                chunk_index=index,
+                total_chunks=total_chunks,
+            )
+            chunk_metadata = {
+                **doc.metadata,
+                "contextual_retrieval": True,
+                "contextualizer_prompt_version": CONTEXTUALIZER_PROMPT_VERSION,
+                "context_prefix": chunk_context.context,
+                "context_key_terms": list(chunk_context.key_terms),
+                "context_provenance_hint": chunk_context.provenance_hint,
+                "context_confidence": round(float(chunk_context.confidence), 4),
+                "contextualizer_provider": getattr(context_usage, "provider", "unknown"),
+                "contextualizer_model": getattr(context_usage, "model", "unknown"),
+            }
+            contextual_text = _build_contextual_text(
+                doc,
+                chunk_text,
+                index,
+                total_chunks,
+                context_prefix=chunk_context.context,
+                context_key_terms=chunk_context.key_terms,
+            )
             embedding = self._embed(contextual_text)
             chunk = DocumentChunk(
                 document_id=document_id,
@@ -246,12 +365,111 @@ class DocumentStore:
                 contextual_text=contextual_text,
                 chunk_index=index,
                 total_chunks=total_chunks,
-                metadata=doc.metadata,
+                metadata=chunk_metadata,
                 tokens=tuple(_tokenize(contextual_text)),
                 embedding=embedding,
             )
             self._chunks.append(chunk)
+            self._keyword_index.add_chunk(
+                chunk_id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                title=chunk.title,
+                source=chunk.source,
+                text=chunk.contextual_text,
+                tokens=chunk.tokens,
+            )
+            self._index_graph_chunk(chunk)
             self._upsert_chunk(chunk)
+
+    def _contextualize_chunk(
+        self,
+        *,
+        doc: EvidenceItem,
+        document_text: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+    ):
+        document_id = _document_identity(doc)
+        chunk_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()[:16]
+        provider_name = getattr(self.contextualizer_provider, "name", "unknown")
+        cache_key = f"{document_id}:{chunk_index}:{chunk_hash}:{provider_name}:{CONTEXTUALIZER_PROMPT_VERSION}"
+        cached = self._contextualization_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        document_excerpt = _document_context_excerpt(document_text, chunk_text)
+        try:
+            result = self.contextualizer_provider.contextualize_chunk(
+                document_title=doc.title,
+                source=doc.source,
+                metadata=doc.metadata,
+                document_excerpt=document_excerpt,
+                chunk_text=chunk_text,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+            )
+        except Exception as exc:
+            if not self.allow_local_fallback:
+                raise RuntimeError(f"Chunk contextualization failed: {exc}") from exc
+            result = self._fallback_contextualizer.contextualize_chunk(
+                document_title=doc.title,
+                source=doc.source,
+                metadata=doc.metadata,
+                document_excerpt=document_excerpt,
+                chunk_text=chunk_text,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+            )
+        self._contextualization_cache[cache_key] = result
+        return result
+
+    def _with_document_id(self, doc: EvidenceItem) -> EvidenceItem:
+        metadata = dict(doc.metadata)
+        document_id = _document_identity(doc)
+        metadata["document_id"] = document_id
+        if metadata == doc.metadata:
+            return doc
+        return doc.model_copy(update={"metadata": metadata})
+
+    def _delete_qdrant_document(self, document_id: str) -> None:
+        if self._client is None or qmodels is None:
+            return
+        try:
+            self._client.delete(
+                collection_name=self.collection_name,
+                points_selector=qmodels.FilterSelector(
+                    filter=qmodels.Filter(
+                        must=[
+                            qmodels.FieldCondition(
+                                key="document_id",
+                                match=qmodels.MatchValue(value=document_id),
+                            )
+                        ]
+                    )
+                ),
+            )
+        except Exception as exc:
+            if not self.allow_local_fallback:
+                raise RuntimeError(f"Qdrant document delete failed: {exc}") from exc
+            self._rebuild_index()
+
+    def _rebuild_index(self) -> None:
+        docs = list(self._docs)
+        self._chunks.clear()
+        self._contextualization_cache.clear()
+        self._keyword_index.clear()
+        self._clear_graph_index()
+        if self._client is not None and qmodels is not None:
+            try:
+                if self._collection_exists():
+                    self._client.delete_collection(self.collection_name)
+            except Exception:
+                pass
+        self._collection_ready = False
+        self._ensure_collection()
+        for doc in docs:
+            self._index_document(doc)
 
     def _search_qdrant(
         self,
@@ -269,21 +487,8 @@ class DocumentStore:
         try:
             response = self._client.query_points(
                 collection_name=self.collection_name,
-                prefetch=[
-                    qmodels.Prefetch(
-                        query=query_embedding,
-                        using=DENSE_VECTOR_NAME,
-                        limit=max(limit * 4, 12),
-                    ),
-                    qmodels.Prefetch(
-                        query=_sparse_vector(query_tokens),
-                        using=SPARSE_VECTOR_NAME,
-                        limit=max(limit * 4, 12),
-                    ),
-                ],
-                query=qmodels.FusionQuery(
-                    fusion=qmodels.Fusion.RRF if self.hybrid_fusion == "rrf" else qmodels.Fusion.DBSF
-                ),
+                query=query_embedding,
+                using=DENSE_VECTOR_NAME,
                 limit=max(limit * 4, 12),
                 with_payload=True,
                 with_vectors=False,
@@ -299,14 +504,12 @@ class DocumentStore:
             chunk = self._chunk_from_payload(payload)
             if chunk is None:
                 continue
-            sparse_score, matched_terms = _sparse_score(query_tokens, chunk.tokens)
             semantic_score = max(0.0, min(1.0, float(hit.score or 0.0)))
             coverage_score = _coverage_score(query_tokens, chunk.tokens)
             phrase_score = _phrase_score(query, chunk.contextual_text)
             raw_score = (
-                sparse_score * 0.34
-                + semantic_score * 0.36
-                + coverage_score * 0.22
+                semantic_score * 0.68
+                + coverage_score * 0.24
                 + phrase_score * 0.08
             )
             scored_chunks.append(
@@ -314,15 +517,14 @@ class DocumentStore:
                     raw_score,
                     chunk,
                     {
-                        "sparse_score": round(sparse_score, 4),
                         "semantic_score": round(semantic_score, 4),
                         "coverage_score": round(coverage_score, 4),
                         "phrase_score": round(phrase_score, 4),
-                        "matched_terms": matched_terms[:12],
+                        "matched_terms": _matched_terms(query_tokens, chunk.tokens)[:12],
                         "qdrant_score": round(semantic_score, 4),
                         "fusion_score": round(semantic_score, 4),
-                        "fusion_algorithm": self.hybrid_fusion,
-                        "retrieval_stage": "qdrant_dense_sparse_fusion",
+                        "fusion_algorithm": "dense_prefetch",
+                        "retrieval_stage": "qdrant_dense_prefetch",
                     },
                 )
             )
@@ -337,15 +539,13 @@ class DocumentStore:
     ) -> list[tuple[float, DocumentChunk, dict[str, object]]]:
         scored_chunks: list[tuple[float, DocumentChunk, dict[str, object]]] = []
         for chunk in self._chunks:
-            sparse_score, matched_terms = _sparse_score(query_tokens, chunk.tokens)
             semantic_score = _cosine_similarity(query_embedding, chunk.embedding)
             coverage_score = _coverage_score(query_tokens, chunk.tokens)
             phrase_score = _phrase_score(query, chunk.contextual_text)
             raw_score = (
-                sparse_score * 0.38
-                + semantic_score * 0.32
+                semantic_score * 0.68
                 + coverage_score * 0.22
-                + phrase_score * 0.08
+                + phrase_score * 0.10
             )
             if raw_score <= 0:
                 continue
@@ -354,17 +554,91 @@ class DocumentStore:
                     raw_score,
                     chunk,
                     {
-                        "sparse_score": round(sparse_score, 4),
                         "semantic_score": round(semantic_score, 4),
                         "coverage_score": round(coverage_score, 4),
                         "phrase_score": round(phrase_score, 4),
-                        "matched_terms": matched_terms[:12],
-                        "fusion_algorithm": "local_weighted",
-                        "retrieval_stage": "local_dense_sparse_fusion",
+                        "matched_terms": _matched_terms(query_tokens, chunk.tokens)[:12],
+                        "fusion_algorithm": "local_dense_prefetch",
+                        "retrieval_stage": "local_dense_prefetch",
                     },
                 )
             )
         return scored_chunks
+
+    def _merge_keyword_candidates(
+        self,
+        query: str,
+        query_text: str,
+        query_tokens: tuple[str, ...],
+        scored_chunks: list[tuple[float, DocumentChunk, dict[str, object]]],
+        limit: int,
+    ) -> list[tuple[float, DocumentChunk, dict[str, object]]]:
+        keyword_hits = self._keyword_index.search(query_tokens, limit=max(limit * 6, 24))
+        if not keyword_hits:
+            return scored_chunks
+
+        chunk_lookup = {chunk.chunk_id: chunk for chunk in self._chunks}
+        dense_ranks = {
+            chunk.chunk_id: rank
+            for rank, (_score, chunk, _scores) in enumerate(
+                sorted(scored_chunks, key=lambda item: (-item[0], item[1].source, item[1].chunk_index)),
+                start=1,
+            )
+        }
+        merged: dict[str, tuple[float, DocumentChunk, dict[str, object]]] = {
+            chunk.chunk_id: (score, chunk, dict(scores))
+            for score, chunk, scores in scored_chunks
+        }
+
+        for chunk_id, keyword_hit in keyword_hits.items():
+            chunk = chunk_lookup.get(chunk_id)
+            if chunk is None:
+                continue
+            bm25_score = keyword_hit.score
+            dense_score = merged.get(chunk_id, (0.0, chunk, {}))[0]
+            fused_score = self._fuse_dense_keyword_score(
+                dense_score=dense_score,
+                bm25_score=bm25_score,
+                dense_rank=dense_ranks.get(chunk_id),
+                keyword_rank=keyword_hit.rank,
+            )
+            keyword_meta = {
+                "bm25_score": round(bm25_score, 4),
+                "bm25_rank": keyword_hit.rank,
+                "bm25_raw_rank": keyword_hit.raw_rank,
+                "keyword_backend": keyword_hit.backend,
+                "keyword_augmented": True,
+                "matched_terms": _matched_terms(query_tokens, chunk.tokens)[:12],
+                "fusion_algorithm": f"{self.hybrid_fusion}_dense_bm25",
+                "fusion_score": round(fused_score, 4),
+                "retrieval_stage": f"{self._vector_backend}_bm25_fusion",
+                "keyword_query": query_text,
+                "matched_query": query,
+            }
+            if chunk_id in merged:
+                _score, existing_chunk, scores = merged[chunk_id]
+                merged[chunk_id] = (fused_score, existing_chunk, {**scores, **keyword_meta})
+                continue
+            merged[chunk_id] = (fused_score, chunk, keyword_meta)
+
+        return sorted(merged.values(), key=lambda item: (-item[0], item[1].source, item[1].chunk_index))
+
+    def _fuse_dense_keyword_score(
+        self,
+        *,
+        dense_score: float,
+        bm25_score: float,
+        dense_rank: int | None,
+        keyword_rank: int,
+    ) -> float:
+        if self.hybrid_fusion == "rrf":
+            dense_rrf = _rrf_score(dense_rank) if dense_rank is not None else 0.0
+            keyword_rrf = _rrf_score(keyword_rank)
+            max_rrf = 2 * _rrf_score(1)
+            rank_score = (dense_rrf + keyword_rrf) / max_rrf
+            lexical_score = bm25_score * 0.72 + rank_score * 0.28
+            return max(0.0, min(1.0, max(dense_score, lexical_score)))
+        return max(0.0, min(1.0, dense_score * 0.55 + bm25_score * 0.45))
 
     def _rerank(
         self,
@@ -373,6 +647,151 @@ class DocumentStore:
         limit: int,
     ) -> list[tuple[float, DocumentChunk, dict[str, object]]]:
         return self.reranker.rerank(query, scored_chunks, limit)
+
+    def _index_graph_chunk(self, chunk: DocumentChunk) -> None:
+        if not self.graph_enabled:
+            return
+        entities = _extract_graph_entities(
+            " ".join([chunk.title, chunk.source, chunk.text]),
+            max_entities=self.graph_max_entities_per_chunk,
+        )
+        if not entities:
+            return
+        self._chunk_entities[chunk.chunk_id] = tuple(entity.key for entity in entities)
+        for entity in entities:
+            self._entity_chunks[entity.key].add(chunk.chunk_id)
+            self._entity_labels.setdefault(entity.key, entity.label)
+        for left_index, left in enumerate(entities):
+            for right in entities[left_index + 1 :]:
+                if left.key == right.key:
+                    continue
+                self._entity_neighbors[left.key][right.key] += 1
+                self._entity_neighbors[right.key][left.key] += 1
+
+    def _clear_graph_index(self) -> None:
+        self._entity_chunks.clear()
+        self._entity_labels.clear()
+        self._entity_neighbors.clear()
+        self._chunk_entities.clear()
+
+    def _rebuild_graph_index(self) -> None:
+        self._clear_graph_index()
+        for chunk in self._chunks:
+            self._index_graph_chunk(chunk)
+
+    def _merge_graph_candidates(
+        self,
+        query_text: str,
+        query_tokens: tuple[str, ...],
+        scored_chunks: list[tuple[float, DocumentChunk, dict[str, object]]],
+    ) -> list[tuple[float, DocumentChunk, dict[str, object]]]:
+        if not self.graph_enabled or not self._chunk_entities:
+            return scored_chunks
+
+        graph_scores = self._search_graph(query_text, query_tokens)
+        if not graph_scores:
+            return scored_chunks
+
+        chunk_lookup = {chunk.chunk_id: chunk for chunk in self._chunks}
+        merged: dict[str, tuple[float, DocumentChunk, dict[str, object]]] = {
+            chunk.chunk_id: (score, chunk, dict(scores))
+            for score, chunk, scores in scored_chunks
+        }
+        for chunk_id, graph_meta in graph_scores.items():
+            chunk = chunk_lookup.get(chunk_id)
+            if chunk is None:
+                continue
+            graph_score = float(graph_meta["graph_score"])
+            if chunk_id in merged:
+                score, existing_chunk, scores = merged[chunk_id]
+                scores.update(graph_meta)
+                scores["graph_augmented"] = True
+                merged[chunk_id] = (min(1.0, score + graph_score * 0.18), existing_chunk, scores)
+                continue
+            scores = {
+                **graph_meta,
+                "graph_augmented": True,
+                "retrieval_stage": "graph_entity_relation_expansion",
+                "fusion_algorithm": "graph_plus_dense_bm25",
+            }
+            merged[chunk_id] = (min(1.0, graph_score * 0.72), chunk, scores)
+        return sorted(merged.values(), key=lambda item: (-item[0], item[1].source, item[1].chunk_index))
+
+    def _search_graph(
+        self,
+        query_text: str,
+        query_tokens: tuple[str, ...],
+    ) -> dict[str, dict[str, object]]:
+        query_entities = _extract_graph_entities(query_text, max_entities=self.graph_max_entities_per_chunk)
+        query_keys = [entity.key for entity in query_entities if entity.key in self._entity_chunks]
+        if not query_keys:
+            token_keys = [token for token in dict.fromkeys(query_tokens) if token in self._entity_chunks]
+            query_keys = token_keys[: self.graph_max_entities_per_chunk]
+        if not query_keys:
+            return {}
+
+        chunk_scores: dict[str, float] = defaultdict(float)
+        matched_entities: dict[str, set[str]] = defaultdict(set)
+        expanded_entities: dict[str, set[str]] = defaultdict(set)
+
+        for key in query_keys:
+            label = self._entity_labels.get(key, key)
+            for chunk_id in self._entity_chunks.get(key, set()):
+                chunk_scores[chunk_id] += 1.0
+                matched_entities[chunk_id].add(label)
+            for neighbor_key, weight in self._entity_neighbors.get(key, Counter()).most_common(self.graph_neighbor_limit):
+                neighbor_label = self._entity_labels.get(neighbor_key, neighbor_key)
+                relation_score = min(0.45, 0.18 + 0.05 * weight)
+                for chunk_id in self._entity_chunks.get(neighbor_key, set()):
+                    chunk_scores[chunk_id] += relation_score
+                    expanded_entities[chunk_id].add(neighbor_label)
+
+        if not chunk_scores:
+            return {}
+        max_score = max(chunk_scores.values()) or 1.0
+        return {
+            chunk_id: {
+                "graph_score": round(score / max_score, 4),
+                "graph_matched_entities": sorted(matched_entities.get(chunk_id, set()))[:8],
+                "graph_expanded_entities": sorted(expanded_entities.get(chunk_id, set()))[:8],
+                "graph_query_entities": [self._entity_labels.get(key, key) for key in query_keys],
+                "graph_neighbor_limit": self.graph_neighbor_limit,
+            }
+            for chunk_id, score in chunk_scores.items()
+        }
+
+    def _parent_context_for_child(self, child: DocumentChunk) -> str:
+        siblings = [
+            chunk
+            for chunk in self._chunks
+            if chunk.document_id == child.document_id
+            and abs(chunk.chunk_index - child.chunk_index) <= self.parent_context_window
+        ]
+        siblings.sort(key=lambda chunk: chunk.chunk_index)
+        if not siblings:
+            return child.contextual_text
+
+        context_lines = [
+            f"Parent document: {child.title}",
+            f"Source: {child.source}",
+            f"Matched child chunk: {child.chunk_index + 1}/{child.total_chunks}",
+            f"Parent context window: +/-{self.parent_context_window} child chunk(s)",
+        ]
+        if child.url:
+            context_lines.append(f"URL: {child.url}")
+        metadata_bits = [
+            f"{key}: {value}"
+            for key, value in sorted(child.metadata.items())
+            if isinstance(value, (str, int, float, bool))
+        ][:8]
+        if metadata_bits:
+            context_lines.append("Metadata: " + "; ".join(metadata_bits))
+        context_lines.append("Parent context:")
+        for sibling in siblings:
+            marker = "matched child" if sibling.chunk_id == child.chunk_id else "neighbor child"
+            context_lines.append(f"[{marker} {sibling.chunk_index + 1}/{sibling.total_chunks}]")
+            context_lines.append(sibling.text)
+        return _trim("\n".join(context_lines), self.parent_context_max_chars)
 
     def _upsert_chunk(self, chunk: DocumentChunk) -> None:
         if self._client is None or qmodels is None:
@@ -384,10 +803,7 @@ class DocumentStore:
                 points=[
                     qmodels.PointStruct(
                         id=_qdrant_point_id(chunk.chunk_id),
-                        vector={
-                            DENSE_VECTOR_NAME: chunk.embedding,
-                            SPARSE_VECTOR_NAME: _sparse_vector(chunk.tokens),
-                        },
+                        vector={DENSE_VECTOR_NAME: chunk.embedding},
                         payload=_chunk_payload(chunk),
                     )
                 ],
@@ -432,7 +848,6 @@ class DocumentStore:
                             distance=qmodels.Distance.COSINE,
                         )
                     },
-                    sparse_vectors_config={SPARSE_VECTOR_NAME: qmodels.SparseVectorParams()},
                 )
             self._collection_ready = True
         except Exception as exc:
@@ -525,7 +940,7 @@ def _chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
 def _split_long_text(text: str, chunk_size: int) -> list[str]:
     if len(text) <= chunk_size:
         return [text]
-    sentences = re.split(r"(?<=[.!?。！？])\s+", text)
+    sentences = SENTENCE_SPLIT_PATTERN.split(text)
     parts: list[str] = []
     current = ""
     for sentence in sentences:
@@ -554,6 +969,9 @@ def _build_contextual_text(
     chunk_text: str,
     chunk_index: int,
     total_chunks: int,
+    *,
+    context_prefix: str,
+    context_key_terms: list[str] | tuple[str, ...] = (),
 ) -> str:
     metadata_bits = [
         f"{key}: {value}"
@@ -561,10 +979,13 @@ def _build_contextual_text(
         if isinstance(value, (str, int, float, bool))
     ][:6]
     context_lines = [
+        f"Retrieval context: {context_prefix}",
         f"Document title: {doc.title}",
         f"Source: {doc.source}",
         f"Chunk: {chunk_index + 1}/{total_chunks}",
     ]
+    if context_key_terms:
+        context_lines.append("Context key terms: " + ", ".join(context_key_terms[:12]))
     if doc.url:
         context_lines.append(f"URL: {doc.url}")
     if metadata_bits:
@@ -574,44 +995,35 @@ def _build_contextual_text(
     return "\n".join(context_lines)
 
 
+def _document_context_excerpt(document_text: str, chunk_text: str, max_chars: int = 12000) -> str:
+    document_text = document_text.strip()
+    if len(document_text) <= max_chars:
+        return document_text
+    chunk_start = document_text.find(chunk_text[: min(80, len(chunk_text))])
+    if chunk_start < 0:
+        return document_text[:max_chars]
+    half = max_chars // 2
+    start = max(0, chunk_start - half)
+    end = min(len(document_text), chunk_start + len(chunk_text) + half)
+    excerpt = document_text[start:end]
+    prefix = "[document excerpt continues] " if start > 0 else ""
+    suffix = " [document excerpt continues]" if end < len(document_text) else ""
+    return f"{prefix}{excerpt}{suffix}"
+
+
 def _tokenize(text: str) -> list[str]:
     return [match.group(0).lower() for match in TOKEN_PATTERN.finditer(text)]
 
 
-def _sparse_score(query_tokens: tuple[str, ...], chunk_tokens: tuple[str, ...]) -> tuple[float, list[str]]:
+def _matched_terms(query_tokens: tuple[str, ...], chunk_tokens: tuple[str, ...]) -> list[str]:
     if not query_tokens or not chunk_tokens:
-        return 0.0, []
-    chunk_counts = Counter(chunk_tokens)
-    unique_query = list(dict.fromkeys(query_tokens))
-    matched = [token for token in unique_query if token in chunk_counts]
-    if not matched:
-        return 0.0, []
-
-    score = 0.0
-    doc_len = len(chunk_tokens)
-    avg_len = 180
-    k1 = 1.2
-    b = 0.75
-    for token in matched:
-        tf = chunk_counts[token]
-        score += ((tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / avg_len)))
-    return min(1.0, score / max(1, len(unique_query))), matched
+        return []
+    chunk_token_set = set(chunk_tokens)
+    return [token for token in dict.fromkeys(query_tokens) if token in chunk_token_set]
 
 
-def _sparse_vector(tokens: tuple[str, ...]):
-    if qmodels is None:
-        return None
-    counts = Counter(tokens)
-    weighted: dict[int, float] = defaultdict(float)
-    token_count = max(1, len(tokens))
-    for token, count in counts.items():
-        index = int(hashlib.sha256(token.encode("utf-8")).hexdigest()[:8], 16)
-        weighted[index] += count / token_count
-    sorted_items = sorted(weighted.items())
-    return qmodels.SparseVector(
-        indices=[index for index, _value in sorted_items],
-        values=[value for _index, value in sorted_items],
-    )
+def _rrf_score(rank: int) -> float:
+    return 1.0 / (60.0 + max(1, rank))
 
 
 def _coverage_score(query_tokens: tuple[str, ...], chunk_tokens: tuple[str, ...]) -> float:
@@ -630,6 +1042,98 @@ def _phrase_score(query: str, text: str) -> float:
     return 1.0 if query in text else 0.0
 
 
+def _extract_graph_entities(text: str, *, max_entities: int) -> list[GraphEntity]:
+    candidates: Counter[str] = Counter()
+    labels: dict[str, str] = {}
+
+    for phrase in re.findall(r"\b[A-Z][A-Za-z0-9+.#/-]*(?:\s+[A-Z][A-Za-z0-9+.#/-]*){0,4}\b", text):
+        normalized = _normalize_entity(phrase)
+        if normalized:
+            candidates[normalized] += 3
+            labels.setdefault(normalized, _clean_entity_label(phrase))
+
+    token_counts = Counter(_tokenize(text))
+    for token, count in token_counts.items():
+        if _is_graph_token(token):
+            candidates[token] += count
+            labels.setdefault(token, token)
+
+    entities: list[GraphEntity] = []
+    for key, _score in candidates.most_common(max_entities * 2):
+        label = labels.get(key, key)
+        if any(key != existing.key and (key in existing.key or existing.key in key) for existing in entities):
+            continue
+        entities.append(GraphEntity(key=key, label=label))
+        if len(entities) >= max_entities:
+            break
+    return entities
+
+
+def _normalize_entity(value: str) -> str:
+    label = _clean_entity_label(value)
+    if not label:
+        return ""
+    tokens = [
+        token.lower()
+        for token in TOKEN_PATTERN.findall(label)
+        if _is_graph_token(token.lower(), allow_short=True)
+    ]
+    return " ".join(tokens)
+
+
+def _clean_entity_label(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip(" -_/.,:;()[]{}")).strip()
+
+
+def _is_graph_token(token: str, *, allow_short: bool = False) -> bool:
+    if len(token) <= 2 or token in STOPWORDS:
+        return False
+    if token.isdigit():
+        return False
+    if allow_short and len(token) >= 3:
+        return True
+    return (
+        any(char.isdigit() for char in token)
+        or "_" in token
+        or "-" in token
+        or token in {
+            "agent",
+            "agentic",
+            "callback",
+            "canonical",
+            "celery",
+            "checkpoint",
+            "citation",
+            "conductresearch",
+            "contextual",
+            "dashscope",
+            "dense",
+            "embedding",
+            "evidence",
+            "fusion",
+            "graph",
+            "grounding",
+            "hybrid",
+            "langgraph",
+            "lightrag",
+            "memory",
+            "parent",
+            "planner",
+            "qdrant",
+            "query",
+            "rag",
+            "rerank",
+            "retrieval",
+            "scheduler",
+            "supervisor",
+            "tavily",
+            "vector",
+            "workflow",
+        }
+        or len(token) >= 5
+    )
+
+
 def _cosine_similarity(left: list[float], right: list[float]) -> float:
     if not left or not right:
         return 0.0
@@ -640,8 +1144,12 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     return sum(left_value * right_value for left_value, right_value in zip(left, right))
 
 
-def _stable_id(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+def _document_identity(document: EvidenceItem) -> str:
+    metadata_id = document.metadata.get("document_id")
+    if isinstance(metadata_id, str) and metadata_id:
+        return metadata_id
+    stable = document.url or f"{document.source}:{document.title}:{document.snippet or document.content or ''}"
+    return hashlib.sha256(stable.encode("utf-8")).hexdigest()
 
 
 def _qdrant_point_id(value: str) -> str:

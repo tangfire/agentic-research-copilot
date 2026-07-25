@@ -12,7 +12,6 @@ def _utc_now() -> str:
 
 class ResearchRequest(BaseModel):
     topic: str = Field(min_length=3)
-    audience: str = "recruiter"
     depth: Literal["quick", "standard", "deep"] = "standard"
     include_private_docs: bool = True
     use_memory: bool = True
@@ -51,6 +50,20 @@ class EvidenceItem(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class SourceCompressionContract(BaseModel):
+    summary: str
+    key_excerpts: list[str] = Field(default_factory=list)
+    relevance: float = 0.0
+    limitations: list[str] = Field(default_factory=list)
+
+
+class ChunkContextContract(BaseModel):
+    context: str
+    key_terms: list[str] = Field(default_factory=list)
+    provenance_hint: str = ""
+    confidence: float = 0.0
+
+
 class ResearchNote(BaseModel):
     plan_item_id: str
     question: str
@@ -86,6 +99,7 @@ class CorpusProfile(BaseModel):
     has_private_docs: bool = False
     has_reference_docs: bool = False
     vector_backend: str = "qdrant"
+    keyword_backend: str = "sqlite_fts5_bm25"
     embedding_dimensions: int = 0
     collection_name: str | None = None
     last_updated: str = Field(default_factory=_utc_now)
@@ -110,6 +124,30 @@ class PlannerContract(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     success_criteria: list[str] = Field(default_factory=list)
     revision_budget: int = 0
+    confidence: float = 0.0
+
+
+class SupervisorToolCall(BaseModel):
+    name: Literal["think_tool", "ConductResearch", "ResearchComplete"]
+    rationale: str
+    plan_item_ids: list[str] = Field(default_factory=list)
+    research_topic: str | None = None
+    reflection: str | None = None
+    mode: Literal["external", "internal", "hybrid"] | None = None
+    selected_tools: list[Literal["web_search", "vector_retrieval", "memory_recall"]] = Field(default_factory=list)
+    web_queries: list[str] = Field(default_factory=list)
+    internal_queries: list[str] = Field(default_factory=list)
+    memory_query: str | None = None
+    min_evidence: int | None = None
+    min_sources: int | None = None
+    sufficiency_criteria: list[str] = Field(default_factory=list)
+
+
+class SupervisorDecisionContract(BaseModel):
+    reflection: str
+    tool_calls: list[SupervisorToolCall] = Field(default_factory=list)
+    completion_criteria: list[str] = Field(default_factory=list)
+    max_concurrent_research_units: int = 1
     confidence: float = 0.0
 
 
@@ -236,6 +274,7 @@ class ResearchRun(BaseModel):
     request: ResearchRequest
     research_brief: str | None = None
     corpus_profile: CorpusProfile | None = None
+    supervisor_decision: SupervisorDecisionContract | None = None
     plan: list[PlanItem] = Field(default_factory=list)
     search_queries: list[SearchQuery] = Field(default_factory=list)
     retrieval_routes: list[RetrievalRoute] = Field(default_factory=list)

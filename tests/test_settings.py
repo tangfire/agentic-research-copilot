@@ -14,6 +14,13 @@ def test_default_reranker_uses_dashscope_with_local_fallback(monkeypatch):
     assert settings.rerank_provider == "dashscope"
     assert settings.rerank_base_url == DASHSCOPE_COMPATIBLE_BASE_URL
     assert settings.rerank_api_key == ""
+    assert settings.search_include_raw_content is True
+    assert settings.source_reader_enabled is True
+    assert settings.source_reader_strategy == "extract"
+    assert settings.source_reader_chunk_context_window == 1
+    assert settings.rag_graph_enabled is True
+    assert settings.rag_graph_max_entities_per_chunk == 12
+    assert settings.rag_graph_neighbor_limit == 8
 
 
 def test_load_settings_reads_dotenv_and_common_key_aliases(tmp_path, monkeypatch):

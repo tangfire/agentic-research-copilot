@@ -22,7 +22,6 @@ def main() -> None:
         for case in cases:
             request = ResearchRequest(
                 topic=case["topic"],
-                audience=case.get("audience", "technical reviewer"),
                 depth=case.get("depth", "standard"),
                 max_sections=4,
                 max_revisions=1,

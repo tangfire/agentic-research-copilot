@@ -153,6 +153,24 @@ if (-not $env:ARC_SEARCH_PROVIDER) {
 if (-not $env:ARC_SEARCH_DEPTH) {
   $env:ARC_SEARCH_DEPTH = "basic"
 }
+if (-not $env:ARC_SEARCH_INCLUDE_RAW_CONTENT) {
+  $env:ARC_SEARCH_INCLUDE_RAW_CONTENT = "true"
+}
+if (-not $env:ARC_SOURCE_READER_ENABLED) {
+  $env:ARC_SOURCE_READER_ENABLED = "true"
+}
+if (-not $env:ARC_SOURCE_READER_STRATEGY) {
+  $env:ARC_SOURCE_READER_STRATEGY = "chunk_rerank_compress"
+}
+if (-not $env:ARC_SOURCE_READER_MAX_CHARS) {
+  $env:ARC_SOURCE_READER_MAX_CHARS = "50000"
+}
+if (-not $env:ARC_SOURCE_READER_EXCERPT_CHARS) {
+  $env:ARC_SOURCE_READER_EXCERPT_CHARS = "1600"
+}
+if (-not $env:ARC_SOURCE_READER_CHUNK_CONTEXT_WINDOW) {
+  $env:ARC_SOURCE_READER_CHUNK_CONTEXT_WINDOW = "1"
+}
 if (-not $env:ARC_RERANK_PROVIDER) {
   $env:ARC_RERANK_PROVIDER = "dashscope"
 }

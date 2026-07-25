@@ -10,8 +10,10 @@ from agentic_research_copilot.settings import load_settings
 
 
 DEMO_TOPIC = (
-    "How should an agentic RAG research copilot be positioned for AI engineering "
-    "interviews, using project context and external research evidence?"
+    "Design a resume-ready AI Research Copilot by comparing Open Deep Research-style "
+    "orchestration with LangGraph persistence, Qdrant hybrid retrieval, Ragas-style "
+    "evaluation, and PraisonAI-inspired memory and trace design. Include trade-offs, "
+    "failure modes, and single-node deployment boundaries."
 )
 
 
@@ -47,25 +49,79 @@ def main() -> None:
 
 
 def _seed_demo_context(copilot: ResearchCopilot) -> None:
-    if not any(document.title == "AI Engineering Interview Positioning Notes" for document in copilot.documents.list()):
-        copilot.add_document(
-            title="AI Engineering Interview Positioning Notes",
-            source="examples/interview-positioning-notes.md",
-            snippet=(
-                "Interviewers should understand the project as an agentic research copilot "
-                "that turns complex questions into citation-backed reports."
-            ),
-            content=(
-                "A strong interview narrative should lead with the user problem, then show the agent handoff flow, "
-                "retrieval routing, Qdrant grounding, layered memory, citation verification, and trace replay. "
-                "The strongest resume angle is practical experience with multi-agent orchestration, RAG quality gates, "
-                "OpenAI-compatible providers, contextual document grounding, LangGraph orchestration, "
-                "and observable failure handling. "
-                "The demo should show planner output, hybrid retrieval over project notes and external papers, "
-                "report citations, evaluator metrics, and memory writes."
-            ),
-            metadata={"kind": "demo_context_note", "topic": "interview positioning"},
-        )
+    _ensure_demo_doc(
+        copilot,
+        title="AI Engineering Interview Positioning Notes",
+        source="examples/interview-positioning-notes.md",
+        url=None,
+        snippet=(
+            "Interviewers should understand the project as a deep research copilot "
+            "that turns complex questions into citation-backed reports."
+        ),
+        content=(
+            "A strong interview narrative should lead with the user problem, then show the agent handoff flow, "
+            "retrieval routing, Qdrant grounding, layered memory, citation verification, evaluation, and trace replay. "
+            "The strongest resume angle is practical experience with multi-agent orchestration, RAG quality gates, "
+            "OpenAI-compatible providers, contextual document grounding, LangGraph orchestration, and observable "
+            "failure handling. The demo should explain trade-offs, failure modes, single-node boundaries, and why "
+            "this is a focused AI Research Copilot rather than a generic agent platform."
+        ),
+        metadata={"kind": "demo_context_note", "topic": "interview positioning"},
+    )
+    _ensure_demo_doc(
+        copilot,
+        title="LangGraph Persistence and Checkpointing Notes",
+        source="docs.langchain.com/langgraph/persistence",
+        url="https://docs.langchain.com/oss/python/langgraph/persistence",
+        snippet="LangGraph persistence uses checkpointers to save graph state and support replay, recovery, and long-running workflows.",
+        content=(
+            "LangGraph persistence is relevant because a research copilot needs inspectable state across planner, "
+            "researcher, reporter, verifier, and memory-write nodes. The demo should describe SQLite checkpointing as "
+            "a single-node durability choice: it is appropriate for a personal project and local deployment, while "
+            "distributed production would need stronger queueing, cancellation, retry, and operational controls."
+        ),
+        metadata={"kind": "official_reference", "topic": "langgraph persistence"},
+    )
+    _ensure_demo_doc(
+        copilot,
+        title="Qdrant Hybrid Retrieval Notes",
+        source="qdrant.tech/documentation/search/hybrid-queries",
+        url="https://qdrant.tech/documentation/search/hybrid-queries/",
+        snippet="Qdrant hybrid queries combine dense and sparse signals and can fuse candidates with strategies such as RRF or DBSF.",
+        content=(
+            "Qdrant hybrid retrieval is the right evidence source for explaining why this project is stronger than "
+            "plain top-k RAG. Dense vectors capture semantic similarity, sparse vectors preserve lexical matches, and "
+            "RRF or DBSF fusion makes retrieval behavior easier to reason about before reranking."
+        ),
+        metadata={"kind": "official_reference", "topic": "hybrid retrieval"},
+    )
+    _ensure_demo_doc(
+        copilot,
+        title="Ragas Metric Notes",
+        source="docs.ragas.io/metrics",
+        url="https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/",
+        snippet="Ragas-style metrics evaluate faithfulness, context precision, context recall, and answer relevancy for RAG systems.",
+        content=(
+            "Ragas-style evaluation is useful as a demo artifact because it separates retrieval quality from generation "
+            "quality. The project should describe local proxy metrics as lightweight regression gates and optional Ragas "
+            "or LLM-as-judge artifacts as presentation evidence, not as a full benchmark claim."
+        ),
+        metadata={"kind": "evaluation_reference", "topic": "rag evaluation"},
+    )
+    _ensure_demo_doc(
+        copilot,
+        title="Open Deep Research Interaction Notes",
+        source="github.com/langchain-ai/open_deep_research",
+        url="https://github.com/langchain-ai/open_deep_research",
+        snippet="Open Deep Research uses a LangGraph research workflow with planning, delegated research, compressed findings, and final report generation.",
+        content=(
+            "The useful reference is the research-loop shape: receive a question, clarify or write a research brief, "
+            "delegate focused research work, compress findings while preserving citations, then synthesize a final report. "
+            "This project adapts that loop for a focused AI Research Copilot with contextual retrieval, memory governance, "
+            "trace replay, and single-node job execution."
+        ),
+        metadata={"kind": "reference_design", "topic": "open deep research"},
+    )
     if not any(record.key == "demo:interview_goal" for record in copilot.memory.list()):
         copilot.add_memory(
             key="demo:interview_goal",
@@ -80,15 +136,36 @@ def _seed_demo_context(copilot: ResearchCopilot) -> None:
         )
 
 
+def _ensure_demo_doc(
+    copilot: ResearchCopilot,
+    *,
+    title: str,
+    source: str,
+    url: str | None,
+    snippet: str,
+    content: str,
+    metadata: dict[str, object],
+) -> None:
+    if any(document.title == title for document in copilot.documents.list()):
+        return
+    copilot.add_document(
+        title=title,
+        source=source,
+        url=url,
+        snippet=snippet,
+        content=content,
+        metadata=metadata,
+    )
+
+
 def _demo_request() -> ResearchRequest:
     return ResearchRequest(
         topic=os.getenv("ARC_DEMO_TOPIC", DEMO_TOPIC),
-        audience=os.getenv("ARC_DEMO_AUDIENCE", "technical interviewer"),
         depth=os.getenv("ARC_DEMO_DEPTH", "standard"),
         include_private_docs=_env_bool("ARC_DEMO_INCLUDE_PRIVATE_DOCS", True),
-        use_memory=_env_bool("ARC_DEMO_USE_MEMORY", True),
-        max_sections=int(os.getenv("ARC_DEMO_MAX_SECTIONS", "4")),
-        max_revisions=int(os.getenv("ARC_DEMO_MAX_REVISIONS", "1")),
+        use_memory=_env_bool("ARC_DEMO_USE_MEMORY", False),
+        max_sections=int(os.getenv("ARC_DEMO_MAX_SECTIONS", "5")),
+        max_revisions=int(os.getenv("ARC_DEMO_MAX_REVISIONS", "0")),
     )
 
 

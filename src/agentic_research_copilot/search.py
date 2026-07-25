@@ -22,6 +22,37 @@ OPEN_DEEP_RESEARCH_STYLE_PROVIDERS = {
     "openai_web",
     "anthropic_web",
 }
+SEARCH_QUERY_STOPWORDS = {
+    "about",
+    "after",
+    "and",
+    "approach",
+    "are",
+    "between",
+    "compare",
+    "compares",
+    "contrast",
+    "core",
+    "does",
+    "establish",
+    "for",
+    "from",
+    "highlighting",
+    "how",
+    "into",
+    "its",
+    "model",
+    "of",
+    "on",
+    "or",
+    "patterns",
+    "the",
+    "their",
+    "to",
+    "trade",
+    "what",
+    "with",
+}
 KEYED_SEARCH_PROVIDERS = {
     "tavily",
     "brave",
@@ -40,12 +71,23 @@ class StrictSearchTool:
         self.search_tool = search_tool
 
     def __call__(self, query: str) -> list[dict[str, object]]:
-        results = self.search_tool(query)
-        if not results:
-            raise RuntimeError(
-                f"Strict search provider '{self.provider}' returned no evidence for query: {query}"
-            )
-        return results
+        attempted: list[str] = []
+        for candidate in _search_query_variants(query):
+            if candidate in attempted:
+                continue
+            attempted.append(candidate)
+            results = self.search_tool(candidate)
+            if results:
+                if candidate != query:
+                    for item in results:
+                        metadata = item.get("metadata")
+                        if isinstance(metadata, dict):
+                            metadata["original_query"] = query
+                            metadata["query_rewrite_strategy"] = "strict_provider_compacted"
+                return results
+        raise RuntimeError(
+            f"Strict search provider '{self.provider}' returned no evidence for query: {query}"
+        )
 
 
 class DuckDuckGoSearchClient:
@@ -134,12 +176,14 @@ class TavilySearchClient:
         max_results: int = 5,
         depth: str = "basic",
         base_url: str = "",
+        include_raw_content: bool = True,
     ) -> None:
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
         self.max_results = max_results
         self.depth = "advanced" if depth == "advanced" else "basic"
         self.endpoint = base_url or self.endpoint
+        self.include_raw_content = include_raw_content
 
     def search(self, query: str) -> list[dict[str, object]]:
         if not self.api_key:
@@ -154,7 +198,7 @@ class TavilySearchClient:
                         "max_results": self.max_results,
                         "search_depth": self.depth,
                         "include_answer": False,
-                        "include_raw_content": False,
+                        "include_raw_content": self.include_raw_content,
                     },
                 )
                 response.raise_for_status()
@@ -168,19 +212,26 @@ class TavilySearchClient:
                 continue
             title = _clean_text(item.get("title")) or query
             content = _clean_text(item.get("content"))
+            raw_content = _clean_text(item.get("raw_content"))
             url = _clean_text(item.get("url")) or None
-            if not content and not title:
+            if not content and not raw_content and not title:
                 continue
             results.append(
                 _search_result(
                     title=title[:180],
                     source="tavily",
                     url=url,
-                    snippet=content[:900],
-                    content=content,
+                    snippet=(content or raw_content)[:900],
+                    content=content or raw_content[:1600],
                     score=float(item.get("score", 0.72) or 0.72),
                     query=query,
-                    metadata={"depth": self.depth},
+                    metadata={
+                        "depth": self.depth,
+                        "raw_content_requested": self.include_raw_content,
+                        "raw_content_available": bool(raw_content),
+                        "raw_content_chars": len(raw_content),
+                    },
+                    raw_content=raw_content,
                 )
             )
         return results[: self.max_results]
@@ -754,6 +805,7 @@ def build_search_tool(settings: AppSettings) -> SearchTool | None:
             api_key=settings.search_api_key,
             depth=settings.search_depth,
             base_url=settings.search_base_url,
+            include_raw_content=settings.search_include_raw_content,
             **common,
         ).search
     elif provider == "brave":
@@ -819,6 +871,34 @@ def search_provider_requires_key(provider: str) -> bool:
     return provider in KEYED_SEARCH_PROVIDERS
 
 
+def _search_query_variants(query: str) -> list[str]:
+    cleaned = _clean_text(query)
+    variants = [cleaned] if cleaned else []
+    first_sentence = re.split(r"[.?!;:]", cleaned, maxsplit=1)[0].strip()
+    compacted = _compact_search_query(cleaned)
+    sentence_compacted = _compact_search_query(first_sentence)
+    for candidate in (compacted, first_sentence, sentence_compacted):
+        if candidate and candidate not in variants:
+            variants.append(candidate)
+    return variants
+
+
+def _compact_search_query(query: str, *, max_terms: int = 14) -> str:
+    terms = re.findall(r"[a-zA-Z0-9_+.-]+|[\u4e00-\u9fff]+", query.lower())
+    selected: list[str] = []
+    seen: set[str] = set()
+    for term in terms:
+        if term in SEARCH_QUERY_STOPWORDS or len(term) <= 2:
+            continue
+        if term in seen:
+            continue
+        seen.add(term)
+        selected.append(term)
+        if len(selected) >= max_terms:
+            break
+    return " ".join(selected)
+
+
 def _search_result(
     *,
     title: str,
@@ -830,8 +910,9 @@ def _search_result(
     query: str,
     kind: str = "web",
     metadata: dict[str, object] | None = None,
+    raw_content: str | None = None,
 ) -> dict[str, object]:
-    return {
+    result: dict[str, object] = {
         "title": title or query,
         "source": source,
         "kind": kind,
@@ -841,6 +922,9 @@ def _search_result(
         "score": score,
         "metadata": {"provider": source, "query": query, **(metadata or {})},
     }
+    if raw_content:
+        result["raw_content"] = raw_content
+    return result
 
 
 def _clean_text(value: object) -> str:

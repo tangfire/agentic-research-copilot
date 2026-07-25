@@ -184,6 +184,12 @@ class MemoryStore:
                 self._index_record(record)
                 known.add(identity)
 
+    def clear(self) -> int:
+        count = len(self._records)
+        self._records.clear()
+        self._embeddings.clear()
+        return count
+
     def recall(
         self,
         query: str,

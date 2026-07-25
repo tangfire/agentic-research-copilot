@@ -20,6 +20,7 @@ def wait_for_job(client: TestClient, status_url: str, timeout_seconds: float = 5
 
 
 def test_root_page_includes_docs_link(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "root.sqlite"))
     client = TestClient(create_app())
 
@@ -33,7 +34,10 @@ def test_root_page_includes_docs_link(tmp_path: Path, monkeypatch):
 
 
 def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "server.sqlite"))
+    monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "server-checkpoints.sqlite"))
+    monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
     client = TestClient(create_app())
 
     memory_response = client.post(
@@ -94,6 +98,48 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
         },
     )
     assert document_response.status_code == 200
+    document_data = document_response.json()
+    document_id = document_data["metadata"]["document_id"]
+
+    documents_response = client.get("/v1/documents")
+    assert documents_response.status_code == 200
+    assert any(doc["metadata"]["document_id"] == document_id for doc in documents_response.json())
+
+    delete_document_response = client.delete(f"/v1/documents/{document_id}")
+    assert delete_document_response.status_code == 200
+    assert delete_document_response.json()["deleted"] is True
+
+    missing_document_response = client.delete("/v1/documents/missing-document")
+    assert missing_document_response.status_code == 404
+
+    second_document_response = client.post(
+        "/v1/documents",
+        json={
+            "title": "Architecture Notes",
+            "source": "architecture.md",
+            "snippet": "The copilot combines planning, retrieval, citations, and trace replay.",
+        },
+    )
+    assert second_document_response.status_code == 200
+
+    local_notes = tmp_path / "local-notes.md"
+    local_notes.write_text(
+        "Local reader ingestion keeps parsing separate from chunking and reranking.",
+        encoding="utf-8",
+    )
+    ingest_response = client.post(
+        "/v1/documents/ingest",
+        json={
+            "path": str(local_notes),
+            "title": "Local Reader Notes",
+            "metadata": {"kind": "reader_demo"},
+        },
+    )
+    assert ingest_response.status_code == 200
+    ingest_data = ingest_response.json()
+    assert ingest_data["document_count"] == 1
+    assert ingest_data["documents"][0]["metadata"]["reader"] == "plain_text"
+    assert ingest_data["documents"][0]["metadata"]["kind"] == "reader_demo"
 
     run_response = client.post(
         "/v1/research/runs",
@@ -132,15 +178,30 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     assert replay_response.status_code == 200
     assert replay_response.json()["status"] == "completed"
 
+    clear_documents_response = client.delete("/v1/documents")
+    assert clear_documents_response.status_code == 200
+    assert client.get("/v1/documents").json() == []
+
+    clear_history_response = client.delete("/v1/research/history?include_memory=true")
+    assert clear_history_response.status_code == 200
+    clear_history_data = clear_history_response.json()
+    assert clear_history_data["runs_deleted"] >= 1
+    assert clear_history_data["memory_cleared"] is True
+    assert client.get("/v1/research/runs").json() == []
+    assert client.get("/v1/research/jobs").json() == []
+    assert client.get("/v1/memory").json() == []
+
 
 def test_job_status_result_and_runtime_config(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "jobs.sqlite"))
+    monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "jobs-checkpoints.sqlite"))
+    monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
     with TestClient(create_app()) as client:
         job_response = client.post(
             "/v1/research/jobs",
             json={
                 "topic": "agentic rag product architecture",
-                "audience": "technical interviewer",
                 "depth": "standard",
             },
         )
@@ -182,6 +243,12 @@ def test_job_status_result_and_runtime_config(tmp_path: Path, monkeypatch):
         assert "source_quality_score" in config_data["evaluation"]["metrics"]
         assert "faithfulness_proxy" in config_data["evaluation"]["metrics"]
         assert config_data["retrieval"]["hybrid_pipeline"]["fusion"] in {"rrf", "dbsf"}
+        assert any(agent["name"] == "research_supervisor" for agent in config_data["agents"])
+        assert "research_supervisor" in config_data["orchestration"]["active_graph"]
+        assert "open_deep_research_alignment" in config_data
+        web_tool = next(tool for tool in config_data["tool_registry"] if tool["name"] == "web_search")
+        assert web_tool["include_raw_content"] is True
+        assert web_tool["reader_strategy"] == "provider_raw_content_extract"
         assert all(reference["dependency"] is False for reference in config_data["reference_designs"])
         assert config_data["provider_readiness"]["strict_providers"] is False
 

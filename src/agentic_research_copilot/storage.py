@@ -22,7 +22,7 @@ class SQLiteStore:
 
     def save_document(self, document: EvidenceItem) -> None:
         payload = document.model_dump_json()
-        identity = self._document_identity(document)
+        identity = self.document_identity(document)
         with self._connect() as conn:
             conn.execute(
                 """
@@ -31,6 +31,16 @@ class SQLiteStore:
                 """,
                 (identity, payload, identity),
             )
+
+    def delete_document(self, document_id: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM documents WHERE identity = ?", (document_id,))
+        return cursor.rowcount > 0
+
+    def clear_documents(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM documents")
+        return cursor.rowcount
 
     def load_memory(self) -> list[MemoryRecord]:
         with self._connect() as conn:
@@ -101,6 +111,21 @@ class SQLiteStore:
                 (run.run_id, payload, run.started_at or ""),
             )
 
+    def clear_memory(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM memory_records")
+        return cursor.rowcount
+
+    def clear_runs(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM research_runs")
+        return cursor.rowcount
+
+    def clear_jobs(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM research_jobs")
+        return cursor.rowcount
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -145,7 +170,10 @@ class SQLiteStore:
                 """
             )
 
-    def _document_identity(self, document: EvidenceItem) -> str:
+    def document_identity(self, document: EvidenceItem) -> str:
+        metadata_id = document.metadata.get("document_id")
+        if isinstance(metadata_id, str) and metadata_id:
+            return metadata_id
         stable = document.url or f"{document.source}:{document.title}:{document.snippet or document.content or ''}"
         return hashlib.sha256(stable.encode("utf-8")).hexdigest()
 

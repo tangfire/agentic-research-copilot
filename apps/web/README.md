@@ -11,11 +11,19 @@ final report, evaluation gates, and trace artifacts.
 Views:
 
 - Portal: submit asynchronous research jobs through a thread-style Chinese UI, inspect the research brief, stage progress, plan items, quality gates, source summary, and citation-backed report.
-- Runs: inspect job state, completed runs, and plan transitions.
-- Sources: add project documents and grounding context.
+- Runs: inspect job state, completed runs, plan transitions, and clear local history.
+- Sources: add, delete, and clear project documents and grounding context.
 - Memory: add structured project and user memory.
 - Traces: inspect telemetry events, run traces, checkpoints, and lower-level handoffs.
 - Config: inspect runtime agents, tools, routes, providers, provider readiness, and quality gates.
 
 The same API can later support a richer Next.js or Vue frontend if the product needs
 authentication, streaming jobs, collaborative report editing, or heavier UI state.
+
+The portal is laid out as an integrated research console instead of a wall of cards:
+a top command bar for the question, a central workspace for brief/plan/report, and a
+right inspector for quality gates, sources, and trace details. The first-use path
+intentionally mirrors Open Deep Research: ask a question, follow the research thread,
+then read the report. Provider details, source lists, section citations, and low-level
+routes/traces remain available for inspection without turning the entry flow into a
+configuration form.

@@ -33,6 +33,11 @@ class RunLedger:
         for run in runs:
             self.record(run)
 
+    def clear(self) -> int:
+        count = len(self._runs)
+        self._runs.clear()
+        return count
+
 
 class JobLedger:
     """In-memory index for queued and completed research jobs."""
@@ -57,3 +62,8 @@ class JobLedger:
     def extend(self, jobs: Iterable[ResearchJob]) -> None:
         for job in jobs:
             self.record(job)
+
+    def clear(self) -> int:
+        count = len(self._jobs)
+        self._jobs.clear()
+        return count

@@ -8,7 +8,7 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: #f7f8fb;
+        --bg: #f4f6f8;
         --ink: #182033;
         --muted: #657089;
         --line: #dbe1ea;
@@ -33,7 +33,9 @@
       body {
         margin: 0;
         min-height: 100vh;
-        background: var(--bg);
+        background:
+          linear-gradient(180deg, #f8fafc 0, #f4f6f8 220px),
+          var(--bg);
         color: var(--ink);
         font-family:
           Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -65,11 +67,12 @@
         justify-content: space-between;
         gap: 16px;
         border-bottom: 1px solid var(--line);
-        background: rgba(255, 255, 255, 0.88);
+        background: rgba(255, 255, 255, 0.92);
         backdrop-filter: blur(10px);
         position: sticky;
         top: 0;
         z-index: 5;
+        box-shadow: 0 1px 0 rgba(24, 32, 51, 0.03);
       }
 
       .brand {
@@ -132,6 +135,19 @@
         background: transparent;
       }
 
+      .button.danger,
+      button.danger {
+        border-color: #fecaca;
+        color: var(--bad);
+      }
+
+      .button.mini,
+      button.mini {
+        min-height: 28px;
+        padding: 4px 8px;
+        font-size: 12px;
+      }
+
       button:disabled {
         cursor: not-allowed;
         opacity: 0.65;
@@ -139,9 +155,9 @@
 
       .layout {
         display: grid;
-        grid-template-columns: 224px minmax(0, 1fr);
+        grid-template-columns: 232px minmax(0, 1fr);
         gap: 20px;
-        width: min(1480px, 100%);
+        width: min(1540px, 100%);
         margin: 0 auto;
         padding: 20px clamp(14px, 3vw, 32px) 32px;
       }
@@ -151,11 +167,13 @@
         top: 84px;
         align-self: start;
         display: grid;
-        gap: 8px;
+        align-content: start;
+        gap: 6px;
+        min-height: calc(100vh - 116px);
         padding: 12px;
-        border: 1px solid var(--line);
-        background: var(--surface);
-        box-shadow: var(--shadow);
+        border: 1px solid #d6dee7;
+        background: #17211f;
+        box-shadow: 0 18px 42px rgba(24, 32, 51, 0.12);
         border-radius: 8px;
       }
 
@@ -164,13 +182,15 @@
         width: 100%;
         border-color: transparent;
         background: transparent;
-        color: var(--muted);
+        color: #bfd0cb;
+        min-height: 42px;
       }
 
       .tab-button.active {
-        background: #e7f3f1;
-        color: var(--accent-strong);
-        border-color: #b7d8d3;
+        background: #f6fbfa;
+        color: #0d4f49;
+        border-color: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
       }
 
       main {
@@ -216,48 +236,158 @@
         max-width: 780px;
       }
 
-      .provider-strip {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px;
+      .research-console {
+        overflow: hidden;
+        border: 1px solid #d4dde7;
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 20px 48px rgba(24, 32, 51, 0.1);
       }
 
-      .provider-card {
+      .console-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+        padding: 22px 24px;
+        border-bottom: 1px solid var(--line);
+        background: #f8fbfb;
+      }
+
+      .console-title {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .console-title h1 {
+        font-size: clamp(24px, 2.6vw, 32px);
+        line-height: 1.08;
+      }
+
+      .console-title p {
+        color: var(--muted);
+        max-width: 780px;
+      }
+
+      .research-command {
+        display: grid;
+        gap: 14px;
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      .command-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: end;
+      }
+
+      .topic-box {
+        padding: 12px;
+        border: 1px solid #cfd9e4;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
+
+      .topic-box textarea {
+        min-height: 90px;
+        border-color: transparent;
+        background: #ffffff;
+        box-shadow: inset 0 0 0 1px #edf1f6;
+      }
+
+      .command-actions {
+        display: grid;
+        gap: 10px;
+        justify-items: start;
+        min-width: 142px;
+      }
+
+      .console-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(310px, 350px);
+        min-height: 720px;
+        background: #ffffff;
+      }
+
+      .workspace-pane {
+        display: grid;
+        align-content: start;
+        gap: 18px;
+        min-width: 0;
+        padding: 20px 24px 24px;
+        background: #ffffff;
+      }
+
+      .pane-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .pane-block {
         min-width: 0;
         border: 1px solid var(--line);
-        background: #fbfcfe;
         border-radius: 8px;
-        padding: 10px 12px;
+        background: #ffffff;
+        padding: 16px;
       }
 
-      .provider-card span {
-        display: block;
-        color: var(--muted);
-        font-size: 12px;
+      .thread-grid {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+        gap: 16px;
+        align-items: start;
       }
 
-      .provider-card strong {
-        display: block;
-        margin-top: 3px;
-        font-size: 13px;
-        overflow-wrap: anywhere;
+      .report-block {
+        background: #ffffff;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .inspector-pane {
+        display: grid;
+        align-content: start;
+        gap: 16px;
+        min-width: 0;
+        padding: 20px;
+        border-left: 1px solid var(--line);
+        background: #f6f8fb;
+      }
+
+      .inspector-section {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 14px;
+      }
+
+      .inspector-section .section-title {
+        margin-bottom: 12px;
       }
 
       .research-grid {
         display: grid;
-        grid-template-columns: minmax(320px, 0.86fr) minmax(0, 1.28fr) minmax(280px, 0.82fr);
+        grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
         gap: 18px;
         align-items: start;
       }
 
-      .ask-card,
-      .research-sidebar {
+      .ask-card {
         position: sticky;
         top: 84px;
       }
 
       .research-sidebar {
         display: grid;
+        grid-column: 1 / -1;
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
         gap: 18px;
       }
 
@@ -455,6 +585,10 @@
         align-items: start;
       }
 
+      .inspector-pane .technical-grid {
+        grid-template-columns: 1fr;
+      }
+
       .workbench-grid {
         display: grid;
         grid-template-columns: minmax(360px, 0.78fr) minmax(0, 1.22fr);
@@ -610,33 +744,6 @@
         min-height: 18px;
       }
 
-      .prompt-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-      }
-
-      .prompt-chip {
-        min-height: 42px;
-        justify-content: flex-start;
-        white-space: normal;
-        text-align: left;
-        background: #fbfcfe;
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 2px;
-      }
-
-      .prompt-chip strong {
-        font-size: 13px;
-      }
-
-      .prompt-chip span {
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.35;
-      }
-
       .helper-text {
         color: var(--muted);
         font-size: 12px;
@@ -692,6 +799,71 @@
         border-left: 3px solid #b7d8d3;
       }
 
+      .report-document {
+        display: grid;
+        background: #ffffff;
+      }
+
+      .report-document .report-header {
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        background: #ffffff;
+        padding: 20px 22px 16px;
+      }
+
+      .report-document .report-header h3 {
+        font-size: 18px;
+        line-height: 1.25;
+      }
+
+      .report-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 22px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfe;
+      }
+
+      .report-content {
+        display: grid;
+      }
+
+      .report-document .report-section {
+        display: grid;
+        gap: 10px;
+        padding: 18px 22px;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: #ffffff;
+      }
+
+      .report-document .report-section header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0;
+      }
+
+      .report-document .report-section h3 {
+        font-size: 16px;
+        line-height: 1.35;
+      }
+
+      .report-document .report-section p {
+        color: #2c3648;
+      }
+
+      .report-document .citation-details {
+        margin-top: 6px;
+      }
+
+      .report-document > .citation-details {
+        margin: 14px 22px 20px;
+      }
+
       .source-card {
         background: #ffffff;
       }
@@ -722,6 +894,18 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
+      }
+
+      .citation-details {
+        margin-top: 10px;
+        border-top: 1px solid var(--line);
+        padding-top: 8px;
+      }
+
+      .citation-details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 13px;
       }
 
       .progress {
@@ -803,6 +987,13 @@
 
       .item header strong {
         overflow-wrap: anywhere;
+      }
+
+      .item-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
       }
 
       .table-wrap {
@@ -987,6 +1178,7 @@
           position: static;
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
+          min-height: 0;
           overflow-x: hidden;
         }
 
@@ -1000,6 +1192,10 @@
           position: static;
         }
 
+        .console-header,
+        .command-main,
+        .console-body,
+        .thread-grid,
         .split,
         .workbench-grid,
         .research-grid,
@@ -1008,14 +1204,23 @@
           grid-template-columns: 1fr;
         }
 
+        .console-body {
+          min-height: 0;
+        }
+
+        .inspector-pane {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+
+        .research-sidebar {
+          grid-template-columns: 1fr;
+        }
+
         .side-stack {
           position: static;
         }
 
-        .provider-strip,
-        .prompt-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
       }
 
       @media (max-width: 640px) {
@@ -1026,9 +1231,12 @@
 
         .metric-grid,
         .toggle-row,
-        .provider-strip,
-        .prompt-grid {
-          grid-template-columns: 1fr;
+        .console-header,
+        .research-command,
+        .workspace-pane,
+        .inspector-pane {
+          padding-left: 14px;
+          padding-right: 14px;
         }
 
         .segmented {
@@ -1063,178 +1271,104 @@
 
         <main>
           <section id="portal" class="tab-panel active">
-            <section class="workspace-header">
-              <div class="workspace-title">
-                <div>
+            <section class="research-console">
+              <header class="console-header">
+                <div class="console-title">
                   <h1>AI Research Copilot</h1>
                   <p id="workspace-subtitle">提交一个复杂问题，系统会生成研究计划并产出带引用的报告。</p>
                 </div>
-                <span id="provider-ready-pill" class="pill">检查模型服务</span>
-              </div>
-              <div id="provider-strip" class="provider-strip"></div>
-            </section>
+              </header>
 
-            <div class="research-grid">
-              <form id="run-form" class="surface ask-card form-grid">
-                <div class="section-title">
-                  <div class="section-heading">
-                    <h2>新建研究</h2>
-                    <p>输入题目后，系统会按研究线程推进。</p>
-                  </div>
-                  <span class="pill">Thread</span>
-                </div>
-                <label>
-                  研究问题
-                  <textarea id="topic" name="topic" required minlength="3">这个 AI Research Copilot 应该如何写进 AI 工程岗位简历，并在面试中讲清楚价值？</textarea>
-                </label>
-                <label>
-                  目标读者
-                  <input id="audience" name="audience" value="技术面试官" />
-                </label>
-                <details class="route-details" open>
-                  <summary>
+              <form id="run-form" class="research-command">
+                <div class="command-main">
+                  <label class="topic-box">
+                    研究问题
+                    <textarea id="topic" name="topic" required minlength="3">这个 AI Research Copilot 应该如何写进 AI 工程岗位简历，并在面试中讲清楚价值？</textarea>
+                  </label>
+                  <div class="command-actions">
                     <div class="status-line">
-                      <strong>研究参数</strong>
-                      <span class="pill">可调整</span>
+                      <button id="run-button" class="primary" type="submit">开始研究</button>
+                      <button id="cancel-job-button" class="ghost hidden" type="button">取消任务</button>
+                      <span id="form-status" class="muted"></span>
                     </div>
-                  </summary>
-                  <div class="stack" style="margin-top: 12px;">
-                    <label>
-                      研究深度
-                      <span class="segmented">
-                        <label><input type="radio" name="depth" value="quick" /><span>快速</span></label>
-                        <label><input type="radio" name="depth" value="standard" checked /><span>标准</span></label>
-                        <label><input type="radio" name="depth" value="deep" /><span>深入</span></label>
-                      </span>
-                    </label>
-                    <div class="toggle-row">
-                      <label class="toggle">
-                        <input id="include-private-docs" type="checkbox" checked />
-                        使用资料库
-                      </label>
-                      <label class="toggle">
-                        <input id="use-memory" type="checkbox" checked />
-                        使用记忆
-                      </label>
-                    </div>
-                    <label>
-                      报告章节数
-                      <select id="max-sections">
-                        <option value="3">3</option>
-                        <option value="4" selected>4</option>
-                        <option value="5">5</option>
-                      </select>
-                    </label>
+                    <div id="job-progress" class="progress hidden" aria-hidden="true"><span></span></div>
                   </div>
-                </details>
-                <div class="prompt-grid">
-                  <button
-                    class="prompt-chip"
-                    type="button"
-                    data-topic="这个 AI Research Copilot 应该如何写进 AI 工程岗位简历，并在面试中讲清楚价值？"
-                    data-audience="技术面试官"
-                  >
-                    <strong>简历定位</strong>
-                    <span>项目亮点和面试讲法</span>
-                  </button>
-                  <button
-                    class="prompt-chip"
-                    type="button"
-                    data-topic="参考 Open Deep Research 和 PraisonAI，评估当前 AI Research Copilot 的架构设计是否合理。"
-                    data-audience="资深 AI 工程师"
-                  >
-                    <strong>架构评审</strong>
-                    <span>Agent、RAG、记忆、评估</span>
-                  </button>
-                  <button
-                    class="prompt-chip"
-                    type="button"
-                    data-topic="评估这个项目的 Agentic RAG 链路，并找出最适合演示给面试官看的证据。"
-                    data-audience="AI 应用面试官"
-                  >
-                    <strong>RAG 评估</strong>
-                    <span>检索、引用和 trace 证据</span>
-                  </button>
                 </div>
-                <div class="status-line">
-                  <button id="run-button" class="primary" type="submit">开始研究</button>
-                  <button id="cancel-job-button" class="ghost hidden" type="button">取消任务</button>
-                  <span id="form-status" class="muted"></span>
-                </div>
-                <div id="job-progress" class="progress hidden" aria-hidden="true"><span></span></div>
               </form>
 
-              <section class="surface thread-panel">
-                <div class="section-title">
-                  <div class="section-heading">
-                    <h2>研究线程</h2>
-                    <p>从研究简报到最终报告的执行进度。</p>
+              <div class="console-body">
+                <section class="workspace-pane">
+                  <div class="pane-toolbar">
+                    <div class="section-heading">
+                      <h2>研究运行</h2>
+                      <p>从研究简报、执行阶段到最终报告的完整过程。</p>
+                    </div>
+                    <span id="selected-run-pill" class="pill">未选择运行</span>
                   </div>
-                  <span id="selected-run-pill" class="pill">未选择运行</span>
-                </div>
-                <div id="research-brief"></div>
-                <div>
-                  <div class="section-title">
-                    <h3>执行阶段</h3>
-                    <span class="pill">LangGraph</span>
+                  <div id="research-brief"></div>
+                  <div class="thread-grid">
+                    <section class="pane-block">
+                      <div class="section-title">
+                        <h3>执行阶段</h3>
+                        <span class="pill">LangGraph</span>
+                      </div>
+                      <div id="stage-list" class="stage-list"></div>
+                    </section>
+                    <section class="pane-block">
+                      <div class="section-title">
+                        <h3>研究计划</h3>
+                        <span class="pill">Planner</span>
+                      </div>
+                      <div id="plan-summary"></div>
+                    </section>
                   </div>
-                  <div id="stage-list" class="stage-list"></div>
-                </div>
-                <div>
-                  <div class="section-title">
-                    <h3>研究计划</h3>
-                    <span class="pill">Planner</span>
-                  </div>
-                  <div id="plan-summary"></div>
-                </div>
-              </section>
-
-              <aside class="research-sidebar">
-                <section class="surface">
-                  <div class="section-title">
-                    <h2>质量门禁</h2>
-                    <span class="pill">Evaluator</span>
-                  </div>
-                  <div id="run-metrics" class="quality-grid"></div>
+                  <section class="pane-block report-block">
+                    <div class="section-title">
+                      <h2>研究报告</h2>
+                      <span class="pill">带引用输出</span>
+                    </div>
+                    <div id="report-output"></div>
+                  </section>
                 </section>
-                <section class="surface">
-                  <div class="section-title">
-                    <h2>证据来源</h2>
-                    <span class="pill">Sources</span>
-                  </div>
-                  <div id="source-summary"></div>
-                </section>
-              </aside>
-            </div>
 
-            <section class="surface report-panel">
-              <div class="section-title">
-                <h2>研究报告</h2>
-                <span class="pill">带引用输出</span>
+                <aside class="inspector-pane">
+                  <section class="inspector-section">
+                    <div class="section-title">
+                      <h2>质量门禁</h2>
+                      <span class="pill">Evaluator</span>
+                    </div>
+                    <div id="run-metrics" class="quality-grid"></div>
+                  </section>
+                  <section class="inspector-section">
+                    <div class="section-title">
+                      <h2>证据来源</h2>
+                      <span class="pill">Sources</span>
+                    </div>
+                    <div id="source-summary"></div>
+                  </section>
+                  <section class="inspector-section technical-panel">
+                    <details>
+                      <summary>技术细节：检索路由和 Agent trace</summary>
+                      <div class="technical-grid">
+                        <section>
+                          <div class="section-title">
+                            <h3>检索路由</h3>
+                            <span class="pill">Router</span>
+                          </div>
+                          <div id="route-table" class="stack"></div>
+                        </section>
+                        <section>
+                          <div class="section-title">
+                            <h3>Agent 时间线</h3>
+                            <span class="pill">Trace</span>
+                          </div>
+                          <div id="timeline-output"></div>
+                        </section>
+                      </div>
+                    </details>
+                  </section>
+                </aside>
               </div>
-              <div id="report-output"></div>
-            </section>
-
-            <section class="surface technical-panel">
-              <details>
-                <summary>技术细节：检索路由和 Agent trace</summary>
-                <div class="technical-grid">
-                  <section>
-                    <div class="section-title">
-                      <h3>检索路由</h3>
-                      <span class="pill">Router</span>
-                    </div>
-                    <div id="route-table" class="stack"></div>
-                  </section>
-                  <section>
-                    <div class="section-title">
-                      <h3>Agent 时间线</h3>
-                      <span class="pill">Trace</span>
-                    </div>
-                    <div id="timeline-output"></div>
-                  </section>
-                </div>
-              </details>
             </section>
           </section>
 
@@ -1248,7 +1382,7 @@
                 <div id="job-list" class="run-list"></div>
                 <div class="section-title" style="margin-top: 16px;">
                   <h2>历史运行</h2>
-                  <span class="pill">GET /v1/research/runs</span>
+                  <button id="clear-history-button" class="ghost danger mini" type="button">清空历史</button>
                 </div>
                 <div id="run-list" class="run-list"></div>
               </section>
@@ -1294,7 +1428,7 @@
               <section class="surface">
                 <div class="section-title">
                   <h2>资料清单</h2>
-                  <span class="pill">GET /v1/documents</span>
+                  <button id="clear-documents-button" class="ghost danger mini" type="button">清空资料库</button>
                 </div>
                 <div id="document-list"></div>
               </section>
@@ -1374,7 +1508,6 @@
         memoryGovernance: null,
         telemetry: [],
         config: null,
-        providerCheck: null,
         activeJob: null,
         selectedRun: null,
       };
@@ -1475,7 +1608,7 @@
 
       async function loadAll() {
         await checkHealth();
-        const [jobs, runs, documents, memory, memoryGovernance, telemetry, config, providerCheck] = await Promise.all([
+        const [jobs, runs, documents, memory, memoryGovernance, telemetry, config] = await Promise.all([
           api("/v1/research/jobs"),
           api("/v1/research/runs"),
           api("/v1/documents"),
@@ -1483,7 +1616,6 @@
           api("/v1/memory/governance"),
           api("/v1/telemetry"),
           api("/v1/runtime/config"),
-          api("/v1/runtime/provider-check"),
         ]);
         state.jobs = jobs;
         state.runs = runs;
@@ -1492,15 +1624,12 @@
         state.memoryGovernance = memoryGovernance;
         state.telemetry = telemetry;
         state.config = config;
-        state.providerCheck = providerCheck;
         if (state.activeJob) {
           state.activeJob = jobs.find((job) => job.job_id === state.activeJob.job_id) || state.activeJob;
         } else {
           state.activeJob = jobs.find((job) => ["queued", "running"].includes(job.status)) || null;
         }
-        if (!state.selectedRun && runs.length) {
-          state.selectedRun = runs[0];
-        } else if (state.selectedRun) {
+        if (state.selectedRun) {
           const fresh = runs.find((run) => run.run_id === state.selectedRun.run_id);
           state.selectedRun = fresh || state.selectedRun;
         }
@@ -1534,14 +1663,15 @@
         renderTelemetry();
         renderCheckpoints();
         renderConfig();
+        renderMaintenanceControls();
+      }
+
+      function renderMaintenanceControls() {
+        $("#clear-history-button").disabled = !state.runs.length && !state.jobs.length && !state.telemetry.length;
+        $("#clear-documents-button").disabled = !state.documents.length;
       }
 
       function renderWorkspaceHeader() {
-        const readiness = state.providerCheck || {};
-        const providers = readiness.providers || {};
-        const ready = Boolean(readiness.ready);
-        $("#provider-ready-pill").textContent = ready ? "真实服务已连接" : "服务配置待检查";
-        $("#provider-ready-pill").className = ready ? "pill good" : "pill warn";
         const selectedRun = state.selectedRun;
         const activeJob = state.activeJob;
         $("#workspace-subtitle").textContent = activeJob && ["queued", "running"].includes(activeJob.status)
@@ -1549,23 +1679,6 @@
           : selectedRun
             ? `${zhStatus(selectedRun.status)} · 运行 ${shortId(selectedRun.run_id)}`
             : "可以开始一次带引用、可追溯、可复查的研究任务。";
-        $("#provider-strip").innerHTML = [
-          providerCard("大模型", providers.model?.chat_model || providers.model?.provider || "未配置", providers.model?.api_key_configured),
-          providerCard("向量模型", providers.embedding?.model || providers.embedding?.provider || "未配置", providers.embedding?.api_key_configured),
-          providerCard("搜索源", providers.search?.provider || "未配置", providers.search?.api_key_configured || providers.search?.provider === "none"),
-          providerCard("重排模型", providers.rerank?.model || providers.rerank?.provider || "未配置", providers.rerank?.api_key_configured),
-          providerCard("检查点", providers.langgraph?.checkpointer || "未配置", providers.langgraph?.checkpointer === "sqlite"),
-        ].join("");
-      }
-
-      function providerCard(label, value, ok) {
-        return `
-          <div class="provider-card">
-            <span>${escapeHtml(label)}</span>
-            <strong>${escapeHtml(value || "未配置")}</strong>
-            <span class="${ok ? "success" : "error"}">${ok ? "已连接" : "需检查"}</span>
-          </div>
-        `;
       }
 
       function currentSubject() {
@@ -1593,7 +1706,6 @@
         const title = request.topic || job?.topic || "未命名研究";
         const brief = run?.research_brief || "研究简报生成中。";
         const meta = [
-          request.audience ? `读者：${request.audience}` : "",
           request.depth ? `深度：${request.depth}` : "",
           run?.run_id ? `运行：${shortId(run.run_id)}` : job?.job_id ? `任务：${shortId(job.job_id)}` : "",
         ].filter(Boolean);
@@ -1747,14 +1859,16 @@
         }
         const report = run.report || {};
         const evaluation = run.evaluation || {};
-        const rows = [
-          ["计划覆盖", evaluation.plan_coverage],
+        const primaryRows = [
           ["证据充分", evaluation.evidence_sufficiency],
           ["来源质量", evaluation.source_quality_score],
-          ["上下文精度", evaluation.context_precision],
           ["上下文召回", evaluation.context_recall],
-          ["事实一致", evaluation.faithfulness_proxy],
           ["引用精度", evaluation.citation_precision],
+        ];
+        const extraRows = [
+          ["计划覆盖", evaluation.plan_coverage],
+          ["上下文精度", evaluation.context_precision],
+          ["事实一致", evaluation.faithfulness_proxy],
         ];
         $("#run-metrics").innerHTML = `
           <div class="status-line">
@@ -1762,9 +1876,19 @@
             <span class="pill">计划 ${escapeHtml(run.plan?.length || 0)}</span>
             <span class="pill">证据 ${escapeHtml(run.evidence?.length || 0)}</span>
             <span class="pill">来源 ${escapeHtml(report.source_count || 0)}</span>
-            <span class="pill">并发 ${escapeHtml(state.config?.job_execution?.research_max_workers || 1)}</span>
           </div>
-          ${rows.map(([label, value]) => qualityMetric(label, value)).join("")}
+          ${primaryRows.map(([label, value]) => qualityMetric(label, value)).join("")}
+          <details class="citation-details">
+            <summary>查看完整评估指标</summary>
+            <div class="quality-grid" style="margin-top: 10px;">
+              ${extraRows.map(([label, value]) => qualityMetric(label, value)).join("")}
+              <div class="status-line">
+                <span class="pill">并发 ${escapeHtml(state.config?.job_execution?.research_max_workers || 1)}</span>
+                <span class="pill">查询改写 ${escapeHtml(evaluation.query_rewrite_count || 0)}</span>
+                <span class="pill">来源多样性 ${escapeHtml(evaluation.source_diversity || 0)}</span>
+              </div>
+            </div>
+          </details>
         `;
         $("#route-table").innerHTML = renderRoutes(run.retrieval_routes || []);
       }
@@ -1808,17 +1932,25 @@
         const countPills = Object.entries(kindCounts)
           .map(([kind, count]) => `<span class="pill">${escapeHtml(kind)} ${escapeHtml(count)}</span>`)
           .join("");
-        const rows = sourceIndex.length
-          ? sourceIndex.slice(0, 6).map(sourceIndexRow).join("")
-          : evidence.slice(0, 6).map(evidenceSourceRow).join("");
+        const sourceRows = sourceIndex.length
+          ? sourceIndex.map(sourceIndexRow)
+          : evidence.map(evidenceSourceRow);
         target.innerHTML = `
           <div class="stack">
             <div class="status-line">
               <span class="pill">引用来源 ${escapeHtml(report.source_count || sourceIndex.length || 0)}</span>
               <span class="pill">证据 ${escapeHtml(evidence.length)}</span>
-              ${countPills}
             </div>
-            <div class="source-list">${rows || empty("暂无可展示来源。")}</div>
+            <div class="source-list">${sourceRows.slice(0, 3).join("") || empty("暂无可展示来源。")}</div>
+            ${sourceRows.length > 3 || countPills ? `
+              <details class="citation-details">
+                <summary>查看全部来源和类型</summary>
+                <div class="stack" style="margin-top: 10px;">
+                  <div class="status-line">${countPills}</div>
+                  <div class="source-list">${sourceRows.slice(3).join("")}</div>
+                </div>
+              </details>
+            ` : ""}
           </div>
         `;
       }
@@ -1867,14 +1999,17 @@
               .map((item) => sourceLine(item))
               .join("");
             return `
-              <article class="item report-section">
+              <section class="report-section">
                 <header>
-                  <strong>${escapeHtml(section.heading)}</strong>
+                  <h3>${escapeHtml(section.heading)}</h3>
                   <span class="pill">${section.evidence_count || 0} 条引用</span>
                 </header>
                 <p>${escapeHtml(section.content)}</p>
-                <div class="citation-list">${citations || '<span class="muted">本节暂无引用。</span>'}</div>
-              </article>
+                <details class="citation-details">
+                  <summary>查看本节引用</summary>
+                  <div class="citation-list">${citations || '<span class="muted">本节暂无引用。</span>'}</div>
+                </details>
+              </section>
             `;
           })
           .join("");
@@ -1882,31 +2017,26 @@
           .map((line) => `<div class="item source-index-line">${escapeHtml(line)}</div>`)
           .join("");
         output.innerHTML = `
-          <div class="stack">
+          <article class="report-document">
             <div class="report-header">
               <h3>${escapeHtml(report.title)}</h3>
               <p class="muted" style="margin-top: 6px;">${escapeHtml(report.summary)}</p>
             </div>
-            <div class="status-line">${failureReason || issues || '<span class="pill good">已通过引用校验</span>'}</div>
-            <div class="status-line">
+            <div class="report-meta-row">${failureReason || issues || '<span class="pill good">已通过引用校验</span>'}</div>
+            <div class="report-meta-row">
               <span class="${evaluation.passed ? "pill good" : "pill warn"}">${evaluation.passed ? "评估通过" : "需要复查"}</span>
-              <span class="pill">覆盖 ${Math.round((evaluation.plan_coverage || 0) * 100)}%</span>
               <span class="pill">充分 ${Math.round((evaluation.evidence_sufficiency || 0) * 100)}%</span>
               <span class="pill">来源 ${Math.round((evaluation.source_quality_score || 0) * 100)}%</span>
-              <span class="pill">上下文精度 ${Math.round((evaluation.context_precision || 0) * 100)}%</span>
               <span class="pill">上下文召回 ${Math.round((evaluation.context_recall || 0) * 100)}%</span>
-              <span class="pill">一致性 ${Math.round((evaluation.faithfulness_proxy || 0) * 100)}%</span>
-              <span class="pill">查询改写 ${escapeHtml(evaluation.query_rewrite_count || 0)}</span>
               <span class="pill">引用 ${Math.round((evaluation.citation_precision || 0) * 100)}%</span>
-              <span class="pill">来源多样性 ${escapeHtml(evaluation.source_diversity || 0)}</span>
-              ${evalNotes}
             </div>
-            <div>${sections}</div>
-            <div>
-              <h3>来源索引</h3>
+            ${evalNotes ? `<details class="citation-details"><summary>查看评估备注</summary><div class="status-line" style="margin-top: 10px;">${evalNotes}</div></details>` : ""}
+            <div class="report-content">${sections}</div>
+            <details class="citation-details">
+              <summary>查看完整来源索引</summary>
               <div class="stack" style="margin-top: 10px;">${sourceIndex || empty("暂无来源索引。")}</div>
-            </div>
-          </div>
+            </details>
+          </article>
         `;
       }
 
@@ -2132,18 +2262,29 @@
         }
         target.innerHTML = state.documents
           .map(
-            (doc) => `
+            (doc) => {
+              const documentId = doc.metadata?.document_id || "";
+              return `
               <article class="item">
                 <header>
                   <strong>${escapeHtml(doc.title)}</strong>
-                  <span class="pill">${escapeHtml(zhKind(doc.kind))}</span>
+                  <span class="item-actions">
+                    <span class="pill">${escapeHtml(zhKind(doc.kind))}</span>
+                    ${documentId ? `<button class="ghost danger mini delete-document-button" type="button" data-document-id="${escapeHtml(documentId)}">删除</button>` : ""}
+                  </span>
                 </header>
                 <p class="muted">${escapeHtml(doc.source)}</p>
                 <p style="margin-top: 6px;">${escapeHtml(doc.snippet || doc.content || "")}</p>
               </article>
-            `,
+            `;
+            },
           )
           .join("");
+        $$(".delete-document-button").forEach((button) => {
+          button.addEventListener("click", async () => {
+            await deleteDocument(button.dataset.documentId);
+          });
+        });
       }
 
       function renderMemory() {
@@ -2335,11 +2476,6 @@
         try {
           const body = {
             topic: $("#topic").value.trim(),
-            audience: $("#audience").value.trim() || "technical interviewer",
-            depth: document.querySelector('input[name="depth"]:checked').value,
-            include_private_docs: $("#include-private-docs").checked,
-            use_memory: $("#use-memory").checked,
-            max_sections: Number($("#max-sections").value),
           };
           const result = await api("/v1/research/jobs", {
             method: "POST",
@@ -2387,6 +2523,30 @@
         await loadAll();
       }
 
+      async function deleteDocument(documentId) {
+        if (!documentId) return;
+        if (!window.confirm("确定删除这条资料吗？相关向量索引也会一起删除。")) return;
+        await api(`/v1/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+        await loadAll();
+      }
+
+      async function clearDocuments() {
+        if (!state.documents.length) return;
+        if (!window.confirm("确定清空资料库吗？所有本地资料和向量索引都会删除。")) return;
+        await api("/v1/documents", { method: "DELETE" });
+        state.selectedRun = null;
+        await loadAll();
+      }
+
+      async function clearHistory() {
+        if (!state.runs.length && !state.jobs.length && !state.telemetry.length) return;
+        if (!window.confirm("确定清空历史运行、任务队列和轨迹事件吗？资料库不会被删除。")) return;
+        await api("/v1/research/history", { method: "DELETE" });
+        state.activeJob = null;
+        state.selectedRun = null;
+        await loadAll();
+      }
+
       async function addMemory(event) {
         event.preventDefault();
         await api("/v1/memory", {
@@ -2404,15 +2564,11 @@
       $$(".tab-button").forEach((button) => {
         button.addEventListener("click", () => switchTab(button.dataset.tab));
       });
-      $$(".prompt-chip").forEach((button) => {
-        button.addEventListener("click", () => {
-          $("#topic").value = button.dataset.topic || "";
-          $("#audience").value = button.dataset.audience || "";
-        });
-      });
       $("#run-form").addEventListener("submit", createRun);
       $("#cancel-job-button").addEventListener("click", () => cancelJob(state.activeJob?.job_id));
       $("#document-form").addEventListener("submit", addDocument);
+      $("#clear-documents-button").addEventListener("click", clearDocuments);
+      $("#clear-history-button").addEventListener("click", clearHistory);
       $("#memory-form").addEventListener("submit", addMemory);
       $("#refresh-button").addEventListener("click", loadAll);
 

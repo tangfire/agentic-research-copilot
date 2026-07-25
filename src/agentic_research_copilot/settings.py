@@ -35,6 +35,12 @@ class AppSettings(BaseModel):
     search_depth: str = "basic"
     search_timeout_seconds: float = 8.0
     search_max_results: int = 5
+    search_include_raw_content: bool = True
+    source_reader_enabled: bool = True
+    source_reader_strategy: Literal["extract", "model_compress", "chunk_rerank_compress"] = "extract"
+    source_reader_max_chars: int = 50000
+    source_reader_excerpt_chars: int = 1600
+    source_reader_chunk_context_window: int = 1
     research_max_workers: int = 4
     job_max_attempts: int = 2
     job_timeout_seconds: float = 120.0
@@ -62,6 +68,9 @@ class AppSettings(BaseModel):
     rag_min_evidence_per_item: int = 2
     rag_min_source_diversity: int = 2
     rag_hybrid_fusion: Literal["rrf", "dbsf"] = "rrf"
+    rag_graph_enabled: bool = True
+    rag_graph_max_entities_per_chunk: int = 12
+    rag_graph_neighbor_limit: int = 8
     rerank_provider: Literal["rule", "dashscope", "qwen", "qwen3"] = "dashscope"
     rerank_base_url: str = DASHSCOPE_COMPATIBLE_BASE_URL
     rerank_api_key: str = ""
@@ -71,6 +80,7 @@ class AppSettings(BaseModel):
     langgraph_checkpointer: Literal["sqlite", "memory"] = "sqlite"
     langgraph_checkpoint_path: str = ".arc/langgraph_checkpoints.sqlite"
     max_revisions: int = 2
+    seed_reference_knowledge: bool = False
 
 
 def load_settings() -> AppSettings:
@@ -89,6 +99,12 @@ def load_settings() -> AppSettings:
         search_depth=os.getenv("ARC_SEARCH_DEPTH", "basic"),
         search_timeout_seconds=float(os.getenv("ARC_SEARCH_TIMEOUT_SECONDS", "8")),
         search_max_results=int(os.getenv("ARC_SEARCH_MAX_RESULTS", "5")),
+        search_include_raw_content=_env_bool("ARC_SEARCH_INCLUDE_RAW_CONTENT", True),
+        source_reader_enabled=_env_bool("ARC_SOURCE_READER_ENABLED", True),
+        source_reader_strategy=os.getenv("ARC_SOURCE_READER_STRATEGY", "extract").lower(),
+        source_reader_max_chars=int(os.getenv("ARC_SOURCE_READER_MAX_CHARS", "50000")),
+        source_reader_excerpt_chars=int(os.getenv("ARC_SOURCE_READER_EXCERPT_CHARS", "1600")),
+        source_reader_chunk_context_window=int(os.getenv("ARC_SOURCE_READER_CHUNK_CONTEXT_WINDOW", "1")),
         research_max_workers=int(os.getenv("ARC_RESEARCH_MAX_WORKERS", "4")),
         job_max_attempts=int(os.getenv("ARC_JOB_MAX_ATTEMPTS", "2")),
         job_timeout_seconds=float(os.getenv("ARC_JOB_TIMEOUT_SECONDS", "120")),
@@ -119,6 +135,9 @@ def load_settings() -> AppSettings:
         rag_min_evidence_per_item=int(os.getenv("ARC_RAG_MIN_EVIDENCE_PER_ITEM", "2")),
         rag_min_source_diversity=int(os.getenv("ARC_RAG_MIN_SOURCE_DIVERSITY", "2")),
         rag_hybrid_fusion=os.getenv("ARC_RAG_HYBRID_FUSION", "rrf").lower(),
+        rag_graph_enabled=_env_bool("ARC_RAG_GRAPH_ENABLED", True),
+        rag_graph_max_entities_per_chunk=int(os.getenv("ARC_RAG_GRAPH_MAX_ENTITIES_PER_CHUNK", "12")),
+        rag_graph_neighbor_limit=int(os.getenv("ARC_RAG_GRAPH_NEIGHBOR_LIMIT", "8")),
         rerank_provider=os.getenv("ARC_RERANK_PROVIDER", "dashscope").lower(),
         rerank_base_url=os.getenv("ARC_RERANK_BASE_URL", DASHSCOPE_COMPATIBLE_BASE_URL).rstrip("/"),
         rerank_api_key=_first_env("ARC_RERANK_API_KEY", "DASHSCOPE_API_KEY", "QWEN_API_KEY"),
@@ -128,6 +147,7 @@ def load_settings() -> AppSettings:
         langgraph_checkpointer=os.getenv("ARC_LANGGRAPH_CHECKPOINTER", "sqlite").lower(),
         langgraph_checkpoint_path=os.getenv("ARC_LANGGRAPH_CHECKPOINT_PATH", ".arc/langgraph_checkpoints.sqlite"),
         max_revisions=int(os.getenv("ARC_MAX_REVISIONS", "2")),
+        seed_reference_knowledge=_env_bool("ARC_SEED_REFERENCE_KNOWLEDGE", False),
     )
 
 

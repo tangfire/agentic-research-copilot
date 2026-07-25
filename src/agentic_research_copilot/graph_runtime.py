@@ -19,6 +19,7 @@ from .schemas import (
     RunCheckpoint,
     RunTraceEvent,
     SearchQuery,
+    SupervisorDecisionContract,
 )
 
 if TYPE_CHECKING:
@@ -41,6 +42,8 @@ class ResearchGraphState(TypedDict, total=False):
     final_status: str
     final_research_brief: str | None
     final_corpus_profile: CorpusProfile | None
+    final_supervisor_decision: SupervisorDecisionContract | None
+    final_route_hints: list[Any]
     final_plan: list[Any]
     final_search_queries: list[SearchQuery]
     final_retrieval_routes: list[Any]
@@ -115,6 +118,7 @@ class LangGraphResearchRuntime:
         builder.add_node("supervisor_start", self._supervisor_start)
         builder.add_node("memory_recall", self._memory_recall)
         builder.add_node("planner", self._planner)
+        builder.add_node("research_supervisor", self._research_supervisor)
         builder.add_node("parallel_research", self._parallel_research)
         builder.add_node("reporter", self._reporter)
         builder.add_node("verifier_evaluator", self._verifier_evaluator)
@@ -125,7 +129,8 @@ class LangGraphResearchRuntime:
         builder.add_edge(START, "supervisor_start")
         builder.add_edge("supervisor_start", "memory_recall")
         builder.add_edge("memory_recall", "planner")
-        builder.add_edge("planner", "parallel_research")
+        builder.add_edge("planner", "research_supervisor")
+        builder.add_edge("research_supervisor", "parallel_research")
         builder.add_edge("parallel_research", "reporter")
         builder.add_edge("reporter", "verifier_evaluator")
         builder.add_conditional_edges(
@@ -163,6 +168,8 @@ class LangGraphResearchRuntime:
             "final_status": "completed",
             "final_research_brief": None,
             "final_corpus_profile": None,
+            "final_supervisor_decision": None,
+            "final_route_hints": [],
             "final_plan": [],
             "final_search_queries": [],
             "final_retrieval_routes": [],
@@ -188,6 +195,7 @@ class LangGraphResearchRuntime:
                     "supervisor_start",
                     "memory_recall",
                     "planner",
+                    "research_supervisor",
                     "parallel_research",
                     "reporter",
                     "verifier_evaluator",
@@ -255,8 +263,7 @@ class LangGraphResearchRuntime:
         planner_usage = self.copilot.planner.last_usage
         research_brief = planner_contract.research_brief
         plan = [item.model_copy() for item in planner_contract.plan]
-        retrieval_routes = self.copilot.router.build_routes(request, research_brief, plan, corpus_profile)
-        search_queries = self.copilot.workflow.build_queries(plan, retrieval_routes, revision_count=revision_count)
+        route_hints = self.copilot.router.build_routes(request, research_brief, plan, corpus_profile)
 
         self._append_trace(
             state,
@@ -270,7 +277,6 @@ class LangGraphResearchRuntime:
             tokens_out=getattr(planner_usage, "completion_tokens", 0),
             latency_ms=getattr(planner_usage, "latency_ms", 0),
             plan_count=len(plan),
-            query_count=len(search_queries),
             revision_count=revision_count,
             runtime="langgraph",
         )
@@ -280,10 +286,92 @@ class LangGraphResearchRuntime:
             {
                 "research_brief": research_brief,
                 "plan_count": len(plan),
-                "query_count": len(search_queries),
+                "candidate_route_count": len(route_hints),
                 "document_count": corpus_profile.document_count,
                 "model_provider": getattr(planner_usage, "provider", None),
                 "model_name": getattr(planner_usage, "model", None),
+                "revision_count": revision_count,
+            },
+        )
+
+        return {
+            "final_research_brief": research_brief,
+            "final_corpus_profile": corpus_profile,
+            "final_route_hints": route_hints,
+            "final_plan": plan,
+            "final_search_queries": [],
+            "final_retrieval_routes": [],
+            "needs_revision": False,
+            "revision_reason": None,
+        }
+
+    def _research_supervisor(self, state: ResearchGraphState) -> ResearchGraphState:
+        request = state["request"]
+        revision_count = state["revision_count"]
+        revision_notes = state.get("revision_notes", [])
+        memory_records = state.get("memory_records", [])
+        research_brief = state["final_research_brief"] or request.topic
+        corpus_profile = state["final_corpus_profile"] or CorpusProfile()
+        plan = state["final_plan"]
+        route_hints = state.get("final_route_hints", [])
+
+        self._record_handoff(
+            state,
+            "planner",
+            "research_supervisor",
+            "supervisor.decision",
+            "Decide which research units to delegate and which evidence tools each unit should use.",
+            revision_count,
+        )
+        supervisor_decision = self.copilot.supervisor_agent.decide(
+            request,
+            research_brief=research_brief,
+            plan=plan,
+            retrieval_routes=route_hints,
+            corpus_profile=corpus_profile,
+            memory_records=memory_records,
+            revision_count=revision_count,
+            revision_notes=revision_notes,
+        )
+        supervisor_usage = self.copilot.supervisor_agent.last_usage
+        retrieval_routes = self.copilot._routes_from_supervisor_decision(
+            request=request,
+            research_brief=research_brief,
+            plan=plan,
+            supervisor_decision=supervisor_decision,
+            route_hints=route_hints,
+            corpus_profile=corpus_profile,
+        )
+        search_queries = self.copilot.workflow.build_queries(plan, retrieval_routes, revision_count=revision_count)
+
+        self._append_trace(
+            state,
+            kind="step",
+            actor="research_supervisor",
+            message="Issued ODR-style supervisor tool calls.",
+            step="supervisor.decision",
+            provider=getattr(supervisor_usage, "provider", None),
+            model=getattr(supervisor_usage, "model", None),
+            tokens_in=getattr(supervisor_usage, "prompt_tokens", 0),
+            tokens_out=getattr(supervisor_usage, "completion_tokens", 0),
+            latency_ms=getattr(supervisor_usage, "latency_ms", 0),
+            tool_calls=[call.model_dump() for call in supervisor_decision.tool_calls],
+            completion_criteria=supervisor_decision.completion_criteria,
+            max_concurrent_research_units=supervisor_decision.max_concurrent_research_units,
+            query_count=len(search_queries),
+            revision_count=revision_count,
+            runtime="langgraph",
+        )
+        self._checkpoint(
+            state,
+            "supervisor.decision",
+            {
+                "reflection": supervisor_decision.reflection,
+                "tool_calls": [call.model_dump() for call in supervisor_decision.tool_calls],
+                "completion_criteria": supervisor_decision.completion_criteria,
+                "max_concurrent_research_units": supervisor_decision.max_concurrent_research_units,
+                "model_provider": getattr(supervisor_usage, "provider", None),
+                "model_name": getattr(supervisor_usage, "model", None),
                 "revision_count": revision_count,
             },
         )
@@ -308,22 +396,80 @@ class LangGraphResearchRuntime:
         )
 
         route_lookup = {route.plan_item_id: route for route in retrieval_routes}
-        for item in plan:
-            route = route_lookup.get(item.id)
-            if route is None:
+        item_lookup = {item.id: item for item in plan}
+        for call in supervisor_decision.tool_calls:
+            if call.name == "think_tool":
+                self._append_trace(
+                    state,
+                    kind="tool_call",
+                    actor="research_supervisor",
+                    message=call.reflection or call.rationale,
+                    step="supervisor.think",
+                    tool_name="think_tool",
+                    rationale=call.rationale,
+                    runtime="langgraph",
+                )
                 continue
-            self._record_handoff(state, "supervisor", "researcher", f"research.{item.id}", route.reason, revision_count)
-            if route.mode in {"internal", "hybrid"} and request.include_private_docs and corpus_profile.has_private_docs:
-                self._record_handoff(state, "researcher", "retriever", f"retrieve.{item.id}", route.reason, revision_count)
+            if call.name == "ResearchComplete":
+                self._append_trace(
+                    state,
+                    kind="tool_call",
+                    actor="research_supervisor",
+                    message=call.reflection or call.rationale,
+                    step="supervisor.complete.criteria",
+                    tool_name="ResearchComplete",
+                    completion_criteria=supervisor_decision.completion_criteria,
+                    runtime="langgraph",
+                )
+                continue
+            if call.name != "ConductResearch":
+                continue
+
+            for plan_item_id in call.plan_item_ids:
+                route = route_lookup.get(plan_item_id)
+                item = item_lookup.get(plan_item_id)
+                if route is None or item is None:
+                    continue
+                item.status = "running"
+                self._record_handoff(
+                    state,
+                    "research_supervisor",
+                    "researcher",
+                    f"research.{item.id}",
+                    route.reason,
+                    revision_count,
+                )
+                self._append_trace(
+                    state,
+                    kind="tool_call",
+                    actor="research_supervisor",
+                    message=call.research_topic or item.question,
+                    step=f"supervisor.conduct.{item.id}",
+                    tool_name="ConductResearch",
+                    plan_item_id=item.id,
+                    rationale=call.rationale,
+                    retrieval_mode=route.mode,
+                    selected_tools=route.selected_tools,
+                    web_queries=route.web_queries,
+                    internal_queries=route.internal_queries,
+                    min_evidence=route.min_evidence,
+                    min_sources=route.min_sources,
+                    runtime="langgraph",
+                )
+                if route.mode in {"internal", "hybrid"} and request.include_private_docs and corpus_profile.has_private_docs:
+                    self._record_handoff(
+                        state,
+                        "researcher",
+                        "retriever",
+                        f"retrieve.{item.id}",
+                        route.reason,
+                        revision_count,
+                    )
 
         return {
-            "final_research_brief": research_brief,
-            "final_corpus_profile": corpus_profile,
-            "final_plan": plan,
+            "final_supervisor_decision": supervisor_decision,
             "final_search_queries": search_queries,
             "final_retrieval_routes": retrieval_routes,
-            "needs_revision": False,
-            "revision_reason": None,
         }
 
     def _parallel_research(self, state: ResearchGraphState) -> ResearchGraphState:
@@ -334,13 +480,23 @@ class LangGraphResearchRuntime:
         research_brief = state["final_research_brief"] or request.topic
         revision_count = state["revision_count"]
         memory_hits = state.get("memory_hits", [])
+        supervisor_decision = state.get("final_supervisor_decision")
         route_lookup = {route.plan_item_id: route for route in retrieval_routes}
+        supervisor_worker_limit = (
+            supervisor_decision.max_concurrent_research_units
+            if supervisor_decision is not None
+            else self.copilot.settings.research_max_workers
+        )
 
         self._checkpoint(
             state,
             "research.parallel.started",
             {
-                "worker_count": min(max(1, self.copilot.settings.research_max_workers), max(1, len(plan))),
+                "worker_count": min(
+                    max(1, self.copilot.settings.research_max_workers),
+                    max(1, supervisor_worker_limit),
+                    max(1, len(plan)),
+                ),
                 "plan_count": len(plan),
                 "runtime": "langgraph",
             },
@@ -351,6 +507,7 @@ class LangGraphResearchRuntime:
             route_lookup=route_lookup,
             corpus_profile=corpus_profile,
             research_brief=research_brief,
+            supervisor_decision=supervisor_decision,
         )
 
         web_hits: list[EvidenceItem] = []
@@ -447,7 +604,7 @@ class LangGraphResearchRuntime:
                     "min_sources": route.min_sources,
                     "web_evidence_count": len(web_evidence),
                     "document_evidence_count": len(document_evidence),
-                    "retrieval_strategy": "contextual_dense_sparse_fusion_rerank",
+                    "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
                     "parallel": True,
                 },
             )
@@ -505,7 +662,8 @@ class LangGraphResearchRuntime:
             "Assemble the citation-backed answer.",
             revision_count,
         )
-        report = self.copilot.reporter.build_report(request.topic, sections, evidence, confidence)
+        report_evidence = self.copilot._rank_evidence_for_report(evidence)
+        report = self.copilot.reporter.build_report(request.topic, sections, report_evidence, confidence)
         reporter_usage = self.copilot.reporter.last_usage
         self._append_trace(
             state,
@@ -522,7 +680,7 @@ class LangGraphResearchRuntime:
             source_count=report.source_count,
             runtime="langgraph",
         )
-        report = report.model_copy(update={"source_index": self.copilot.workflow.format_sources(evidence)})
+        report = report.model_copy(update={"source_index": self.copilot.workflow.format_sources(report_evidence)})
         return {"final_report": report}
 
     def _verifier_evaluator(self, state: ResearchGraphState) -> ResearchGraphState:
@@ -633,11 +791,12 @@ class LangGraphResearchRuntime:
         )
         revision_reason = assessment.revision_reason or "; ".join(evaluation.notes[:2]) or None
 
+        usable_report = bool(report.citations) and evaluation.passed
         if should_revise and revision_count < request.max_revisions:
             final_status = "completed"
             failure_reason = None
             needs_revision = True
-        elif should_revise and revision_count >= request.max_revisions:
+        elif should_revise and revision_count >= request.max_revisions and not usable_report:
             final_status = "failed"
             failure_reason = revision_reason or "Maximum revision budget reached."
             needs_revision = False
@@ -720,6 +879,7 @@ class LangGraphResearchRuntime:
             request=request,
             research_brief=state.get("final_research_brief"),
             corpus_profile=state.get("final_corpus_profile"),
+            supervisor_decision=state.get("final_supervisor_decision"),
             plan=state.get("final_plan", []),
             search_queries=state.get("final_search_queries", []),
             retrieval_routes=state.get("final_retrieval_routes", []),

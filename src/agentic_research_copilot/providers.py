@@ -5,12 +5,14 @@ import json
 import math
 import re
 import time
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Protocol, Sequence, TypeVar
 
 import httpx
 
 from .schemas import (
+    ChunkContextContract,
     CorpusProfile,
     EvidenceItem,
     MemoryRecord,
@@ -20,6 +22,10 @@ from .schemas import (
     ResearchRequest,
     ResearchReport,
     ReportSection,
+    RetrievalRoute,
+    SourceCompressionContract,
+    SupervisorDecisionContract,
+    SupervisorToolCall,
     VerificationContract,
 )
 
@@ -57,6 +63,19 @@ class ResearchModelProvider(Protocol):
         revision_notes: Sequence[str] = (),
     ) -> tuple[PlannerContract, ModelUsage]: ...
 
+    def supervise_research(
+        self,
+        request: ResearchRequest,
+        research_brief: str,
+        plan: Sequence[PlanItem],
+        retrieval_routes: Sequence[RetrievalRoute],
+        corpus_profile: CorpusProfile,
+        memory_records: Sequence[MemoryRecord] = (),
+        *,
+        revision_count: int = 0,
+        revision_notes: Sequence[str] = (),
+    ) -> tuple[SupervisorDecisionContract, ModelUsage]: ...
+
     def assess_report(
         self,
         report: ResearchReport,
@@ -74,6 +93,27 @@ class ResearchModelProvider(Protocol):
         evidence: Sequence[EvidenceItem],
         confidence: float,
     ) -> tuple[ReporterContract, ModelUsage]: ...
+
+    def compress_source(
+        self,
+        *,
+        query: str,
+        title: str,
+        url: str | None,
+        raw_content: str,
+    ) -> tuple[SourceCompressionContract, ModelUsage]: ...
+
+    def contextualize_chunk(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> tuple[ChunkContextContract, ModelUsage]: ...
 
     def embed_text(self, text: str) -> tuple[list[float], ModelUsage]: ...
     def embed_texts(self, texts: Sequence[str]) -> tuple[list[list[float]], ModelUsage]: ...
@@ -98,7 +138,7 @@ class DeterministicResearchModelProvider:
         memory_context = _summarize_memory(memory_records)
         focus = _focus_for_topic(topic)
         brief_bits = [
-            f"Research the topic '{topic}' for a {request.audience} audience.",
+            f"Research the topic '{topic}'.",
             "Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index.",
             f"Focus on {focus}.",
         ]
@@ -142,6 +182,90 @@ class DeterministicResearchModelProvider:
             model="heuristic-planner",
             prompt_tokens=96 + len(topic.split()) * 4,
             completion_tokens=128 + len(contract.plan) * 16,
+            latency_ms=3,
+        )
+        return contract, usage
+
+    def supervise_research(
+        self,
+        request: ResearchRequest,
+        research_brief: str,
+        plan: Sequence[PlanItem],
+        retrieval_routes: Sequence[RetrievalRoute],
+        corpus_profile: CorpusProfile,
+        memory_records: Sequence[MemoryRecord] = (),
+        *,
+        revision_count: int = 0,
+        revision_notes: Sequence[str] = (),
+    ) -> tuple[SupervisorDecisionContract, ModelUsage]:
+        route_lookup = {route.plan_item_id: route for route in retrieval_routes}
+        reflection_bits = [
+            "Use an Open Deep Research-style supervisor loop: think, delegate focused research, then complete only after verification.",
+            f"The plan has {len(plan)} research unit(s).",
+        ]
+        if corpus_profile.has_private_docs:
+            reflection_bits.append(
+                f"Internal grounding is available from {corpus_profile.document_count} document(s), so hybrid/internal routes should be delegated when relevant."
+            )
+        if memory_records:
+            reflection_bits.append(f"Memory recall returned {len(memory_records)} item(s); reuse it as context but keep final claims citation-backed.")
+        if revision_notes:
+            reflection_bits.append("Revision notes must be repaired: " + "; ".join(revision_notes[:3]))
+
+        tool_calls: list[SupervisorToolCall] = [
+            SupervisorToolCall(
+                name="think_tool",
+                rationale="Reflect before delegating research units.",
+                reflection=" ".join(reflection_bits),
+            )
+        ]
+        for item in plan:
+            if not item.requires_research:
+                continue
+            route = route_lookup.get(item.id)
+            route_hint = f" Route mode: {route.mode}. Tools: {', '.join(route.selected_tools)}." if route else ""
+            selected_tools = route.selected_tools if route else ["web_search"]
+            tool_calls.append(
+                SupervisorToolCall(
+                    name="ConductResearch",
+                    rationale=f"Delegate the plan item so a focused researcher can gather evidence.{route_hint}",
+                    plan_item_ids=[item.id],
+                    research_topic=f"{item.question} Purpose: {item.purpose}",
+                    mode=route.mode if route else "external",
+                    selected_tools=selected_tools,
+                    web_queries=route.web_queries if route else [item.search_query or item.question],
+                    internal_queries=route.internal_queries if route else [],
+                    memory_query=route.memory_query if route else f"{request.topic} {item.purpose}",
+                    min_evidence=route.min_evidence if route else 1,
+                    min_sources=route.min_sources if route else 1,
+                    sufficiency_criteria=route.sufficiency_criteria
+                    if route
+                    else ["preserve citations for report assembly"],
+                )
+            )
+        tool_calls.append(
+            SupervisorToolCall(
+                name="ResearchComplete",
+                rationale="Complete only after delegated research returns enough citation-backed evidence and verifier/evaluator checks pass.",
+                reflection="Completion is gated by citation coverage, evidence sufficiency, source diversity, and revision budget.",
+            )
+        )
+        contract = SupervisorDecisionContract(
+            reflection=" ".join(reflection_bits),
+            tool_calls=tool_calls,
+            completion_criteria=[
+                "Each required plan item has enough evidence for its route.",
+                "Final report citations map only to existing evidence.",
+                "Verifier and evaluator either pass the run or trigger a revision loop.",
+            ],
+            max_concurrent_research_units=min(max(1, request.max_sections), max(1, len(plan)), 4),
+            confidence=min(0.92, 0.66 + len(plan) * 0.04 + (0.04 if corpus_profile.has_private_docs else 0.0)),
+        )
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-supervisor",
+            prompt_tokens=112 + len(plan) * 20,
+            completion_tokens=96 + len(tool_calls) * 18,
             latency_ms=3,
         )
         return contract, usage
@@ -262,6 +386,53 @@ class DeterministicResearchModelProvider:
         )
         return contract, usage
 
+    def compress_source(
+        self,
+        *,
+        query: str,
+        title: str,
+        url: str | None,
+        raw_content: str,
+    ) -> tuple[SourceCompressionContract, ModelUsage]:
+        contract = _heuristic_source_compression(query=query, title=title, raw_content=raw_content)
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-source-compressor",
+            prompt_tokens=max(1, len(raw_content) // 4),
+            completion_tokens=max(16, len(contract.summary) // 4),
+            latency_ms=2,
+        )
+        return contract, usage
+
+    def contextualize_chunk(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> tuple[ChunkContextContract, ModelUsage]:
+        contract = _heuristic_chunk_context(
+            document_title=document_title,
+            source=source,
+            metadata=metadata,
+            document_excerpt=document_excerpt,
+            chunk_text=chunk_text,
+            chunk_index=chunk_index,
+            total_chunks=total_chunks,
+        )
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-contextual-retrieval",
+            prompt_tokens=max(1, (len(document_excerpt) + len(chunk_text)) // 4),
+            completion_tokens=max(16, len(contract.context) // 4),
+            latency_ms=1,
+        )
+        return contract, usage
+
     def embed_text(self, text: str) -> tuple[list[float], ModelUsage]:
         vector = _hashed_dense_vector(text, self.embedding_dimensions)
         usage = ModelUsage(provider=self.name, model="hashed-embedding", prompt_tokens=max(1, len(text) // 4), latency_ms=1)
@@ -325,6 +496,52 @@ class OpenAICompatibleResearchModelProvider:
             user_payload=payload,
             schema=schema,
             response_model=PlannerContract,
+        )
+
+    def supervise_research(
+        self,
+        request: ResearchRequest,
+        research_brief: str,
+        plan: Sequence[PlanItem],
+        retrieval_routes: Sequence[RetrievalRoute],
+        corpus_profile: CorpusProfile,
+        memory_records: Sequence[MemoryRecord] = (),
+        *,
+        revision_count: int = 0,
+        revision_notes: Sequence[str] = (),
+    ) -> tuple[SupervisorDecisionContract, ModelUsage]:
+        payload = {
+            "request": request.model_dump(),
+            "research_brief": research_brief,
+            "plan": [item.model_dump() for item in plan],
+            "retrieval_routes": [route.model_dump() for route in retrieval_routes],
+            "corpus_profile": corpus_profile.model_dump(),
+            "memory_records": [record.model_dump() for record in memory_records[:8]],
+            "revision_count": revision_count,
+            "revision_notes": list(revision_notes)[:8],
+            "instructions": (
+                "Follow the Open Deep Research supervisor pattern. First reflect with a "
+                "think_tool-style call, then use ConductResearch calls to delegate concrete "
+                "research units. Use ResearchComplete only as the completion decision after "
+                "delegation and verification criteria are clear. Preserve the provided "
+                "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
+                "mode, selected_tools, web_queries/internal_queries, memory_query, min_evidence, "
+                "min_sources, and sufficiency_criteria. Treat retrieval_routes as optional "
+                "candidate hints, not as mandatory final routing decisions."
+            ),
+        }
+        return self._chat_structured(
+            system_prompt=(
+                "You are the research supervisor for an AI Research Copilot. Return valid JSON only "
+                "that conforms to the supplied schema. Emit Open Deep Research-style tool calls: "
+                "think_tool for reflection, ConductResearch for delegated research, and "
+                "ResearchComplete for completion criteria. ConductResearch must include the evidence "
+                "tools and query rewrites needed by the delegated unit. Keep decisions inspectable and "
+                "citation-oriented."
+            ),
+            user_payload=payload,
+            schema=SupervisorDecisionContract.model_json_schema(),
+            response_model=SupervisorDecisionContract,
         )
 
     def assess_report(
@@ -397,6 +614,84 @@ class OpenAICompatibleResearchModelProvider:
             schema=ReporterContract.model_json_schema(),
             response_model=ReporterContract,
         )
+
+    def compress_source(
+        self,
+        *,
+        query: str,
+        title: str,
+        url: str | None,
+        raw_content: str,
+    ) -> tuple[SourceCompressionContract, ModelUsage]:
+        payload = {
+            "query": query,
+            "source": {
+                "title": title,
+                "url": url,
+            },
+            "raw_content": raw_content,
+            "instructions": (
+                "Compress the source for a downstream research agent. Preserve concrete facts, "
+                "numbers, dates, named entities, and any caveats relevant to the query. Do not "
+                "invent facts. key_excerpts must be short excerpts or close paraphrases grounded "
+                "in the provided raw_content. Set relevance between 0 and 1."
+            ),
+        }
+        return self._chat_structured(
+            system_prompt=(
+                "You are a source reader for an AI Research Copilot. Return valid JSON only "
+                "that conforms to the supplied schema. The output will become citation-backed "
+                "evidence, so preserve supportable facts and list limitations when the source "
+                "is thin or off-topic."
+            ),
+            user_payload=payload,
+            schema=SourceCompressionContract.model_json_schema(),
+            response_model=SourceCompressionContract,
+        )
+
+    def contextualize_chunk(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> tuple[ChunkContextContract, ModelUsage]:
+        payload = {
+            "document": {
+                "title": document_title,
+                "source": source,
+                "metadata": _scalar_metadata(metadata, limit=12),
+                "excerpt": document_excerpt[:12000],
+            },
+            "chunk": {
+                "index": chunk_index + 1,
+                "total_chunks": total_chunks,
+                "text": chunk_text[:2400],
+            },
+            "instructions": (
+                "Generate an indexing-time contextual retrieval prefix for this chunk. "
+                "The context should be 50-100 tokens, grounded only in the document and chunk, "
+                "and explain where the chunk sits in the document, what local topic it covers, "
+                "and which concrete entities/terms matter for dense retrieval and BM25. "
+                "Do not answer a user question and do not invent facts."
+            ),
+        }
+        contract, usage = self._chat_structured(
+            system_prompt=(
+                "You create Anthropic-style contextual retrieval prefixes for RAG indexing. "
+                "Return valid JSON only that conforms to the supplied schema. The context field "
+                "must be one concise paragraph suitable to prepend to a chunk before embedding "
+                "and BM25 indexing."
+            ),
+            user_payload=payload,
+            schema=ChunkContextContract.model_json_schema(),
+            response_model=ChunkContextContract,
+        )
+        return _normalize_chunk_context_contract(contract), usage
 
     def embed_text(self, text: str) -> tuple[list[float], ModelUsage]:
         start = time.perf_counter()
@@ -598,6 +893,138 @@ def _summarize_memory(records: Sequence[MemoryRecord]) -> str:
     return "; ".join(summary_bits)
 
 
+def _heuristic_source_compression(
+    *,
+    query: str,
+    title: str,
+    raw_content: str,
+    max_summary_chars: int = 900,
+    max_excerpt_chars: int = 260,
+) -> SourceCompressionContract:
+    cleaned = _clean_text(raw_content)
+    if not cleaned:
+        return SourceCompressionContract(summary="", key_excerpts=[], relevance=0.0, limitations=["empty source content"])
+    terms = {
+        token.lower()
+        for token in re.findall(r"[A-Za-z0-9_+.-]{3,}", query)
+        if token.lower() not in {"about", "and", "for", "from", "how", "the", "this", "what", "with"}
+    }
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", cleaned) if part.strip()]
+    if not sentences:
+        sentences = [cleaned]
+    scored: list[tuple[int, int, str]] = []
+    for index, sentence in enumerate(sentences):
+        lower = sentence.lower()
+        score = sum(1 for term in terms if term in lower)
+        scored.append((score, -index, sentence))
+    selected = [
+        sentence
+        for score, _, sentence in sorted(scored, reverse=True)[:5]
+        if score > 0
+    ] or sentences[:3]
+    summary = _trim_text(" ".join(selected), max_summary_chars)
+    excerpts = [_trim_text(sentence, max_excerpt_chars) for sentence in selected[:5]]
+    top_scores = sorted(scored, reverse=True)[:8]
+    relevance = min(1.0, max(0.1, sum(score for score, _, _ in top_scores) / max(1, len(terms) * 3)))
+    limitations = [] if any(score > 0 for score, _, _ in scored) else [f"source was weakly aligned with query; title: {title}"]
+    return SourceCompressionContract(
+        summary=summary,
+        key_excerpts=excerpts,
+        relevance=round(relevance, 4),
+        limitations=limitations,
+    )
+
+
+def _heuristic_chunk_context(
+    *,
+    document_title: str,
+    source: str,
+    metadata: dict[str, Any],
+    document_excerpt: str,
+    chunk_text: str,
+    chunk_index: int,
+    total_chunks: int,
+) -> ChunkContextContract:
+    scalar_metadata = _scalar_metadata(metadata, limit=8)
+    location_bits = [
+        f"document '{document_title}'",
+        f"source '{source}'",
+        f"chunk {chunk_index + 1} of {max(1, total_chunks)}",
+    ]
+    for key in ("section_path", "section_heading", "page_number", "page_count", "file_type"):
+        value = scalar_metadata.get(key)
+        if value not in {None, ""}:
+            location_bits.append(f"{key} {value}")
+
+    terms = _context_key_terms(" ".join([document_title, source, document_excerpt[:1000], chunk_text]))
+    topic_terms = ", ".join(terms[:8]) if terms else "local evidence and provenance"
+    context = (
+        f"This chunk comes from {', '.join(location_bits)}. "
+        f"It provides local evidence about {topic_terms} and should be retrieved when a query needs "
+        f"this document's specific context rather than a generic background summary."
+    )
+    return ChunkContextContract(
+        context=_limit_words(context, max_words=96),
+        key_terms=terms[:12],
+        provenance_hint="; ".join(location_bits),
+        confidence=0.74,
+    )
+
+
+def _normalize_chunk_context_contract(contract: ChunkContextContract) -> ChunkContextContract:
+    context = _limit_words(contract.context, max_words=110)
+    key_terms = [term for term in (_clean_text(term) for term in contract.key_terms) if term][:12]
+    return contract.model_copy(
+        update={
+            "context": context,
+            "key_terms": key_terms,
+            "provenance_hint": _trim_text(contract.provenance_hint, 220),
+            "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
+        }
+    )
+
+
+def _scalar_metadata(metadata: dict[str, Any], *, limit: int) -> dict[str, object]:
+    scalar: dict[str, object] = {}
+    for key, value in sorted(metadata.items()):
+        if isinstance(value, (str, int, float, bool)):
+            scalar[key] = value
+        if len(scalar) >= limit:
+            break
+    return scalar
+
+
+def _context_key_terms(text: str) -> list[str]:
+    counts = Counter(
+        token.lower()
+        for token in TOKEN_PATTERN.findall(text)
+        if len(token) > 2
+        and token.lower()
+        not in {
+            "about",
+            "and",
+            "are",
+            "for",
+            "from",
+            "how",
+            "into",
+            "not",
+            "the",
+            "this",
+            "that",
+            "with",
+        }
+    )
+    return [token for token, _count in counts.most_common(16)]
+
+
+def _limit_words(text: str, *, max_words: int) -> str:
+    words = _clean_text(text).split()
+    if len(words) <= max_words:
+        return " ".join(words)
+    return " ".join(words[:max_words]).rstrip(" ,.;:") + "..."
+
+
 def _hashed_dense_vector(text: str, dimensions: int) -> list[float]:
     tokens = [token.lower() for token in TOKEN_PATTERN.findall(text)]
     if not tokens:
@@ -638,3 +1065,14 @@ def _extract_json_object(content: str) -> str:
     if start != -1 and end != -1 and end > start:
         return stripped[start : end + 1]
     return stripped
+
+
+def _clean_text(value: object) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _trim_text(text: str, max_chars: int) -> str:
+    text = _clean_text(text)
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."

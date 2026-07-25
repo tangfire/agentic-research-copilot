@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from .document_reader import DocumentReadError
 from .pipeline import ResearchCopilot
 from .schemas import ResearchRequest
 
@@ -20,6 +21,14 @@ class DocumentInput(BaseModel):
     url: str | None = None
     snippet: str | None = None
     content: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class DocumentIngestInput(BaseModel):
+    path: str = Field(min_length=1)
+    title: str | None = None
+    source: str | None = None
+    url: str | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
@@ -84,6 +93,10 @@ def create_app() -> FastAPI:
                 <li><code>POST /v1/research/runs/{run_id}/replay</code></li>
                 <li><code>GET /v1/documents</code></li>
                 <li><code>POST /v1/documents</code></li>
+                <li><code>POST /v1/documents/ingest</code></li>
+                <li><code>DELETE /v1/documents/{document_id}</code></li>
+                <li><code>DELETE /v1/documents</code></li>
+                <li><code>DELETE /v1/research/history</code></li>
                 <li><code>GET /v1/memory</code></li>
                 <li><code>GET /v1/memory/governance</code></li>
                 <li><code>POST /v1/memory</code></li>
@@ -264,6 +277,37 @@ def create_app() -> FastAPI:
             content=payload.content,
             metadata=payload.metadata,
         )
+
+    @app.post("/v1/documents/ingest")
+    def ingest_document(payload: DocumentIngestInput):
+        try:
+            documents = copilot.ingest_document_path(
+                payload.path,
+                title=payload.title,
+                source=payload.source,
+                url=payload.url,
+                metadata=payload.metadata,
+            )
+        except DocumentReadError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "document_count": len(documents),
+            "documents": documents,
+        }
+
+    @app.delete("/v1/documents/{document_id}")
+    def delete_document(document_id: str):
+        if not copilot.delete_document(document_id):
+            raise HTTPException(status_code=404, detail="Document not found")
+        return {"deleted": True, "document_id": document_id}
+
+    @app.delete("/v1/documents")
+    def clear_documents():
+        return copilot.clear_documents()
+
+    @app.delete("/v1/research/history")
+    def clear_research_history(include_memory: bool = Query(default=False)):
+        return copilot.clear_history(include_memory=include_memory)
 
     @app.get("/v1/memory")
     def list_memory(

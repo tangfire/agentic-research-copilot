@@ -58,3 +58,8 @@ class TelemetryLog:
 
     def by_kind(self, kind: str) -> list[TelemetryEvent]:
         return [event for event in self._events if event.kind == kind]
+
+    def clear(self) -> int:
+        count = len(self._events)
+        self._events.clear()
+        return count

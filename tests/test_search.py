@@ -10,6 +10,7 @@ from agentic_research_copilot.search import (
     PerplexitySearchClient,
     PubMedSearchClient,
     SerpAPISearchClient,
+    StrictSearchTool,
     TavilySearchClient,
     build_search_tool,
 )
@@ -95,11 +96,48 @@ def test_strict_search_tool_raises_on_empty_results():
         tool("agentic rag")
 
 
+def test_strict_search_tool_compacts_long_queries_before_failing_the_run():
+    calls = []
+
+    def fake_search(query):
+        calls.append(query)
+        if len(calls) == 1:
+            return []
+        return [
+            {
+                "title": "LangGraph persistence",
+                "source": "tavily",
+                "url": "https://docs.langchain.com/oss/python/langgraph/persistence",
+                "snippet": "Checkpointing reference.",
+                "content": "Checkpointing reference.",
+                "score": 0.8,
+                "metadata": {"query": query},
+            }
+        ]
+
+    tool = StrictSearchTool("tavily", fake_search)
+    results = tool(
+        "What are the core architectural patterns of Open Deep Research-style orchestration, "
+        "and how do they compare to LangGraph persistence patterns?"
+    )
+
+    assert len(calls) == 2
+    assert len(calls[1]) < len(calls[0])
+    assert results[0]["metadata"]["query_rewrite_strategy"] == "strict_provider_compacted"
+    assert results[0]["metadata"]["original_query"] == calls[0]
+
+
 def test_tavily_adapter_maps_results(monkeypatch):
     fake = FakeClient(
         post_payload={
             "results": [
-                {"title": "Tavily result", "url": "https://example.com/a", "content": "research evidence", "score": 0.9}
+                {
+                    "title": "Tavily result",
+                    "url": "https://example.com/a",
+                    "content": "research evidence",
+                    "raw_content": "Long webpage content with detailed agentic RAG evidence.",
+                    "score": 0.9,
+                }
             ]
         }
     )
@@ -111,7 +149,11 @@ def test_tavily_adapter_maps_results(monkeypatch):
     assert results[0]["url"] == "https://example.com/a"
     assert results[0]["metadata"]["query"] == "agentic rag"
     assert results[0]["metadata"]["depth"] == "basic"
+    assert results[0]["metadata"]["raw_content_requested"] is True
+    assert results[0]["metadata"]["raw_content_available"] is True
+    assert results[0]["raw_content"] == "Long webpage content with detailed agentic RAG evidence."
     assert fake.requests[0][2]["search_depth"] == "basic"
+    assert fake.requests[0][2]["include_raw_content"] is True
 
 
 def test_brave_adapter_maps_results(monkeypatch):

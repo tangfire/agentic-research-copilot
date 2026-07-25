@@ -32,6 +32,10 @@ queue = [
   "celery[redis]>=5.4",
   "redis>=5.0",
 ]
+documents = [
+  "beautifulsoup4>=4.12",
+  "pymupdf>=1.25",
+]
 eval = [
   "datasets>=2.19,<5.0",
   "langchain>=0.3.0,<0.4.0",

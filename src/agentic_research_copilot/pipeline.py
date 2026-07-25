@@ -7,7 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from threading import RLock
 
-from .agents import PlannerAgent, ResearchAgent, ReporterAgent, VerifierAgent
+from .agents import PlannerAgent, ResearchAgent, ReporterAgent, SupervisorAgent, VerifierAgent
+from .document_reader import DocumentReader
 from .evaluation import RAGEvaluator
 from .ledger import JobLedger, RunLedger
 from .providers import build_embedding_provider, build_model_provider
@@ -23,13 +24,16 @@ from .schemas import (
     ResearchRequest,
     ResearchRun,
     ReportSection,
+    RetrievalRoute,
     RunCheckpoint,
     RunTraceEvent,
     SearchQuery,
+    SupervisorDecisionContract,
 )
 from .routing import RetrievalCoordinator
 from .search import OPEN_DEEP_RESEARCH_STYLE_PROVIDERS, SearchTool, build_search_tool, search_provider_requires_key
 from .settings import AppSettings, load_settings, resolve_storage_path
+from .source_reader import source_reader_strategy_label
 from .storage import SQLiteStore
 from .telemetry import TelemetryLog
 from .workflow import ResearchWorkflow
@@ -79,9 +83,14 @@ class ResearchCopilot:
             qdrant_location=self.settings.qdrant_location,
             qdrant_prefer_local=self.settings.qdrant_prefer_local,
             hybrid_fusion=self.settings.rag_hybrid_fusion,
+            graph_enabled=self.settings.rag_graph_enabled,
+            graph_max_entities_per_chunk=self.settings.rag_graph_max_entities_per_chunk,
+            graph_neighbor_limit=self.settings.rag_graph_neighbor_limit,
             reranker=self.reranker,
+            contextualizer_provider=self.model_provider,
             allow_local_fallback=not self.settings.strict_providers,
         )
+        self.document_reader = DocumentReader()
         self.telemetry = TelemetryLog()
         self.ledger = RunLedger()
         self.jobs = JobLedger()
@@ -96,11 +105,22 @@ class ResearchCopilot:
             min_source_diversity=self.settings.rag_min_source_diversity,
         )
         self.planner = PlannerAgent(self.model_provider, self.settings)
-        self.researcher = ResearchAgent(search_tool or build_search_tool(self.settings))
+        self.researcher = ResearchAgent(
+            search_tool or build_search_tool(self.settings),
+            model_provider=self.model_provider,
+            embedding_provider=self.embedding_provider,
+            source_reader_enabled=self.settings.source_reader_enabled,
+            source_reader_strategy=self.settings.source_reader_strategy,
+            raw_content_max_chars=self.settings.source_reader_max_chars,
+            excerpt_max_chars=self.settings.source_reader_excerpt_chars,
+            chunk_context_window=self.settings.source_reader_chunk_context_window,
+        )
         self.verifier = VerifierAgent(self.model_provider, self.settings)
         self.reporter = ReporterAgent(self.model_provider, self.settings)
+        self.supervisor_agent = SupervisorAgent(self.model_provider, self.settings)
         self._restore_state()
-        self._seed_reference_knowledge()
+        if self.settings.seed_reference_knowledge:
+            self._seed_reference_knowledge()
 
     def add_document(
         self,
@@ -121,6 +141,66 @@ class ResearchCopilot:
         )
         self.storage.save_document(document)
         return document
+
+    def ingest_document_path(
+        self,
+        path: str,
+        *,
+        title: str | None = None,
+        source: str | None = None,
+        url: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> list[EvidenceItem]:
+        segments = self.document_reader.read_path(
+            path,
+            title=title,
+            source=source,
+            url=url,
+            metadata=metadata,
+        )
+        return [
+            self.add_document(
+                title=segment.title,
+                source=segment.source,
+                url=segment.url,
+                content=segment.content,
+                metadata=segment.metadata,
+            )
+            for segment in segments
+        ]
+
+    def delete_document(self, document_id: str) -> bool:
+        deleted_from_index = self.documents.delete(document_id)
+        deleted_from_storage = self.storage.delete_document(document_id)
+        return deleted_from_index or deleted_from_storage
+
+    def clear_documents(self) -> dict[str, object]:
+        storage_deleted = self.storage.clear_documents()
+        indexed_deleted = len(self.documents.list())
+        self.documents.clear()
+        return {
+            "deleted": True,
+            "documents_deleted": max(storage_deleted, indexed_deleted),
+        }
+
+    def clear_history(self, *, include_memory: bool = False) -> dict[str, object]:
+        storage_runs_deleted = self.storage.clear_runs()
+        storage_jobs_deleted = self.storage.clear_jobs()
+        runs_deleted = max(storage_runs_deleted, self.ledger.clear())
+        jobs_deleted = max(storage_jobs_deleted, self.jobs.clear())
+        telemetry_deleted = self.telemetry.clear()
+        memory_deleted = 0
+        if include_memory:
+            storage_memory_deleted = self.storage.clear_memory()
+            memory_deleted = max(storage_memory_deleted, self.memory.clear())
+        return {
+            "deleted": True,
+            "runs_deleted": runs_deleted,
+            "jobs_deleted": jobs_deleted,
+            "telemetry_deleted": telemetry_deleted,
+            "memory_deleted": memory_deleted,
+            "memory_cleared": include_memory,
+        }
 
     def add_memory(
         self,
@@ -256,11 +336,13 @@ class ResearchCopilot:
                     "traceable, and reviewable research reports."
                 ),
                 "release_shape": "single Python FastAPI service with a background job queue, Qdrant retrieval, and a static local web console",
+                "research_path": "plan -> search/read -> synthesize -> verify/evaluate -> replay",
+                "seed_reference_knowledge": self.settings.seed_reference_knowledge,
             },
             "orchestration": {
                 "runtime": self.settings.orchestration_runtime,
                 "strict_providers": self.settings.strict_providers,
-                "active_graph": "supervisor -> memory -> planner -> parallel_research -> reporter -> verifier/evaluator -> memory_write",
+                "active_graph": "supervisor -> memory -> planner -> research_supervisor -> parallel_research -> reporter -> verifier/evaluator -> memory_write",
                 "fallback_runtime": "custom",
                 "checkpointer": self.settings.langgraph_checkpointer,
                 "checkpoint_path": self.settings.langgraph_checkpoint_path,
@@ -300,29 +382,65 @@ class ResearchCopilot:
             "reference_designs": [
                 {
                     "name": "Open Deep Research",
+                    "learning_priority": "primary",
                     "used_for": [
                         "LangGraph-oriented research graph structure",
                         "plan -> research -> compress -> report loop",
+                        "LLM supervisor tool loop with think/delegate/complete decisions",
+                        "provider raw-content reading and compression",
                         "citation-backed final answer contract",
                         "research state shaped around questions, notes, evidence, and sections",
+                        "judge/evaluator-style demo artifacts",
                     ],
                     "dependency": False,
                 },
                 {
                     "name": "PraisonAI",
+                    "learning_priority": "secondary",
                     "used_for": [
                         "memory and persistence concepts",
+                        "reader registry and document ingestion extension shape",
                         "agent handoff vocabulary",
                         "observability, replay, and run-ledger patterns",
                     ],
                     "dependency": False,
                 },
             ],
+            "open_deep_research_alignment": {
+                "positioning": (
+                    "Complex-question AI Research Copilot: plan, search/read, retrieve, "
+                    "recall memory, synthesize, verify citations, evaluate, and replay."
+                ),
+                "matched_boundaries": [
+                    "LangGraph-style supervisor/research/report graph",
+                    "ODR-style supervisor decisions expressed as think_tool, ConductResearch, and ResearchComplete calls",
+                    "provider raw_content reading plus compression before report synthesis",
+                    "citation-backed report sections mapped to existing evidence",
+                    "source quality surfaced through evaluation rather than runtime source blocking",
+                    "LLM judge style demo artifact outside the hot path",
+                ],
+                "product_specific_differences": [
+                    "Uses an ODR-style LLM research supervisor; ConductResearch calls carry selected tools, query rewrites, grounding mode, and sufficiency criteria",
+                    "Keeps deterministic route hints only for offline tests/fallbacks, not as the primary real-provider decision layer",
+                    "Adds local document grounding with text/Markdown/HTML/PDF parsing before Qdrant retrieval",
+                    "Uses single-node FastAPI/Celery/Redis/SQLite/Qdrant deployment, not a distributed platform",
+                ],
+            },
             "agents": [
                 {"name": "planner", "role": "creates a research brief and decomposed plan"},
-                {"name": "retrieval_router", "role": "selects external, internal, or hybrid evidence routes"},
+                {
+                    "name": "research_supervisor",
+                    "role": "emits ODR-style think_tool, ConductResearch, and ResearchComplete decisions before research execution",
+                },
+                {
+                    "name": "route_materializer",
+                    "role": "turns ConductResearch tool-call arguments into executable web/vector/memory route contracts",
+                },
                 {"name": "researcher", "role": "collects web evidence through the configured search tool"},
-                {"name": "grounding_layer", "role": "retrieves contextual document chunks with dense/sparse fusion and reranking"},
+                {
+                    "name": "grounding_layer",
+                    "role": "retrieves precise child chunks, expands parent/neighbor context, then applies dense/BM25 fusion and reranking",
+                },
                 {"name": "memory_manager", "role": "recalls and writes structured topic memory"},
                 {"name": "supervisor", "role": "coordinates handoffs, retries, and failure states"},
                 {
@@ -340,6 +458,19 @@ class ResearchCopilot:
                     "base_url": self.settings.search_base_url,
                     "model": self.settings.search_model,
                     "depth": self.settings.search_depth,
+                    "include_raw_content": self.settings.search_include_raw_content,
+                    "reader_enabled": self.settings.source_reader_enabled,
+                    "reader_strategy": source_reader_strategy_label(self.settings.source_reader_strategy),
+                    "reader_max_chars": self.settings.source_reader_max_chars,
+                    "reader_excerpt_chars": self.settings.source_reader_excerpt_chars,
+                    "reader_chunk_context_window": self.settings.source_reader_chunk_context_window,
+                    "reader_contract": (
+                        "split/rerank -> neighbor expansion -> summary/key_excerpts/relevance/limitations"
+                        if self.settings.source_reader_strategy == "chunk_rerank_compress"
+                        else "summary/key_excerpts/relevance/limitations"
+                        if self.settings.source_reader_strategy == "model_compress"
+                        else "query_relevant_excerpt"
+                    ),
                     "api_key_configured": bool(self.settings.search_api_key)
                     if search_provider_requires_key(self.settings.search_provider)
                     else True,
@@ -360,12 +491,32 @@ class ResearchCopilot:
                     "name": "document_retrieval",
                     "provider": corpus_profile.vector_backend,
                     "enabled": corpus_profile.has_private_docs,
-                    "strategy": "contextual_dense_sparse_fusion_rerank",
+                    "strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+                    "parent_child": "child chunks are retrieved precisely, then same-document neighbor context is returned for synthesis",
+                    "contextual_retrieval": "indexing-time chunk context prefixes are prepended before dense embedding and BM25 indexing",
+                    "graph_augmented": self.settings.rag_graph_enabled,
+                    "graph_strategy": "LightRAG-inspired entity co-occurrence graph signal fused with dense/BM25 candidates",
                     "collection": corpus_profile.collection_name,
+                    "keyword_backend": corpus_profile.keyword_backend,
                     "reranker": self.reranker.name,
                     "rerank_provider": self.settings.rerank_provider,
                     "rerank_model": self.settings.rerank_model,
                     "rerank_api_key_configured": bool(self.settings.rerank_api_key),
+                },
+                {
+                    "name": "document_reader",
+                    "provider": "local_file_reader",
+                    "enabled": True,
+                    "supported_inputs": ["text", "markdown", "html", "pdf_with_pymupdf"],
+                    "parser_boundary": "file parsing is separated from vector indexing and research orchestration",
+                    "section_strategy": "Markdown/HTML headings become section segments with section_heading and section_path metadata before chunking",
+                    "pdf_strategy": (
+                        "PDFs are split into page segments with page_number/page_count, block, "
+                        "heading-hint, table, and layout metadata before chunking"
+                    ),
+                    "chunking_strategy": "DocumentStore performs paragraph-aware child chunking, contextual retrieval prefixing, dense embedding, and BM25 indexing",
+                    "parent_child_strategy": "retrieval scores child chunks and returns same-document parent/neighbor context for synthesis",
+                    "graph_strategy": "LightRAG-inspired lightweight entity/relation graph; graph hits are fused before rerank",
                 },
                 {"name": "memory_search", "provider": "layered_structured_memory", "enabled": True},
                 {"name": "run_ledger", "provider": "sqlite", "enabled": True},
@@ -374,10 +525,15 @@ class ResearchCopilot:
             ],
             "retrieval": {
                 "routes": ["external", "internal", "hybrid"],
-                "default_strategy": "contextual_dense_sparse_fusion_rerank",
+                "default_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
                 "hybrid_pipeline": {
+                    "parent_child": "child retrieval with parent/neighbor context expansion",
+                    "contextual_retrieval": "chunk-specific context prefixes are generated at ingestion and indexed with the chunk",
+                    "graph_augmented": self.settings.rag_graph_enabled,
+                    "graph_max_entities_per_chunk": self.settings.rag_graph_max_entities_per_chunk,
+                    "graph_neighbor_limit": self.settings.rag_graph_neighbor_limit,
                     "dense_vector": "Qdrant named vector 'dense'",
-                    "sparse_vector": "Qdrant sparse vector 'sparse'",
+                    "keyword_index": "SQLite FTS5 bm25() over contextual child chunks",
                     "fusion": self.settings.rag_hybrid_fusion,
                     "reranker": self.reranker.name,
                     "rerank_provider": self.settings.rerank_provider,
@@ -385,7 +541,7 @@ class ResearchCopilot:
                     "fallback": (
                         "disabled in strict provider mode"
                         if self.settings.strict_providers
-                        else "local dense/sparse weighted fusion when Qdrant named vectors are unavailable"
+                        else "local dense + SQLite BM25 fusion when Qdrant is unavailable"
                     ),
                 },
                 "agentic_rag": {
@@ -397,6 +553,7 @@ class ResearchCopilot:
                     "sufficiency_check": "route-level evidence thresholds feed the verifier/evaluator revision loop",
                 },
                 "vector_backend": corpus_profile.vector_backend,
+                "keyword_backend": corpus_profile.keyword_backend,
                 "embedding_dimensions": corpus_profile.embedding_dimensions,
                 "collection_name": corpus_profile.collection_name,
                 "production_upgrade": "swap the model adapter or vector backend without changing the route contract",
@@ -674,11 +831,11 @@ class ResearchCopilot:
                 "and reviewable research reports."
             ),
             content=(
-                "The product uses LangGraph + Agentic RAG to plan sub-questions, select tools, "
-                "rewrite queries, route between external search, vector_retrieval, memory_recall, "
-                "and hybrid evidence, verify citations, evaluate RAG quality, persist trace and "
-                "replay artifacts, and support OpenAI-compatible chat providers, Qwen embeddings, "
-                "Tavily search, and deterministic test doubles."
+                "The product uses LangGraph + Agentic RAG to plan sub-questions, run an ODR-style "
+                "research supervisor, emit ConductResearch calls with selected tools and query rewrites, "
+                "route between external search, vector_retrieval, memory_recall, and hybrid evidence, "
+                "verify citations, evaluate RAG quality, persist trace and replay artifacts, and support "
+                "OpenAI-compatible chat providers, Qwen embeddings, Tavily search, and deterministic test doubles."
             ),
             metadata={"kind": "project_overview"},
         )
@@ -688,8 +845,9 @@ class ResearchCopilot:
             snippet="Build an AI Research Copilot that can plan, search, ground, remember, verify, evaluate, and report.",
             content=(
                 "The architecture centers on a LangGraph StateGraph supervisor, layered memory, "
-                "planner, router, concurrent researcher/retriever workers, Qdrant dense/sparse "
-                "named vectors, RRF/DBSF hybrid fusion, Qwen/DashScope reranking with deterministic fallback, "
+                "planner, ODR-style research_supervisor, concurrent researcher/retriever workers, Qdrant dense "
+                "vectors, indexing-time contextual retrieval prefixes, SQLite FTS5 BM25 keyword retrieval, "
+                "RRF/DBSF hybrid fusion, Qwen/DashScope reranking with deterministic fallback, "
                 "reporter, Verifier, Evaluator, SQLite checkpoints, trace replay, source quality, "
                 "citation precision, evidence sufficiency, context precision, context recall, "
                 "faithfulness proxy, queued jobs, retry, and cancelled states."
@@ -759,6 +917,7 @@ class ResearchCopilot:
         final_status = "completed"
         final_research_brief: str | None = None
         final_corpus_profile: CorpusProfile | None = None
+        final_supervisor_decision: SupervisorDecisionContract | None = None
         final_plan: list = []
         final_search_queries: list[SearchQuery] = []
         final_retrieval_routes = []
@@ -897,13 +1056,10 @@ class ResearchCopilot:
             planner_usage = self.planner.last_usage
             research_brief = planner_contract.research_brief
             plan = [item.model_copy() for item in planner_contract.plan]
-            retrieval_routes = self.router.build_routes(request, research_brief, plan, corpus_profile)
-            search_queries = self.workflow.build_queries(plan, retrieval_routes, revision_count=revision_count)
+            route_hints = self.router.build_routes(request, research_brief, plan, corpus_profile)
 
             final_research_brief = research_brief
             final_plan = plan
-            final_search_queries = search_queries
-            final_retrieval_routes = retrieval_routes
 
             append_trace(
                 kind="step",
@@ -916,7 +1072,6 @@ class ResearchCopilot:
                 tokens_out=getattr(planner_usage, "completion_tokens", 0),
                 latency_ms=getattr(planner_usage, "latency_ms", 0),
                 plan_count=len(plan),
-                query_count=len(search_queries),
                 revision_count=revision_count,
             )
 
@@ -925,10 +1080,69 @@ class ResearchCopilot:
                 {
                     "research_brief": research_brief,
                     "plan_count": len(plan),
-                    "query_count": len(search_queries),
                     "document_count": corpus_profile.document_count,
                     "model_provider": getattr(planner_usage, "provider", None),
                     "model_name": getattr(planner_usage, "model", None),
+                    "revision_count": revision_count,
+                },
+            )
+
+            record_handoff(
+                "planner",
+                "research_supervisor",
+                "supervisor.decision",
+                "Decide which research units to delegate and which evidence tools each unit should use.",
+                revision_count,
+            )
+            supervisor_decision = self.supervisor_agent.decide(
+                request,
+                research_brief=research_brief,
+                plan=plan,
+                retrieval_routes=route_hints,
+                corpus_profile=corpus_profile,
+                memory_records=memory_records,
+                revision_count=revision_count,
+                revision_notes=revision_notes,
+            )
+            supervisor_usage = self.supervisor_agent.last_usage
+            retrieval_routes = self._routes_from_supervisor_decision(
+                request=request,
+                research_brief=research_brief,
+                plan=plan,
+                supervisor_decision=supervisor_decision,
+                route_hints=route_hints,
+                corpus_profile=corpus_profile,
+            )
+            search_queries = self.workflow.build_queries(plan, retrieval_routes, revision_count=revision_count)
+            final_supervisor_decision = supervisor_decision
+            final_search_queries = search_queries
+            final_retrieval_routes = retrieval_routes
+
+            append_trace(
+                kind="step",
+                actor="research_supervisor",
+                message="Issued ODR-style supervisor tool calls.",
+                step="supervisor.decision",
+                provider=getattr(supervisor_usage, "provider", None),
+                model=getattr(supervisor_usage, "model", None),
+                tokens_in=getattr(supervisor_usage, "prompt_tokens", 0),
+                tokens_out=getattr(supervisor_usage, "completion_tokens", 0),
+                latency_ms=getattr(supervisor_usage, "latency_ms", 0),
+                tool_calls=[call.model_dump() for call in supervisor_decision.tool_calls],
+                completion_criteria=supervisor_decision.completion_criteria,
+                max_concurrent_research_units=supervisor_decision.max_concurrent_research_units,
+                query_count=len(search_queries),
+                revision_count=revision_count,
+            )
+            checkpoint(
+                "supervisor.decision",
+                {
+                    "reflection": supervisor_decision.reflection,
+                    "tool_calls": [call.model_dump() for call in supervisor_decision.tool_calls],
+                    "completion_criteria": supervisor_decision.completion_criteria,
+                    "max_concurrent_research_units": supervisor_decision.max_concurrent_research_units,
+                    "model_provider": getattr(supervisor_usage, "provider", None),
+                    "model_name": getattr(supervisor_usage, "model", None),
                     "revision_count": revision_count,
                 },
             )
@@ -957,15 +1171,54 @@ class ResearchCopilot:
             evidence: list[EvidenceItem] = list(memory_hits)
             route_lookup = {route.plan_item_id: route for route in retrieval_routes}
 
-            for item in plan:
-                item.status = "running"
-                route = route_lookup.get(item.id)
-                if route is None:
+            for call in supervisor_decision.tool_calls:
+                if call.name == "think_tool":
+                    append_trace(
+                        kind="tool_call",
+                        actor="research_supervisor",
+                        message=call.reflection or call.rationale,
+                        step="supervisor.think",
+                        tool_name="think_tool",
+                        rationale=call.rationale,
+                    )
+                    continue
+                if call.name == "ResearchComplete":
+                    append_trace(
+                        kind="tool_call",
+                        actor="research_supervisor",
+                        message=call.reflection or call.rationale,
+                        step="supervisor.complete.criteria",
+                        tool_name="ResearchComplete",
+                        completion_criteria=supervisor_decision.completion_criteria,
+                    )
+                    continue
+                if call.name != "ConductResearch":
                     continue
 
-                record_handoff("supervisor", "researcher", f"research.{item.id}", route.reason, revision_count)
-                if route.mode in {"internal", "hybrid"} and request.include_private_docs and corpus_profile.has_private_docs:
-                    record_handoff("researcher", "retriever", f"retrieve.{item.id}", route.reason, revision_count)
+                for plan_item_id in call.plan_item_ids:
+                    route = route_lookup.get(plan_item_id)
+                    item = next((candidate for candidate in plan if candidate.id == plan_item_id), None)
+                    if route is None or item is None:
+                        continue
+                    item.status = "running"
+                    record_handoff("research_supervisor", "researcher", f"research.{item.id}", route.reason, revision_count)
+                    append_trace(
+                        kind="tool_call",
+                        actor="research_supervisor",
+                        message=call.research_topic or item.question,
+                        step=f"supervisor.conduct.{item.id}",
+                        tool_name="ConductResearch",
+                        plan_item_id=item.id,
+                        rationale=call.rationale,
+                        retrieval_mode=route.mode,
+                        selected_tools=route.selected_tools,
+                        web_queries=route.web_queries,
+                        internal_queries=route.internal_queries,
+                        min_evidence=route.min_evidence,
+                        min_sources=route.min_sources,
+                    )
+                    if route.mode in {"internal", "hybrid"} and request.include_private_docs and corpus_profile.has_private_docs:
+                        record_handoff("researcher", "retriever", f"retrieve.{item.id}", route.reason, revision_count)
 
             checkpoint(
                 "research.parallel.started",
@@ -980,6 +1233,7 @@ class ResearchCopilot:
                 route_lookup=route_lookup,
                 corpus_profile=corpus_profile,
                 research_brief=research_brief,
+                supervisor_decision=supervisor_decision,
             )
 
             for item in plan:
@@ -1064,7 +1318,7 @@ class ResearchCopilot:
                         "min_sources": route.min_sources,
                         "web_evidence_count": len(web_evidence),
                         "document_evidence_count": len(document_evidence),
-                        "retrieval_strategy": "contextual_dense_sparse_fusion_rerank",
+                        "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
                         "parallel": True,
                     },
                 )
@@ -1100,7 +1354,8 @@ class ResearchCopilot:
             )
             confidence = self._estimate_confidence(request, evidence, memory_hits, document_hits, plan)
             record_handoff("supervisor", "reporter", "reporting", "Assemble the citation-backed answer.", revision_count)
-            report = self.reporter.build_report(request.topic, sections, evidence, confidence)
+            report_evidence = self._rank_evidence_for_report(evidence)
+            report = self.reporter.build_report(request.topic, sections, report_evidence, confidence)
             reporter_usage = self.reporter.last_usage
             append_trace(
                 kind="step",
@@ -1115,7 +1370,9 @@ class ResearchCopilot:
                 section_count=len(sections),
                 source_count=report.source_count,
             )
-            report = report.model_copy(update={"source_index": self.workflow.format_sources(evidence)})
+            report = report.model_copy(
+                update={"source_index": self.workflow.format_sources(self._rank_evidence_for_report(evidence))}
+            )
             assessment = self.verifier.assess(
                 report,
                 evidence,
@@ -1231,7 +1488,8 @@ class ResearchCopilot:
                 )
                 continue
 
-            if (assessment.should_revise or quality_should_revise) and revision_count >= request.max_revisions:
+            usable_report = bool(report.citations) and evaluation.passed
+            if (assessment.should_revise or quality_should_revise) and revision_count >= request.max_revisions and not usable_report:
                 final_status = "failed"
                 failure_reason = assessment.revision_reason or "; ".join(evaluation.notes[:2]) or "Maximum revision budget reached."
             elif assessment.critical_issues and not report.citations:
@@ -1272,6 +1530,7 @@ class ResearchCopilot:
             request=request,
             research_brief=final_research_brief,
             corpus_profile=final_corpus_profile,
+            supervisor_decision=final_supervisor_decision,
             plan=final_plan,
             search_queries=final_search_queries,
             retrieval_routes=final_retrieval_routes,
@@ -1316,12 +1575,22 @@ class ResearchCopilot:
         route_lookup,
         corpus_profile: CorpusProfile,
         research_brief: str,
+        supervisor_decision: SupervisorDecisionContract | None = None,
     ) -> dict[str, PlanItemResearchResult]:
-        runnable_items = [item for item in plan if item.id in route_lookup]
+        runnable_items = self._conduct_plan_items(plan, route_lookup, supervisor_decision)
         if not runnable_items:
             return {}
 
-        max_workers = min(max(1, self.settings.research_max_workers), len(runnable_items))
+        supervisor_worker_limit = (
+            supervisor_decision.max_concurrent_research_units
+            if supervisor_decision is not None
+            else self.settings.research_max_workers
+        )
+        max_workers = min(
+            max(1, self.settings.research_max_workers),
+            max(1, supervisor_worker_limit),
+            len(runnable_items),
+        )
         if max_workers == 1:
             return {
                 item.id: self._research_plan_item(
@@ -1364,6 +1633,29 @@ class ResearchCopilot:
                         ),
                     )
         return results
+
+    def _conduct_plan_items(
+        self,
+        plan: list,
+        route_lookup,
+        supervisor_decision: SupervisorDecisionContract | None,
+    ) -> list:
+        base_items = [item for item in plan if item.id in route_lookup]
+        if supervisor_decision is None:
+            return base_items
+        delegated_ids: list[str] = []
+        seen: set[str] = set()
+        for call in supervisor_decision.tool_calls:
+            if call.name != "ConductResearch":
+                continue
+            for plan_item_id in call.plan_item_ids:
+                if plan_item_id in route_lookup and plan_item_id not in seen:
+                    seen.add(plan_item_id)
+                    delegated_ids.append(plan_item_id)
+        if not delegated_ids:
+            return base_items
+        item_lookup = {item.id: item for item in base_items}
+        return [item_lookup[item_id] for item_id in delegated_ids if item_id in item_lookup]
 
     def _research_plan_item(
         self,
@@ -1480,6 +1772,210 @@ class ResearchCopilot:
             )
         return records
 
+    def _routes_from_supervisor_decision(
+        self,
+        *,
+        request: ResearchRequest,
+        research_brief: str,
+        plan: list,
+        supervisor_decision: SupervisorDecisionContract,
+        route_hints: list[RetrievalRoute],
+        corpus_profile: CorpusProfile,
+    ) -> list[RetrievalRoute]:
+        """Materialize ConductResearch calls into executable evidence routes."""
+        item_lookup = {item.id: item for item in plan}
+        hint_lookup = {route.plan_item_id: route for route in route_hints}
+        routes: list[RetrievalRoute] = []
+        seen: set[str] = set()
+
+        for call in supervisor_decision.tool_calls:
+            if call.name != "ConductResearch":
+                continue
+            for plan_item_id in call.plan_item_ids:
+                item = item_lookup.get(plan_item_id)
+                if item is None or plan_item_id in seen:
+                    continue
+                routes.append(
+                    self._route_from_conduct_call(
+                        request=request,
+                        research_brief=research_brief,
+                        item=item,
+                        call=call,
+                        route_hint=hint_lookup.get(plan_item_id),
+                        corpus_profile=corpus_profile,
+                    )
+                )
+                seen.add(plan_item_id)
+
+        for item in plan:
+            if not item.requires_research or item.id in seen:
+                continue
+            route_hint = hint_lookup.get(item.id)
+            routes.append(
+                route_hint
+                or self._route_from_conduct_call(
+                    request=request,
+                    research_brief=research_brief,
+                    item=item,
+                    call=None,
+                    route_hint=None,
+                    corpus_profile=corpus_profile,
+                )
+            )
+        return routes
+
+    def _route_from_conduct_call(
+        self,
+        *,
+        request: ResearchRequest,
+        research_brief: str,
+        item,
+        call,
+        route_hint: RetrievalRoute | None,
+        corpus_profile: CorpusProfile,
+    ) -> RetrievalRoute:
+        selected_tools = self._normalize_supervisor_tools(
+            getattr(call, "selected_tools", []) if call is not None else [],
+            request=request,
+            corpus_profile=corpus_profile,
+        )
+        if not selected_tools and route_hint is not None:
+            selected_tools = self._normalize_supervisor_tools(
+                route_hint.selected_tools,
+                request=request,
+                corpus_profile=corpus_profile,
+            )
+        if not selected_tools:
+            selected_tools = ["web_search"]
+            if request.use_memory:
+                selected_tools.append("memory_recall")
+        if "web_search" not in selected_tools and "vector_retrieval" not in selected_tools:
+            selected_tools.insert(0, "web_search")
+
+        mode = self._mode_from_tools(selected_tools)
+        requested_mode = getattr(call, "mode", None) if call is not None else None
+        if requested_mode in {"external", "internal", "hybrid"} and self._mode_is_compatible(requested_mode, selected_tools):
+            mode = requested_mode
+
+        web_queries = self._clean_supervisor_queries(getattr(call, "web_queries", []) if call is not None else [])
+        internal_queries = self._clean_supervisor_queries(getattr(call, "internal_queries", []) if call is not None else [])
+        if not web_queries and route_hint is not None:
+            web_queries = list(route_hint.web_queries)
+        if not internal_queries and route_hint is not None:
+            internal_queries = list(route_hint.internal_queries)
+
+        default_query = self._clean_supervisor_queries(
+            [
+                getattr(call, "research_topic", None) if call is not None else None,
+                item.search_query,
+                item.question,
+                f"{request.topic} {item.purpose} evidence sources",
+            ]
+        )
+        if mode in {"external", "hybrid"} and not web_queries:
+            web_queries = default_query[: self.router.max_query_rewrites]
+        if mode in {"internal", "hybrid"} and not internal_queries:
+            internal_queries = self._clean_supervisor_queries(
+                [
+                    f"{request.topic} {research_brief} {item.purpose}",
+                    item.search_query,
+                    item.question,
+                ]
+            )[: self.router.max_query_rewrites]
+        if mode == "external":
+            internal_queries = []
+        if mode == "internal":
+            web_queries = []
+
+        memory_query = getattr(call, "memory_query", None) if call is not None else None
+        if request.use_memory and not memory_query:
+            memory_query = route_hint.memory_query if route_hint is not None else f"{request.topic} {item.purpose}"
+        if not request.use_memory:
+            memory_query = None
+
+        min_evidence = getattr(call, "min_evidence", None) if call is not None else None
+        min_sources = getattr(call, "min_sources", None) if call is not None else None
+        sufficiency_criteria = list(getattr(call, "sufficiency_criteria", []) if call is not None else [])
+        if route_hint is not None:
+            min_evidence = min_evidence or route_hint.min_evidence
+            min_sources = min_sources or route_hint.min_sources
+            sufficiency_criteria = sufficiency_criteria or list(route_hint.sufficiency_criteria)
+        min_evidence = int(min_evidence or self.router.min_evidence_per_item)
+        min_sources = int(min_sources or (1 if mode == "internal" else self.router.min_source_diversity))
+        if not sufficiency_criteria:
+            sufficiency_criteria = [
+                f"collect at least {min_evidence} evidence items for this delegated research unit",
+                f"use at least {min_sources} non-memory source group(s) when available",
+                "preserve citations for report assembly",
+            ]
+
+        rationale = getattr(call, "rationale", None) if call is not None else None
+        if route_hint is not None and not rationale:
+            rationale = route_hint.reason
+        return RetrievalRoute(
+            plan_item_id=item.id,
+            mode=mode,
+            web_query=web_queries[0] if web_queries else None,
+            internal_query=internal_queries[0] if internal_queries else None,
+            reason=rationale or "Supervisor delegated this research unit.",
+            selected_tools=selected_tools,
+            web_queries=web_queries,
+            internal_queries=internal_queries,
+            memory_query=memory_query,
+            min_evidence=min_evidence,
+            min_sources=min_sources,
+            sufficiency_criteria=sufficiency_criteria,
+        )
+
+    def _normalize_supervisor_tools(
+        self,
+        tools,
+        *,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+    ) -> list[str]:
+        valid = {"web_search", "vector_retrieval", "memory_recall"}
+        normalized: list[str] = []
+        for tool in tools or []:
+            if tool not in valid or tool in normalized:
+                continue
+            if tool == "memory_recall" and not request.use_memory:
+                continue
+            if tool == "vector_retrieval" and (not request.include_private_docs or not corpus_profile.has_private_docs):
+                continue
+            normalized.append(tool)
+        return normalized
+
+    def _mode_from_tools(self, tools: list[str]) -> str:
+        has_web = "web_search" in tools
+        has_vector = "vector_retrieval" in tools
+        if has_web and has_vector:
+            return "hybrid"
+        if has_vector:
+            return "internal"
+        return "external"
+
+    def _mode_is_compatible(self, mode: str, tools: list[str]) -> bool:
+        if mode == "hybrid":
+            return "web_search" in tools and "vector_retrieval" in tools
+        if mode == "internal":
+            return "vector_retrieval" in tools
+        return "web_search" in tools
+
+    def _clean_supervisor_queries(self, queries) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for query in queries:
+            if query is None:
+                continue
+            normalized = " ".join(str(query).split()).strip()
+            key = normalized.lower()
+            if not normalized or key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(normalized)
+        return cleaned
+
     def _build_run_artifact_evidence(
         self,
         *,
@@ -1571,50 +2067,75 @@ class ResearchCopilot:
         sections: list[ReportSection] = []
         plan_count = len(plan)
         base_sources = self._source_names(evidence)
-        run_artifacts = [item for item in evidence if item.kind == "run-artifact"]
-        project_grounding = document_hits[:3] or evidence[:3]
+        ranked_evidence = self._rank_evidence_for_report(evidence)
+        run_artifacts = [item for item in ranked_evidence if item.kind == "run-artifact"]
+        external_grounding = [
+            item
+            for item in ranked_evidence
+            if item.kind == "web" and item.source not in {"memory", "internal-note"}
+        ]
+        project_grounding = self._rank_evidence_for_report(document_hits)[:4] or ranked_evidence[:4]
+        non_memory_grounding = [
+            item
+            for item in ranked_evidence
+            if item.kind != "memory" and item.source != "memory"
+        ]
 
         section_specs: list[tuple[str, str, list[EvidenceItem]]] = [
             (
                 "Problem framing",
                 (
                     f"{research_brief} The current plan splits the topic into {plan_count} steps "
-                    f"and keeps the output oriented to a {request.audience} audience. In an interview, the project "
-                    "should be framed as an AI Research Copilot: it starts from a complex question, "
+                    "and frames the project as an AI Research Copilot: it starts from a complex question, "
                     "plans the investigation, then uses LangGraph + Agentic RAG to route between public and "
                     "contextual evidence, verify citations, and store reusable memory."
                 ),
-                project_grounding + evidence[:3],
+                project_grounding + external_grounding[:2],
             ),
             (
                 "Execution flow",
                 (
-                    "The LangGraph StateGraph runs as supervisor -> memory -> planner -> router -> researcher/retriever "
+                    "The LangGraph StateGraph runs as supervisor -> memory -> planner -> research_supervisor -> researcher/retriever "
                     "-> reporter -> verifier/evaluator -> memory. "
                     f"It combines {len(search_queries)} generated queries, {len(retrieval_routes)} retrieval routes, "
                     f"{len(web_hits)} web hits, {len(notes)} compressed notes, "
                     f"{len(memory_hits)} memory hits, and {len(document_hits)} contextual grounding hits "
-                    "to keep the result evidence-backed and traceable. Each route records external search, "
-                    "vector_retrieval, memory_recall, hybrid tool selection, query rewrite counts, and source-indexed "
+                    "to keep the result evidence-backed and traceable. The research supervisor emits think_tool, "
+                    "ConductResearch, and ResearchComplete decisions; each delegated unit records external search, "
+                    "vector_retrieval, memory_recall, tool selection, query rewrite counts, and source-indexed "
                     "checkpoints so the handoff trace can be reviewed after the run. The graph uses single-node "
                     "LangGraph SQLite checkpointing by default, while SQLite also stores durable run traces and replay artifacts; "
                     "the job layer is a single-worker queue with queued, retry, and cancelled states rather than a "
                     "distributed scheduler."
                 ),
-                run_artifacts + evidence[2:6],
+                run_artifacts + project_grounding[:3],
             ),
             (
                 "Contextual grounding",
                 (
                     "Memory stores session notes, canonical facts, and topic summaries with confidence metadata, while the "
-                    "grounding layer retrieves contextualized chunks from a Qdrant-backed embedding index with dense and "
-                    "sparse named vectors, RRF/DBSF hybrid fusion, and a Qwen/DashScope reranker that falls back to a "
+                    "grounding layer prepends chunk-specific contextual retrieval prefixes before writing to a "
+                    "Qdrant-backed dense embedding index plus SQLite FTS5 BM25 keyword search, then uses "
+                    "RRF/DBSF hybrid fusion and a Qwen/DashScope reranker that falls back to a "
                     "deterministic rule_diversity_chunk_bonus reranker when no API key is configured. "
                     "Web search stays separate until report assembly, so project context stays traceable and fresh evidence "
                     "remains distinct. The same retrieval contract can still swap in a cross-encoder or another hosted "
                     "reranker later."
                 ),
-                memory_hits[:2] + document_hits[:3],
+                project_grounding + external_grounding[:2],
+            ),
+            (
+                "Trade-offs and failure modes",
+                (
+                    "The system does not pretend that every search result is authoritative. Search providers can surface "
+                    "tutorials, community discussions, or low-signal pages, so source quality is handled as an evaluation "
+                    "and presentation concern: weak sources remain visible in trace artifacts, while the report should "
+                    "prefer project documents, official references, papers, and source-backed run artifacts for core "
+                    "claims. The single-node queue and SQLite checkpoint design are intentional for a personal research "
+                    "assistant; a multi-tenant SaaS would need stronger auth, rate limits, distributed queue operations, "
+                    "human review, and production monitoring."
+                ),
+                run_artifacts + non_memory_grounding[:4],
             ),
             (
                 "Verification and next steps",
@@ -1631,7 +2152,7 @@ class ResearchCopilot:
                     f"This run recalled {len(memory_hits)} memory items; when memory is thin, the trace makes that gap visible "
                     "instead of hiding it behind fluent output."
                 ),
-                run_artifacts + project_grounding,
+                run_artifacts + non_memory_grounding[:4],
             ),
         ]
 
@@ -1741,6 +2262,32 @@ class ResearchCopilot:
             seen.add(key)
             deduped.append(item)
         return deduped
+
+    def _rank_evidence_for_report(self, items: Iterable[EvidenceItem]) -> list[EvidenceItem]:
+        return sorted(
+            self._dedupe_evidence(items),
+            key=lambda item: (-self._report_evidence_weight(item), -(item.score or 0.0), item.title.lower()),
+        )
+
+    @staticmethod
+    def _report_evidence_weight(item: EvidenceItem) -> float:
+        source = (item.source or "").lower()
+        url = (item.url or "").lower()
+        metadata_kind = str(item.metadata.get("kind", "")).lower()
+        score = 0.0
+        if item.kind in {"document-chunk", "run-artifact", "paper", "web-summary"}:
+            score += 3.0
+        if metadata_kind in {"official_reference", "evaluation_reference", "reference_design", "architecture", "source_map"}:
+            score += 2.0
+        if any(domain in source or domain in url for domain in ("docs.", "github.com", "qdrant.tech", "langchain.com", "langchain-ai", "ragas.io", "arxiv.org", "pubmed")):
+            score += 1.5
+        if item.url:
+            score += 0.5
+        if item.kind == "memory" or source == "memory":
+            score -= 1.5
+        if any(domain in source or domain in url for domain in ("youtube.com", "youtu.be", "reddit.com")):
+            score -= 1.0
+        return score
 
     def _source_names(self, items: Iterable[EvidenceItem]) -> list[str]:
         names: list[str] = []
