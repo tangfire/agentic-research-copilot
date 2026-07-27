@@ -355,6 +355,9 @@ class ResearchCopilot:
             executor.shutdown(wait=False, cancel_futures=True)
         self.documents.close()
 
+    def refresh_state(self) -> None:
+        self._restore_state()
+
     def runtime_config(self) -> dict[str, object]:
         corpus_profile = self.documents.profile()
         return {

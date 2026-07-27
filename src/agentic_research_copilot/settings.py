@@ -188,7 +188,7 @@ def _load_dotenv_files() -> None:
         resolved = candidate.resolve()
         if resolved in loaded or not resolved.exists():
             continue
-        load_dotenv(resolved, override=False)
+        load_dotenv(resolved, override=False, encoding="utf-8-sig")
         loaded.add(resolved)
 
 

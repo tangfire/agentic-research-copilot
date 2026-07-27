@@ -1,0 +1,20 @@
+{
+  "plan_coverage": 1.0,
+  "retrieval_hit_rate": 1.0,
+  "private_retrieval_hit_rate": 1.0,
+  "evidence_sufficiency": 1.0,
+  "tool_selection_coverage": 1.0,
+  "query_rewrite_count": 5,
+  "source_quality_score": 0.6553,
+  "context_precision": 0.5597,
+  "context_recall": 1.0,
+  "faithfulness_proxy": 0.8459,
+  "citation_precision": 1.0,
+  "citation_source_coverage": 1.0,
+  "source_diversity": 6,
+  "insufficient_plan_items": [],
+  "unsupported_sections": [],
+  "no_citation_section_count": 0,
+  "passed": true,
+  "notes": []
+}

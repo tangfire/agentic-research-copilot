@@ -48,6 +48,26 @@ research workflow, and the heavier pieces each support a specific failure mode i
 plain RAG. The next risk is not the stack choice; it is an underprepared demo
 with an empty corpus, no memory records, or no saved trace/evaluation artifacts.
 
+## July 2026 Resume Demo Status
+
+The resume demo gap has been reduced. `scripts/prepare_resume_demo_assets.py`
+now prepares a bounded federated-learning corpus, memory records, and completed
+run artifacts under `examples/resume-demo/`. The latest strict-provider run used
+OpenAI-compatible chat, Qwen/DashScope embeddings and rerank, Tavily, Qdrant,
+SQLite FTS5/BM25, Celery/Redis, LangGraph, and the local MCP workbench.
+
+Current stable assets:
+
+- 5 paper excerpts from 5 federated-learning sources
+- 3 project memory records
+- MCP readiness 10/10
+- 2 completed research runs with saved reports, traces, evaluations, and replay
+  data
+
+The detailed experiment log is in `docs/resume-demo-runbook.md`. Keep that
+runbook current whenever a demo failure leads to a code, prompt, config, or
+evaluation change.
+
 ## Reference Check
 
 ### Open Deep Research

@@ -72,6 +72,22 @@ def test_load_settings_reads_dotenv_and_common_key_aliases(tmp_path, monkeypatch
     assert settings.rerank_api_key == "dashscope-test-key"
 
 
+def test_load_settings_reads_bom_prefixed_dotenv(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "true")
+    monkeypatch.delenv("ARC_STRICT_PROVIDERS", raising=False)
+    monkeypatch.delenv("ARC_STORAGE_PATH", raising=False)
+    (tmp_path / ".env").write_text(
+        "\ufeffARC_STRICT_PROVIDERS=true\nARC_STORAGE_PATH=.arc/demo.sqlite\n",
+        encoding="utf-8",
+    )
+
+    settings = load_settings()
+
+    assert settings.strict_providers is True
+    assert settings.storage_path == ".arc/demo.sqlite"
+
+
 def test_strict_provider_mode_reports_missing_real_config(monkeypatch):
     monkeypatch.setenv("ARC_STRICT_PROVIDERS", "true")
 

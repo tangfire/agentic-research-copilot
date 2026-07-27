@@ -1,0 +1,152 @@
+{
+  "api_base": "http://127.0.0.1:8010",
+  "source_dir": "<local reference-paper folder>",
+  "source_files": [
+    "mcmahan17a.pdf",
+    "NeurIPS-2020-personalized-federated-learning-with-moreau-envelopes-Paper.pdf",
+    "NeurIPS-2022-fedrolex-model-heterogeneous-federated-learning-with-rolling-sub-model-extraction-Paper-Conference.pdf",
+    "NeurIPS-2023-towards-personalized-federated-learning-via-heterogeneous-model-reassembly-Paper-Conference.pdf",
+    "FedAUX_Leveraging_Unlabeled_Auxiliary_Data_in_Federated_Learning.pdf"
+  ],
+  "output_dir": "examples\\resume-demo",
+  "corpus_assets": [
+    {
+      "title": "FedAvg: Communication-Efficient Learning of Deep Networks from Decentralized Data",
+      "source": "resume-demo-papers/mcmahan17a.pdf",
+      "status": "skipped_existing"
+    },
+    {
+      "title": "pFedMe: Personalized Federated Learning with Moreau Envelopes",
+      "source": "resume-demo-papers/NeurIPS-2020-personalized-federated-learning-with-moreau-envelopes-Paper.pdf",
+      "status": "skipped_existing"
+    },
+    {
+      "title": "FedRolex: Model-Heterogeneous Federated Learning with Rolling Sub-Model Extraction",
+      "source": "resume-demo-papers/NeurIPS-2022-fedrolex-model-heterogeneous-federated-learning-with-rolling-sub-model-extraction-Paper-Conference.pdf",
+      "status": "skipped_existing"
+    },
+    {
+      "title": "Personalized Federated Learning via Heterogeneous Model Reassembly",
+      "source": "resume-demo-papers/NeurIPS-2023-towards-personalized-federated-learning-via-heterogeneous-model-reassembly-Paper-Conference.pdf",
+      "status": "skipped_existing"
+    },
+    {
+      "title": "FedAUX: Leveraging Unlabeled Auxiliary Data in Federated Learning",
+      "source": "resume-demo-papers/FedAUX_Leveraging_Unlabeled_Auxiliary_Data_in_Federated_Learning.pdf",
+      "status": "skipped_existing"
+    }
+  ],
+  "memory_assets": [
+    {
+      "key": "resume_demo:positioning",
+      "status": "skipped_existing"
+    },
+    {
+      "key": "resume_demo:corpus_scope",
+      "status": "skipped_existing"
+    },
+    {
+      "key": "resume_demo:demo_goal",
+      "status": "skipped_existing"
+    }
+  ],
+  "runtime": {
+    "strict_ready": true,
+    "runtime": "langgraph",
+    "queue": "celery",
+    "vector_backend": "qdrant_dense",
+    "keyword_backend": "sqlite_fts5_bm25",
+    "reranker": "dashscope_qwen3_rerank",
+    "mcp_loaded": true
+  },
+  "mcp_readiness": {
+    "available": true,
+    "score": 1.0,
+    "passed": 10,
+    "total": 10,
+    "failed": []
+  },
+  "final_corpus_profile": {
+    "document_count": 5,
+    "source_count": 5,
+    "source_names": [
+      "resume-demo-papers/FedAUX_Leveraging_Unlabeled_Auxiliary_Data_in_Federated_Learning.pdf",
+      "resume-demo-papers/NeurIPS-2020-personalized-federated-learning-with-moreau-envelopes-Paper.pdf",
+      "resume-demo-papers/NeurIPS-2022-fedrolex-model-heterogeneous-federated-learning-with-rolling-sub-model-extraction-Paper-Conference.pdf",
+      "resume-demo-papers/NeurIPS-2023-towards-personalized-federated-learning-via-heterogeneous-model-reassembly-Paper-Conference.pdf",
+      "resume-demo-papers/mcmahan17a.pdf"
+    ],
+    "document_kinds": {
+      "document": 5
+    },
+    "keyword_signals": [
+      "the",
+      "model",
+      "and",
+      "data",
+      "learning",
+      "federated",
+      "clients",
+      "models"
+    ],
+    "has_private_docs": true,
+    "has_reference_docs": false,
+    "vector_backend": "qdrant_dense",
+    "keyword_backend": "sqlite_fts5_bm25",
+    "embedding_dimensions": 256,
+    "collection_name": "arc_resume_demo_20260727",
+    "last_updated": "2026-07-27T05:18:11.461221+00:00"
+  },
+  "final_memory_governance": {
+    "total_records": 3,
+    "by_layer": {
+      "summary": 2,
+      "canonical": 1
+    },
+    "canonical_count": 1,
+    "embedding_enabled": true,
+    "embedding_provider": "openai_compatible",
+    "embedding_dimensions": 256,
+    "indexed_memory_count": 3,
+    "needs_review_count": 0,
+    "conflict_record_count": 0,
+    "conflict_count": 0,
+    "review_required": [],
+    "write_rules": [
+      "session memory captures run-scoped notes",
+      "summary memory captures topic-level takeaways",
+      "canonical memory is active only when confidence is sufficient and no conflict is detected",
+      "conflicting canonical facts are retained but marked needs_review instead of overwritten"
+    ],
+    "recall_strategy": [
+      "lexical token matching",
+      "embedding-assisted semantic similarity when an embedding provider is configured",
+      "confidence and layer weighting",
+      "governance penalty for needs_review canonical records"
+    ]
+  },
+  "run_assets": [
+    {
+      "slug": "fl-heterogeneity-comparison",
+      "job_id": "4d414aa7-1356-4058-a400-08a1ff77fbde",
+      "run_id": "98d699ef-d3b2-4144-a73b-b9a23a04c6ca",
+      "status": "completed",
+      "source_count": 6,
+      "evaluation_passed": true,
+      "trace_events": 44,
+      "report": "examples\\resume-demo\\fl-heterogeneity-comparison.report.md",
+      "reused_existing": true
+    },
+    {
+      "slug": "fl-personalization-design-memo",
+      "job_id": "115d6444-82e6-45ff-bc5c-f81f0777e4dc",
+      "run_id": "0404a715-df93-4639-a32b-9fec9477c708",
+      "status": "completed",
+      "source_count": 6,
+      "evaluation_passed": true,
+      "trace_events": 53,
+      "report": "examples\\resume-demo\\fl-personalization-design-memo.report.md"
+    }
+  ],
+  "demo_boundary": "This script seeds controlled excerpts from PDFs for a reliable resume demo. Full PDF ingestion remains available through /v1/documents/ingest, but large PDFs can be slow because strict mode uses real contextualization and embeddings."
+}

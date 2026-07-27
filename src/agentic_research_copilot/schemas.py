@@ -3,11 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _none_to_empty_list(value: Any) -> Any:
+    return [] if value is None else value
 
 
 ResearchToolName = Literal["web_search", "vector_retrieval", "memory_recall", "mcp_tool"]
@@ -155,6 +159,18 @@ class SupervisorToolCall(BaseModel):
     min_sources: int | None = None
     sufficiency_criteria: list[str] = Field(default_factory=list)
 
+    @field_validator(
+        "plan_item_ids",
+        "selected_tools",
+        "web_queries",
+        "internal_queries",
+        "sufficiency_criteria",
+        mode="before",
+    )
+    @classmethod
+    def _normalize_optional_lists(cls, value: Any) -> Any:
+        return _none_to_empty_list(value)
+
 
 class SupervisorDecisionContract(BaseModel):
     reflection: str
@@ -162,6 +178,11 @@ class SupervisorDecisionContract(BaseModel):
     completion_criteria: list[str] = Field(default_factory=list)
     max_concurrent_research_units: int = 1
     confidence: float = 0.0
+
+    @field_validator("tool_calls", "completion_criteria", mode="before")
+    @classmethod
+    def _normalize_optional_lists(cls, value: Any) -> Any:
+        return _none_to_empty_list(value)
 
 
 class ResearcherToolDecisionContract(BaseModel):

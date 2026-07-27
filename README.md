@@ -479,6 +479,17 @@ grounding documents.
 
 ## Demo Artifacts
 
+Use `scripts/prepare_resume_demo_assets.py` for the July 2026 resume-ready
+strict-provider demo. It seeds a small federated-learning paper corpus, memory
+records, and completed run artifacts under `examples/resume-demo/`:
+
+```bash
+python scripts/prepare_resume_demo_assets.py --source-dir "<local-reference-paper-folder>"
+```
+
+The experiment log, fixes, and interview talking points are in
+`docs/resume-demo-runbook.md`.
+
 Use `scripts/capture_demo.py` to capture a resume/interview demo run without
 writing secrets into the repository. The script reads provider configuration
 from environment variables and writes:
