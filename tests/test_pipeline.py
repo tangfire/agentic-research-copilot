@@ -54,6 +54,44 @@ def test_chat_provider_can_use_separate_openai_embedding_provider(tmp_path: Path
     assert embedding_provider.embedding_dimensions == 256
 
 
+def test_clarify_request_identifies_vague_topics(tmp_path: Path):
+    copilot = ResearchCopilot(
+        settings=AppSettings(
+            storage_path=str(tmp_path / "clarify.sqlite"),
+            langgraph_checkpoint_path=str(tmp_path / "clarify-checkpoints.sqlite"),
+        )
+    )
+
+    result = copilot.clarify(ResearchRequest(topic="RAG"))
+
+    assert result.need_clarification is True
+    assert result.question
+    assert "scope" in result.question.lower()
+    assert result.verification == ""
+    assert result.missing_dimensions
+
+
+def test_clarify_request_accepts_specific_topics(tmp_path: Path):
+    copilot = ResearchCopilot(
+        settings=AppSettings(
+            storage_path=str(tmp_path / "clarify-specific.sqlite"),
+            langgraph_checkpoint_path=str(tmp_path / "clarify-specific-checkpoints.sqlite"),
+        )
+    )
+
+    result = copilot.clarify(
+        ResearchRequest(
+            topic="Compare Open Deep Research and local AI research copilot architecture",
+            depth="standard",
+        )
+    )
+
+    assert result.need_clarification is False
+    assert result.question == ""
+    assert result.verification
+    assert "research" in result.verification.lower()
+
+
 def test_pipeline_returns_report(tmp_path: Path):
     copilot = ResearchCopilot(
         settings=AppSettings(
@@ -101,6 +139,8 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(event.actor == "reporter" and event.model for event in result.trace)
     assert any(event.kind == "tool_call" and event.metadata.get("parallel") is True for event in result.trace)
     assert any(event.actor == "researcher" and "sufficiency_score" in event.metadata for event in result.trace)
+    assert any(note.research_iterations for note in result.notes)
+    assert any(event.actor == "researcher" and event.metadata.get("research_iteration_count", 0) >= 1 for event in result.trace)
     assert any(checkpoint.stage == "langgraph.runtime" for checkpoint in result.checkpoints)
     assert any(checkpoint.stage == "supervisor.decision" for checkpoint in result.checkpoints)
     assert any(checkpoint.stage == "research.parallel.started" for checkpoint in result.checkpoints)
@@ -196,6 +236,112 @@ def test_research_agent_extracts_raw_content_into_read_evidence():
     assert "Agentic research systems" in evidence[0].content
     assert evidence[0].metadata["read_strategy"] == "provider_raw_content_extract"
     assert evidence[0].metadata["raw_content_chars"] > len(evidence[0].content)
+
+
+def test_research_agent_iterates_until_evidence_is_sufficient():
+    calls = []
+
+    def fake_search(query):
+        calls.append(query)
+        if "second" in query:
+            return [
+                {
+                    "title": "Second Source",
+                    "source": "official-docs",
+                    "url": "https://example.com/second",
+                    "snippet": "Second independent source.",
+                    "content": "Second independent source with corroborating evidence.",
+                    "score": 0.84,
+                }
+            ]
+        return [
+            {
+                "title": "First Source",
+                "source": "paper",
+                "url": "https://example.com/first",
+                "snippet": "First source.",
+                "content": "First source has useful but insufficient evidence.",
+                "score": 0.91,
+            }
+        ]
+
+    agent = ResearchAgent(fake_search, source_reader_enabled=False, max_iterations=3)
+    collection = agent.collect_iterative(
+        PlanItem(
+            id="plan-1",
+            question="How should researcher loops work?",
+            purpose="Verify iterative collection.",
+            search_query="researcher loop",
+        ),
+        ["first query", "second query"],
+        min_evidence=2,
+        min_sources=2,
+    )
+
+    assert calls == ["first query", "second query"]
+    assert collection.completed_reason == "sufficiency_met"
+    assert len(collection.evidence) == 2
+    assert len(collection.iterations) == 2
+    assert collection.iterations[0]["gaps"]
+    assert collection.iterations[1]["gaps"] == []
+    assert "researcher should continue" in collection.iterations[0]["reflection"]
+
+
+def test_research_agent_can_call_mcp_when_search_evidence_is_insufficient():
+    search_calls = []
+    mcp_calls = []
+
+    def fake_search(query):
+        search_calls.append(query)
+        return [
+            {
+                "title": "Initial Web Source",
+                "source": "official-docs",
+                "url": "https://example.com/web",
+                "snippet": "Initial source with partial evidence.",
+                "content": "Initial source with partial evidence.",
+                "score": 0.82,
+            }
+        ]
+
+    def fake_mcp(query, tool_name=None):
+        mcp_calls.append((query, tool_name))
+        return [
+            {
+                "title": "MCP Dataset Lookup",
+                "source": "mcp:dataset",
+                "kind": "mcp",
+                "snippet": "MCP tool returned a second source.",
+                "content": "MCP tool returned structured evidence from a configured external tool.",
+                "score": 0.78,
+                "metadata": {"mcp_tool_name": "dataset_lookup"},
+            }
+        ]
+
+    agent = ResearchAgent(
+        fake_search,
+        mcp_tool=fake_mcp,
+        source_reader_enabled=False,
+        max_iterations=3,
+    )
+    collection = agent.collect_iterative(
+        PlanItem(
+            id="plan-mcp",
+            question="How should external tool evidence be added?",
+            purpose="Verify MCP tool routing.",
+            search_query="external tool evidence",
+        ),
+        ["first query", "mcp query"],
+        min_evidence=2,
+        min_sources=2,
+    )
+
+    assert search_calls == ["first query"]
+    assert mcp_calls
+    assert mcp_calls[0][1] == "search_grounding_corpus"
+    assert collection.completed_reason == "sufficiency_met"
+    assert any(item.kind == "mcp" for item in collection.evidence)
+    assert [iteration["action"] for iteration in collection.iterations] == ["web_search", "mcp_tool"]
 
 
 def test_research_agent_can_model_compress_raw_content():

@@ -21,6 +21,33 @@ It should not be described as a production-grade generic agent platform. The cur
 architecture is intentionally product-specific: strong enough for an interview demo,
 small enough to explain and maintain.
 
+## Technology Fit Review
+
+Current verdict: the technology choices are appropriate for the project. The repo
+does not appear to be an unrelated stack wrapped in agent/RAG terminology. The
+important caveat is presentation: describe the system as a single-node AI
+Research Copilot, not as an enterprise research platform.
+
+| Technology | Why it fits | Boundary to keep honest |
+| --- | --- | --- |
+| LangGraph | The workflow has stateful planning, delegation, bounded loops, verification, revision, memory writes, and replay. | Single-node SQLite checkpointing, not distributed durable execution. |
+| FastAPI | The product needs inspectable job, run, document, memory, telemetry, and runtime-config APIs. | Thin local API, not a full SaaS backend. |
+| Celery/Redis | Useful for separating API and worker processes during strict real-provider demos. | Single-node worker separation, not production multi-tenant scheduling. |
+| SQLite | Good for local run ledgers, memory, documents, job state, telemetry, and checkpoint files. | Local persistence, not horizontal database scaling. |
+| Qdrant | Provides a real dense-vector backend for grounding documents. | Retrieval backend only; it does not make the project an enterprise search platform by itself. |
+| SQLite FTS5/BM25 | Adds exact term and acronym recall that dense embeddings often miss. | Single-node lexical index, not Elasticsearch/OpenSearch. |
+| Reranker | Reorders fused dense/BM25/graph candidates by query relevance. | Qwen/DashScope rerank, not a locally trained cross-encoder unless that is added later. |
+| MCP | Configurable tool boundary for grounding search, memory recall, run/eval inspection, and readiness checks. | Local workbench server, not an enterprise MCP gateway. |
+| Provider raw-content reader | Reads and compresses source content beyond snippets. | Provider reading layer, not browser automation or crawling. |
+| PyMuPDF document reader | Preserves useful PDF page/block/table metadata for grounding. | Not OCR or full document intelligence. |
+| LightRAG-inspired graph signal | Adds entity/relation candidate expansion before rerank. | Lightweight graph signal, not a full LightRAG/GraphRAG runtime. |
+| Proxy evaluation + optional judge/Ragas | Makes quality failures visible without adding heavy benchmark cost to every run. | Demo/eval artifacts, not a large public benchmark. |
+
+This makes the resume story defensible: the architecture is built around a real
+research workflow, and the heavier pieces each support a specific failure mode in
+plain RAG. The next risk is not the stack choice; it is an underprepared demo
+with an empty corpus, no memory records, or no saved trace/evaluation artifacts.
+
 ## Reference Check
 
 ### Open Deep Research
@@ -30,6 +57,7 @@ The local Open Deep Research reference is strongest in these areas:
 - LangGraph-first research orchestration.
 - Supervisor/researcher split with parallel delegated research.
 - Tool-calling research loop with reflection.
+- Configurable MCP tool loading through `mcp_config.url` and `mcp_config.tools`.
 - Tavily search with provider-returned `raw_content` that is compressed before
   final report writing.
 - Compression of research findings before final report writing.
@@ -49,6 +77,12 @@ research supervisor emits those tool-call-shaped decisions, and each
 `ConductResearch` call carries selected tools, query rewrites, grounding mode,
 and sufficiency criteria. Deterministic route hints remain only for offline tests
 and defensive fallback behavior.
+
+ODR's MCP integration is not a fixed list of built-in servers. The inspected
+mainline exposes `MCPConfig(url, tools, auth_required)` and `mcp_prompt`, then
+loads only the configured tool allowlist through `MultiServerMCPClient`. This
+repo follows that mechanism with `ARC_MCP_SERVER_URL`, `ARC_MCP_TOOLS`, optional
+bearer auth, and trace-visible MCP evidence records.
 
 ### PraisonAI
 
@@ -75,6 +109,8 @@ These are the boundaries to keep clear when presenting the project:
 | --- | --- | --- | --- |
 | Product path | Plan/research/compress/report/evaluate | Plan, search/read, retrieve, synthesize, verify/evaluate, replay | ODR-style AI Research Copilot, not plain RAG |
 | Supervisor/tool loop | LLM supervisor delegates with `think_tool`, `ConductResearch`, and `ResearchComplete` | LLM planner plus ODR-style research supervisor; `ConductResearch` carries tools, queries, mode, and sufficiency criteria | Main orchestration is ODR-aligned; deterministic hints are fallback/test scaffolding |
+| Researcher tool loop | Researcher model can call search, `think_tool`, configured MCP tools, or complete | Bounded model-driven researcher action schema over `think_tool`, `web_search`, configured `mcp_tool`, and `ResearchComplete` | ODR-shaped but budgeted for a local project |
+| MCP tools | Configured MCP server URL plus explicit tool allowlist; no fixed default server list | `ARC_MCP_SERVER_URL` + comma-separated `ARC_MCP_TOOLS`; optional bearer auth and MCP prompt; local workbench server exposes grounding search, memory recall, run/eval inspection, and readiness checks | Say it mirrors ODR's registry boundary, and the local server is a controlled experiment workbench |
 | Web reader | Tavily/provider `raw_content` and compression | Tavily/provider `raw_content` with extract/model/chunk-rerank compression plus neighbor expansion | ODR-level v1 reading boundary, not browser automation |
 | Source quality | Evaluation/judge surface, not runtime blocking | Runtime metrics and optional judge artifacts expose weak sources | Do not claim permanent high-quality source filtering |
 | Report synthesis | Model-generated report from compressed findings | Citation-aware model sections with backend-locked evidence IDs | Strong; this is one of the main ODR-aligned upgrades |
@@ -91,7 +127,42 @@ sources and small demos are sensitive to question choice. Before interviews, reg
 cleaner demo using questions that naturally retrieve papers, official docs, technical
 reports, standards, or primary-source pages.
 
+For MCP demos, prefer the local `arc-research-workbench` server instead of random
+public MCP servers. It makes the tool path reliable and useful for actual
+experiments: the researcher can call `search_grounding_corpus` for ingested
+document evidence, `recall_project_memory` for session/summary/canonical memory,
+`inspect_research_runs` for trace/evaluation replay, and `check_demo_readiness`
+before an interview demo. Optional tools (`search_reference_corpus`,
+`inspect_runtime_config`, and `recommend_demo_questions`) remain available for
+architecture study and demo preparation. This demonstrates MCP as a tool
+registration layer without pretending ODR ships a fixed server bundle.
+
 ## Next Optimizations
+
+### P0: Prepare Real Demo Corpus, Memory, And Trace Artifacts
+
+Status: required before important interviews.
+
+Why: the runtime can be technically ready while the demonstration is still weak.
+If the grounding corpus is empty and memory has no records, MCP readiness and
+hybrid retrieval can load correctly but the system will not visibly prove its
+research value.
+
+Minimum interview pack:
+
+- ingest 5-10 high-quality sources, preferably official docs, papers, technical
+  reports, standards, or primary-source pages
+- run 2-3 complex questions that naturally require planning, web search, local
+  grounding, memory recall, and citation verification
+- keep one run that calls the local MCP workbench
+- save the final report, source index, trace, evaluation, and optional LLM judge
+  or Ragas artifact
+- record what the run demonstrates: planner output, `ConductResearch`, search
+  provider evidence, source-reader compression, Qdrant/BM25/rerank metadata,
+  memory writes, verifier/evaluator notes, and replay
+
+This is the highest-value next step because it turns the architecture into a
+credible product demonstration.
 
 ### P0: Expand The Evaluation Dataset
 
@@ -258,6 +329,7 @@ evidence, and report synthesis receives compact evidence instead of raw pages.
 - `ARC_SOURCE_READER_STRATEGY=extract | model_compress | chunk_rerank_compress`
 - `ARC_SOURCE_READER_MAX_CHARS=50000`
 - `ARC_SOURCE_READER_EXCERPT_CHARS=1600`
+- `ARC_RESEARCH_MAX_ITERATIONS=3`
 - `extract` uses deterministic query-relevant sentence selection for tests/offline runs
 - `model_compress` calls the configured chat model and returns a structured
   `summary/key_excerpts/relevance/limitations` contract

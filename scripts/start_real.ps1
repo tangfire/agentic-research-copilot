@@ -4,6 +4,7 @@ param(
   [switch]$Smoke,
   [switch]$InProcess,
   [switch]$NoWorker,
+  [switch]$NoMcp,
   [switch]$NoInfra
 )
 
@@ -136,6 +137,67 @@ function Start-CeleryWorker {
   Write-Host "Celery worker started with PID $($process.Id). Logs: $stdout"
 }
 
+function Start-McpServer {
+  if ($NoMcp) {
+    $env:ARC_MCP_ENABLED = "false"
+    Write-Host "MCP workbench server disabled by -NoMcp."
+    return
+  }
+  if ($env:ARC_MCP_ENABLED -match "^(0|false|no|off)$") {
+    Write-Host "MCP workbench server disabled by ARC_MCP_ENABLED=$env:ARC_MCP_ENABLED."
+    return
+  }
+  Assert-PythonModule -ModuleName "mcp.server.fastmcp"
+  if (-not $env:ARC_MCP_SERVER_URL) {
+    $env:ARC_MCP_SERVER_URL = "http://127.0.0.1:8765"
+  }
+  if (-not $env:ARC_MCP_TOOLS) {
+    $env:ARC_MCP_TOOLS = "search_grounding_corpus,recall_project_memory,inspect_research_runs,check_demo_readiness"
+  }
+  if (-not $env:ARC_MCP_PROMPT) {
+    $env:ARC_MCP_PROMPT = "Use MCP workspace tools when ingested grounding documents, project memory, prior run traces/evaluation, or demo readiness checks can improve the research answer."
+  }
+  if (-not $env:ARC_MCP_DEMO_API_BASE) {
+    $env:ARC_MCP_DEMO_API_BASE = "http://127.0.0.1:$Port"
+  }
+
+  $uri = [uri]$env:ARC_MCP_SERVER_URL
+  $hostName = if ($uri.Host) { $uri.Host } else { "127.0.0.1" }
+  $portNumber = if ($uri.Port -gt 0) { $uri.Port } elseif ($uri.Scheme -eq "https") { 443 } else { 80 }
+  if (-not $env:ARC_MCP_DEMO_PORT) {
+    $env:ARC_MCP_DEMO_PORT = "$portNumber"
+  }
+  if (Test-TcpPort -HostName $hostName -PortNumber $portNumber) {
+    Write-Host "MCP workbench server already reachable at $env:ARC_MCP_SERVER_URL."
+    return
+  }
+
+  $logDir = Join-Path (Get-Location) ".arc"
+  New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+  $stdout = Join-Path $logDir "mcp-server.out.log"
+  $stderr = Join-Path $logDir "mcp-server.err.log"
+  $process = Start-Process `
+    -FilePath "python" `
+    -ArgumentList @("-m", "agentic_research_copilot.research_mcp_server") `
+    -WorkingDirectory (Get-Location) `
+    -RedirectStandardOutput $stdout `
+    -RedirectStandardError $stderr `
+    -WindowStyle Hidden `
+    -PassThru
+
+  for ($i = 0; $i -lt 15; $i += 1) {
+    if ($process.HasExited) {
+      throw "MCP workbench server exited early. Check $stderr"
+    }
+    if (Test-TcpPort -HostName $hostName -PortNumber $portNumber) {
+      Write-Host "MCP workbench server started with PID $($process.Id). URL: $env:ARC_MCP_SERVER_URL Logs: $stdout"
+      return
+    }
+    Start-Sleep -Seconds 1
+  }
+  throw "MCP workbench server did not become ready on $env:ARC_MCP_SERVER_URL. Check $stderr"
+}
+
 $env:ARC_STRICT_PROVIDERS = "true"
 
 if (-not $env:ARC_MODEL_PROVIDER) {
@@ -155,6 +217,21 @@ if (-not $env:ARC_SEARCH_DEPTH) {
 }
 if (-not $env:ARC_SEARCH_INCLUDE_RAW_CONTENT) {
   $env:ARC_SEARCH_INCLUDE_RAW_CONTENT = "true"
+}
+if (-not $env:ARC_MCP_ENABLED) {
+  $env:ARC_MCP_ENABLED = "true"
+}
+if (-not $env:ARC_MCP_SERVER_URL) {
+  $env:ARC_MCP_SERVER_URL = "http://127.0.0.1:8765"
+}
+if (-not $env:ARC_MCP_TOOLS) {
+  $env:ARC_MCP_TOOLS = "search_grounding_corpus,recall_project_memory,inspect_research_runs,check_demo_readiness"
+}
+if (-not $env:ARC_MCP_PROMPT) {
+  $env:ARC_MCP_PROMPT = "Use MCP workspace tools when ingested grounding documents, project memory, prior run traces/evaluation, or demo readiness checks can improve the research answer."
+}
+if (-not $env:ARC_MCP_TRANSPORT) {
+  $env:ARC_MCP_TRANSPORT = "streamable_http"
 }
 if (-not $env:ARC_SOURCE_READER_ENABLED) {
   $env:ARC_SOURCE_READER_ENABLED = "true"
@@ -225,6 +302,8 @@ if ($LASTEXITCODE -ne 0) {
 if ($env:ARC_JOB_QUEUE_BACKEND -eq "celery" -and -not $NoWorker) {
   Start-CeleryWorker
 }
+
+Start-McpServer
 
 $uvicornArgs = @(
   "-m",

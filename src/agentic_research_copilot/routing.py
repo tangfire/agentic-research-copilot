@@ -49,10 +49,12 @@ class RetrievalCoordinator:
         max_query_rewrites: int = 2,
         min_evidence_per_item: int = 2,
         min_source_diversity: int = 2,
+        mcp_enabled: bool = True,
     ) -> None:
         self.max_query_rewrites = max(1, max_query_rewrites)
         self.min_evidence_per_item = max(1, min_evidence_per_item)
         self.min_source_diversity = max(1, min_source_diversity)
+        self.mcp_enabled = mcp_enabled
 
     def build_routes(
         self,
@@ -185,6 +187,8 @@ class RetrievalCoordinator:
             tools.append("vector_retrieval")
         if use_memory:
             tools.append("memory_recall")
+        if self.mcp_enabled:
+            tools.append("mcp_tool")
         return tools
 
     def _rewrite_count_for_depth(self, depth: str) -> int:

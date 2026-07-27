@@ -10,6 +10,9 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+ResearchToolName = Literal["web_search", "vector_retrieval", "memory_recall", "mcp_tool"]
+
+
 class ResearchRequest(BaseModel):
     topic: str = Field(min_length=3)
     depth: Literal["quick", "standard", "deep"] = "standard"
@@ -34,7 +37,7 @@ class SearchQuery(BaseModel):
     query: str
     intent: str
     plan_item_id: str | None = None
-    tool: Literal["web_search", "vector_retrieval", "memory_recall"] = "web_search"
+    tool: ResearchToolName = "web_search"
     rewrite_index: int = 0
     revision: int = 0
 
@@ -73,6 +76,8 @@ class ResearchNote(BaseModel):
     sufficiency_score: float = 0.0
     gaps: list[str] = Field(default_factory=list)
     follow_up_queries: list[str] = Field(default_factory=list)
+    research_iterations: list[dict[str, Any]] = Field(default_factory=list)
+    completed_reason: str | None = None
 
 
 class RetrievalRoute(BaseModel):
@@ -81,7 +86,7 @@ class RetrievalRoute(BaseModel):
     web_query: str | None = None
     internal_query: str | None = None
     reason: str
-    selected_tools: list[Literal["web_search", "vector_retrieval", "memory_recall"]] = Field(default_factory=list)
+    selected_tools: list[ResearchToolName] = Field(default_factory=list)
     web_queries: list[str] = Field(default_factory=list)
     internal_queries: list[str] = Field(default_factory=list)
     memory_query: str | None = None
@@ -118,6 +123,14 @@ class MemoryRecord(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class ClarificationContract(BaseModel):
+    need_clarification: bool = False
+    question: str = ""
+    verification: str = ""
+    missing_dimensions: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+
 class PlannerContract(BaseModel):
     research_brief: str
     plan: list[PlanItem] = Field(default_factory=list)
@@ -134,7 +147,7 @@ class SupervisorToolCall(BaseModel):
     research_topic: str | None = None
     reflection: str | None = None
     mode: Literal["external", "internal", "hybrid"] | None = None
-    selected_tools: list[Literal["web_search", "vector_retrieval", "memory_recall"]] = Field(default_factory=list)
+    selected_tools: list[ResearchToolName] = Field(default_factory=list)
     web_queries: list[str] = Field(default_factory=list)
     internal_queries: list[str] = Field(default_factory=list)
     memory_query: str | None = None
@@ -148,6 +161,16 @@ class SupervisorDecisionContract(BaseModel):
     tool_calls: list[SupervisorToolCall] = Field(default_factory=list)
     completion_criteria: list[str] = Field(default_factory=list)
     max_concurrent_research_units: int = 1
+    confidence: float = 0.0
+
+
+class ResearcherToolDecisionContract(BaseModel):
+    action: Literal["think_tool", "web_search", "mcp_tool", "ResearchComplete"] = "web_search"
+    query: str | None = None
+    mcp_tool_name: str | None = None
+    rationale: str = ""
+    reflection: str = ""
+    completion_reason: str | None = None
     confidence: float = 0.0
 
 

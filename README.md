@@ -34,7 +34,8 @@ It turns a user question into a research artifact by combining:
 - supervisor-driven planning, reflection, and research delegation
 - concurrent research over plan items
 - ODR-style `think_tool`, `ConductResearch`, and `ResearchComplete` decisions
-- explicit tool selection for `web_search`, `vector_retrieval`, and `memory_recall`
+- a bounded researcher loop per delegated unit: choose `think_tool`, `web_search`, configured `mcp_tool`, or `ResearchComplete`, then compress findings
+- explicit tool selection for `web_search`, `vector_retrieval`, `memory_recall`, and configured MCP tools
 - query rewrite / multi-query retrieval plans per research unit
 - Open Deep Research-style web reading: Tavily can return `raw_content`, and the source reader turns it into citation-ready evidence through query-aware extraction, model compression, or chunk-rerank compression with neighbor expansion
 - local document ingestion for text/Markdown/HTML and optional block/table-aware PDF page parsing before Qdrant-backed contextual retrieval
@@ -59,7 +60,7 @@ It turns a user question into a research artifact by combining:
 3. `Planner` decomposes the research question into plan items.
 4. `ResearchSupervisor` reflects with `think_tool`, delegates plan items through `ConductResearch`, and records `ResearchComplete` criteria.
 5. Each `ConductResearch` call carries selected tools, query rewrites, evidence thresholds, and external/internal/hybrid grounding mode.
-6. `Researcher` runs delegated research units concurrently and uses the source reader to compress provider-returned raw source content when available.
+6. `Researcher` runs delegated research units concurrently. Each unit uses a bounded ODR-style tool loop: the model chooses between reflection, web search, configured MCP tools, and completion; provider raw content is read/compressed when available; evidence/source sufficiency and stopping reason are recorded in the trace.
 7. `Retriever` uses child-chunk retrieval, parent/neighbor context expansion, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, RRF/DBSF fusion, and reranking for uploaded context and already-read grounding material.
 8. `Reporter` generates source-indexed report sections.
 9. `Verifier` checks citations, coverage, confidence, and weak claims.
@@ -79,6 +80,40 @@ It turns a user question into a research artifact by combining:
 - Infra: Docker Compose for local service orchestration
 - Evaluation: proxy RAG gates for plan coverage, retrieval hit rate, source quality, citation precision, source coverage, and unsupported sections, plus optional Open Deep Research-style judge and Ragas artifacts
 
+## Technical Design Fit
+
+The stack is intentionally matched to the product problem. It is not a generic
+chatbot wrapped in fashionable agent/RAG terminology.
+
+- `LangGraph` fits because the core workflow is stateful and conditional:
+  clarify, plan, delegate research, collect evidence, synthesize, verify,
+  revise, write memory, and persist trace/replay artifacts. A linear chain would
+  hide those states.
+- `FastAPI` fits because the product needs a small, inspectable local API for
+  jobs, runs, documents, memory, telemetry, and runtime readiness.
+- `Celery` + `Redis` fits only as single-node API/worker separation for strict
+  real-provider demos. The repo does not claim distributed scheduling,
+  multi-tenant isolation, or SaaS operations.
+- `SQLite` fits for local run ledgers, memory, jobs, telemetry, and LangGraph
+  checkpoint files. It keeps the demo reproducible and inspectable without
+  pretending to be a distributed database.
+- `Qdrant` fits as the dense-vector grounding backend, while SQLite FTS5/BM25
+  keeps exact term recall visible. The hybrid path is useful for research
+  questions where component names, dates, paper titles, and metrics matter.
+- The reranker fits because dense/BM25/graph fusion creates a candidate set, but
+  final evidence order still needs query-aware relevance scoring.
+- MCP fits as a configurable tool boundary. The local workbench server exposes
+  useful project capabilities to the researcher: grounding search, memory recall,
+  run/evaluation inspection, and readiness checks. It is not positioned as an
+  enterprise MCP gateway.
+- Provider `raw_content` reading fits the v1 deep-research boundary: it reads
+  and compresses source content into citation-ready evidence without taking on a
+  full browser automation stack.
+
+The product should be presented as a single-node AI Research Copilot. It is
+credible as an agentic research and Agentic RAG learning project, but it should
+not be described as a production distributed research platform.
+
 ## Open Deep Research Alignment
 
 This repo is designed as an Open Deep Research learning and adaptation project,
@@ -86,8 +121,12 @@ not a generic agent SDK. The main shape intentionally follows the inspected ODR
 reference:
 
 - LangGraph-style supervisor/researcher/report graph
+- ODR-style clarification gate before research starts
 - complex question decomposition and concurrent research units
+- ODR's bias toward single-agent simplicity unless the question has clear independent research directions
+- bounded researcher search/read/reflect loops before evidence compression
 - provider `raw_content` reading and compression before final synthesis
+- MCP compatibility through a configurable `url` + `tools` allowlist, matching ODR's `mcp_config` shape instead of hard-coding server names
 - citation-backed report generation with source indexes
 - source quality, groundedness, completeness, and structure evaluated in demo/eval artifacts instead of a runtime source-blocking policy
 
@@ -98,6 +137,14 @@ There are deliberate product-specific differences:
   `ResearchComplete` decisions. Each `ConductResearch` call carries evidence
   tools, query rewrites, grounding mode, and sufficiency criteria. The
   deterministic provider only fills the same schema for offline tests/fallbacks.
+- Multi-agent execution is conditional, not cosmetic. The supervisor can delegate
+  several independent research units when the plan has parallelizable subtopics,
+  but the implementation keeps a single-researcher path for simple questions. This
+  follows ODR's "bias toward single agent unless parallelization is clear" rule.
+- Each delegated external research unit now records a bounded researcher loop:
+  query, new evidence count, source count, sufficiency gaps, reflection, next
+  query, and completion reason. This makes the multi-agent claim inspectable in
+  run notes, checkpoints, and trace replay.
 - External web reading follows ODR's practical v1 boundary: Tavily/provider
   `raw_content` is compressed into evidence. It is not a full browser automation
   reader.
@@ -177,11 +224,23 @@ pip install -e .[documents]
 - `ARC_SEARCH_MAX_RESULTS=5`
 - `ARC_SEARCH_TIMEOUT_SECONDS=8`
 - `ARC_SEARCH_INCLUDE_RAW_CONTENT=true`
+- `ARC_MCP_ENABLED=true`
+- `ARC_MCP_SERVER_URL=http://127.0.0.1:8765`
+- `ARC_MCP_TOOLS=search_grounding_corpus,recall_project_memory,inspect_research_runs,check_demo_readiness`
+- `ARC_MCP_AUTH_REQUIRED=false`
+- `ARC_MCP_AUTH_TOKEN=`
+- `ARC_MCP_PROMPT=Use MCP workspace tools when ingested grounding documents, project memory, prior run traces/evaluation, or demo readiness checks can improve the research answer.`
+- `ARC_MCP_TRANSPORT=streamable_http`
+- `ARC_MCP_TIMEOUT_SECONDS=20`
+- `ARC_MCP_DEMO_PORT=8765`
+- `ARC_MCP_DEMO_API_BASE=http://127.0.0.1:8010`
+- `ARC_MCP_DEMO_ROOTS=`
 - `ARC_SOURCE_READER_ENABLED=true`
 - `ARC_SOURCE_READER_STRATEGY=extract`
 - `ARC_SOURCE_READER_MAX_CHARS=50000`
 - `ARC_SOURCE_READER_EXCERPT_CHARS=1600`
 - `ARC_RESEARCH_MAX_WORKERS=4`
+- `ARC_RESEARCH_MAX_ITERATIONS=3`
 - `ARC_JOB_MAX_ATTEMPTS=2`
 - `ARC_JOB_TIMEOUT_SECONDS=120`
 - `ARC_JOB_QUEUE_BACKEND=in_process`
@@ -229,6 +288,29 @@ Open Deep Research's Tavily path: search discovers candidate sources, provider
 raw content acts as the reading layer, and the researcher compresses relevant
 excerpts before final synthesis. Disable it only when cost or provider payload
 size matters more than source-level evidence quality.
+
+MCP is enabled as a capability by default, following Open Deep Research's
+configuration boundary. ODR does not hard-code a fixed set of MCP servers; it
+loads tools from a configured `mcp_config.url` and `mcp_config.tools` allowlist.
+This repo mirrors that shape with `ARC_MCP_SERVER_URL` and comma-separated
+`ARC_MCP_TOOLS`.
+
+For local demos, the repo ships a streamable HTTP research-workbench MCP server:
+`python -m agentic_research_copilot.research_mcp_server`. `start_real.ps1`
+starts it automatically unless `-NoMcp` is passed. The default workbench tools are:
+
+- `search_grounding_corpus`: queries `/v1/documents/search` so MCP can use the same contextual retrieval stack as the app: Qdrant dense retrieval, SQLite FTS5/BM25, parent-child expansion, graph signal, and rerank metadata.
+- `recall_project_memory`: queries `/v1/memory/search` and returns session/summary/canonical memories with governance signals.
+- `inspect_research_runs`: reads recent runs plus trace/evaluation summaries so a researcher can reuse prior findings and inspect replay artifacts.
+- `check_demo_readiness`: checks provider readiness, MCP loading, local documents, memory, and completed runs before an interview/demo.
+
+Optional inspection tools are also registered but are not part of the default
+allowlist: `search_reference_corpus` for local ODR/PraisonAI/source-map lookup,
+`inspect_runtime_config` for full runtime configuration inspection, and
+`recommend_demo_questions` for a reproducible demo playbook.
+
+Use `ARC_MCP_AUTH_REQUIRED=true` plus `ARC_MCP_AUTH_TOKEN` for bearer-token MCP
+servers, and `ARC_MCP_PROMPT` to tell the researcher when those tools are useful.
 
 Use `ARC_JOB_QUEUE_BACKEND=celery` when you want the API and worker separated on
 one local node. In that mode, use `ARC_QDRANT_URL=http://localhost:6333` and
@@ -289,11 +371,20 @@ ARC_EMBEDDING_API_KEY=<set-in-shell-or-secret-manager>
 ARC_SEARCH_PROVIDER=tavily
 ARC_SEARCH_API_KEY=<set-in-shell-or-secret-manager>
 ARC_SEARCH_INCLUDE_RAW_CONTENT=true
+ARC_MCP_ENABLED=true
+ARC_MCP_SERVER_URL=http://127.0.0.1:8765
+ARC_MCP_TOOLS=search_grounding_corpus,recall_project_memory,inspect_research_runs,check_demo_readiness
+ARC_MCP_AUTH_REQUIRED=false
+ARC_MCP_AUTH_TOKEN=<set-in-shell-or-secret-manager-if-required>
+ARC_MCP_PROMPT=Use MCP workspace tools when ingested grounding documents, project memory, prior run traces/evaluation, or demo readiness checks can improve the research answer.
+ARC_MCP_DEMO_PORT=8765
+ARC_MCP_DEMO_API_BASE=http://127.0.0.1:8000
 ARC_SOURCE_READER_ENABLED=true
 ARC_SOURCE_READER_STRATEGY=chunk_rerank_compress
 ARC_SOURCE_READER_MAX_CHARS=50000
 ARC_SOURCE_READER_EXCERPT_CHARS=1600
 ARC_SOURCE_READER_CHUNK_CONTEXT_WINDOW=1
+ARC_RESEARCH_MAX_ITERATIONS=3
 ARC_RERANK_PROVIDER=dashscope
 ARC_RERANK_MODEL=qwen3-rerank
 ARC_RERANK_API_KEY=<set-in-shell-or-secret-manager>
@@ -310,9 +401,10 @@ ARC_QDRANT_PREFER_LOCAL=true
 ```
 
 `scripts/start_real.ps1` sets `ARC_STRICT_PROVIDERS=true`, defaults search to
-Tavily, embedding/rerank to Qwen/DashScope, and Qdrant to `http://localhost:6333`
-when those variables are not already set. It does not contain secrets. The app
-will refuse to start if any required real provider is missing.
+Tavily, embedding/rerank to Qwen/DashScope, MCP to the local workbench MCP server,
+and Qdrant to `http://localhost:6333` when those variables are not already set.
+It does not contain secrets. The app will refuse to start if any required real
+provider is missing.
 
 Use `.\scripts\start_real.ps1 -Smoke` only when you intentionally want to make a
 small remote embedding, search, and rerank call before starting the server. This
@@ -373,9 +465,11 @@ The root web workspace includes:
 
 Maintenance endpoints:
 
+- `GET /v1/documents/search?q=...` searches the ingested grounding corpus through the same hybrid retrieval stack used by MCP.
 - `POST /v1/documents/ingest` parses a local text/Markdown/HTML/PDF file into grounding documents.
 - `DELETE /v1/documents/{document_id}` removes one document and its vector chunks.
 - `DELETE /v1/documents` clears the local document corpus and rebuilds the retrieval index as empty.
+- `GET /v1/memory/search?q=...` recalls layered memory with governance metadata for MCP and manual inspection.
 - `DELETE /v1/research/history` clears run/job/telemetry history while preserving documents and memory.
 - `DELETE /v1/research/history?include_memory=true` also clears layered memory.
 
@@ -440,6 +534,7 @@ Useful API paths:
 - `GET /v1/research/jobs/{job_id}/status`
 - `GET /v1/research/jobs/{job_id}/result`
 - `POST /v1/research/jobs/{job_id}/cancel`
+- `POST /v1/research/clarify`
 - `POST /v1/research/runs`
 - `GET /v1/research/runs/{run_id}/status`
 - `GET /v1/research/runs/{run_id}/result`
@@ -468,11 +563,19 @@ agentic-research-copilot/
 - A local web workspace is available at `/` for the portal and admin inspection flows.
 - The pipeline now runs through a LangGraph `StateGraph` with supervisor, memory, planner, research_supervisor, parallel research, reporter, verifier/evaluator, memory-write, and finalization nodes.
 - It includes ODR-style supervisor tool calls, supervisor-driven handoffs, Agentic RAG routes derived from `ConductResearch`, query rewrites, tool selection, evidence sufficiency checks, concurrent plan-item research, provider raw-content source reading, optional model compression, LightRAG-inspired entity/relation graph augmentation, parent-child retrieval, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, Qwen/DashScope reranking, strict real-provider demo mode, layered memory, semantic memory recall, memory governance, structured contracts, single-node LangGraph SQLite checkpoint support, SQLite replay traces, RAG/citation/source evaluation, and report generation.
-- Demo artifacts have been captured with an OpenAI-compatible chat provider, Qwen embeddings, and Tavily search.
+- Strict real-provider runs are supported with an OpenAI-compatible chat provider, Qwen/DashScope embeddings and reranking, Tavily search, Qdrant, Celery/Redis, LangGraph SQLite checkpointing, and the local MCP workbench.
+- Demo artifacts should be regenerated before interviews from a populated grounding corpus and at least one completed memory-writing run. An empty corpus or empty memory store means the system is technically ready but the demonstration is not yet convincing.
 - The local Open Deep Research reference does not implement a standalone runtime source-quality filter. This repo follows that shape: source quality is scored in evaluation and traces, while search provider ranking/filtering is left to the configured provider.
 - Evaluation follows a lightweight Ragas-style direction with local proxy metrics for context precision, context recall, and faithfulness. `scripts/run_ragas_eval.py` can produce an actual optional Ragas artifact when `.[eval]` is installed, but runtime scoring remains lightweight.
 - The main route selector is the ODR-style `ResearchSupervisor`; deterministic route hints remain only as fallback/test scaffolding and are not the product's primary decision layer.
 - The web reader is provider-raw-content based, and the PDF reader is page/block/table-metadata based. Present them as credible v1 readers, not browser automation or enterprise OCR/document intelligence.
+
+Current demo readiness checklist:
+
+- Real providers configured: chat, embedding, search, rerank.
+- Runtime configured: LangGraph SQLite checkpointing, Qdrant, Celery/Redis.
+- MCP configured: streamable HTTP workbench with grounding, memory, run/eval, and readiness tools.
+- Still required for a strong interview demo: ingest high-quality documents, run at least one successful research job, write/recall memory, and save trace/evaluation artifacts.
 
 ## Resume-safe phrasing
 

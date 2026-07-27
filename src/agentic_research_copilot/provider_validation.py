@@ -214,6 +214,15 @@ def provider_runtime_report(settings: Any) -> dict[str, object]:
                 "base_url_configured": bool(getattr(settings, "search_base_url", "")),
                 "model": getattr(settings, "search_model", ""),
             },
+            "mcp": {
+                "enabled": bool(getattr(settings, "mcp_enabled", False)),
+                "server_url_configured": bool(getattr(settings, "mcp_server_url", "")),
+                "tools": list(getattr(settings, "mcp_tools", []) or []),
+                "tools_configured": bool(getattr(settings, "mcp_tools", []) or []),
+                "auth_required": bool(getattr(settings, "mcp_auth_required", False)),
+                "auth_token_configured": bool(getattr(settings, "mcp_auth_token", "")),
+                "transport": getattr(settings, "mcp_transport", ""),
+            },
             "rerank": {
                 "provider": getattr(settings, "rerank_provider", ""),
                 "base_url_configured": bool(getattr(settings, "rerank_base_url", "")),

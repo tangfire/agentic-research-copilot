@@ -235,7 +235,7 @@ class SupervisorAgent:
         }
 
     def _valid_tools(self, tools: Sequence[str]) -> list[str]:
-        valid = {"web_search", "vector_retrieval", "memory_recall"}
+        valid = {"web_search", "vector_retrieval", "memory_recall", "mcp_tool"}
         deduped: list[str] = []
         for tool in tools:
             if tool in valid and tool not in deduped:

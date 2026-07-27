@@ -46,6 +46,22 @@ Open Deep Research 的主版本也不是完整浏览器/PDF reader。它的 Tavi
 
 所以本项目当前的外部 web source reader 已经达到 Open Deep Research 风格的 v1 边界：不是浏览器自动化系统，但已经不是只看 snippet 的浅层搜索。
 
+ODR 还会在正式研究前先做 `clarify_with_user`，避免题目太模糊就直接开跑。现在本项目也补了一个结构化 `/v1/research/clarify` 入口：当 topic 过短、过泛或者缺少目标时，先问一句澄清问题，再进入完整研究流程。
+
+把你现在列的那五个边界放到 ODR 里看，结论其实很清楚：
+
+- 外部 reader：ODR 也是 `raw_content` + 压缩 + 引用锁定这条线，并没有把主版本做成完整浏览器自动化。
+- PDF reader：ODR 主线也没有把企业级 OCR / 版面理解做成核心 runtime 能力；这不是它的重点边界。
+- single-node：ODR 是图编排 + 工具调用 + 评估驱动的研究 agent，不是要证明自己是分布式平台。
+- source quality：ODR 主要把 source quality 放在 benchmark / judge / evaluator 层，而不是运行时硬过滤。
+- LightRAG / GraphRAG：ODR 主线里没有把完整 GraphRAG runtime 当卖点，更多是研究工作流本身。
+
+所以这些点里，真正值得继续对齐 ODR 的不是“补一个更重的基础设施外壳”，而是：
+
+1. 更像 ODR 的研究循环：规划、搜索、阅读、综合、校验、回放闭环要稳定。
+2. 更像 ODR 的评估闭环：保留 LLM judge / Ragas / trace artifact，方便面试和复盘。
+3. 更像 ODR 的工具边界：把不必要的运行时复杂度删掉，保留研究助手真正需要的能力。
+
 需要诚实讲清楚的差异：
 
 - ODR 的 supervisor 是 LLM tool loop，会让模型在 `think_tool`、`ConductResearch`、`ResearchComplete` 之间做决策。
@@ -190,6 +206,63 @@ Demo artifact 也要注意：`examples/llm-judge-report.json` 里如果出现“
 - OCR/图片 caption：提升扫描件、图表截图和论文 figure 的解析质量。
 - 更强 layout-aware chunking：避免表格、公式、标题和正文被粗暴切开。
 
+## 9.5. 多 Agent 到底有没有必要
+
+不要把项目讲成“所有问题都强行多 Agent”。更稳的说法是：这个系统参考 Open Deep Research 的原则，默认偏向简单路径；只有当问题能拆成多个相对独立的研究方向时，才让 supervisor 并发委派多个 researcher。
+
+可以这样回答：
+
+> 多 Agent 在这个项目里不是为了堆角色，而是为了解决复杂研究问题里的上下文隔离和并行探索。简单事实查询没有必要多 Agent，单 researcher 就够了；但如果问题包含架构对比、论文证据、工程实现、评估指标、风险边界这些独立方向，supervisor 会把它们拆成多个 `ConductResearch`，每个 researcher 独立搜索、阅读、反思和压缩证据，最后 reporter 统一综合，verifier/evaluator 再检查引用覆盖和证据充分性。
+
+这次优化后，每个外部 researcher 不再只是“一次搜索拿结果”，而是有一个受预算约束的 `search/read/reflect` 小循环：
+
+`query -> read/compress raw_content -> check evidence/source sufficiency -> reflect -> next query or stop`
+
+代码里会把每轮的 query、新增证据数、来源数、缺口、reflection、next query 和 completed_reason 写入 `ResearchNote.research_iterations`、checkpoint 和 trace。面试官如果问“你的多 Agent 怎么证明不是假的”，就可以打开 trace 讲：supervisor 负责拆解和委派，researcher 负责局部探索和停止判断，reporter/verifier 负责最后的综合和质量门禁。
+
+诚实边界也要讲清楚：
+
+- 当前不是完全自由的浏览器 Agent，也不是无限自主探索。
+- researcher loop 是 bounded loop，默认 `ARC_RESEARCH_MAX_ITERATIONS=3`，避免成本失控。
+- 外部阅读仍然是 ODR v1 风格的 provider raw_content reader，不是完整浏览器自动化。
+- 这反而更适合个人项目和面试 demo：可控、可回放、可解释。
+
+## 9.6. 你应该按什么顺序学这个项目
+
+如果你的目标是“把这个项目真正学会”，建议按下面的顺序读：
+
+1. 先看 `README.md` 的产品定位和主流程，先知道它到底是做什么的。
+2. 再看 `docs/architecture.md`，把 supervisor、researcher、retriever、reporter、verifier 这几层的职责分清。
+3. 接着看 `src/agentic_research_copilot/graph_runtime.py` 和 `pipeline.py`，理解一次 run 是怎么串起来的。
+4. 然后看 `src/agentic_research_copilot/agents/researcher.py`、`source_reader.py`、`retrieval/store.py`、`document_reader.py`，把“读什么、怎么读、怎么召回、怎么压缩”搞明白。
+5. 最后看 `memory/store.py`、`evaluation.py` 和 `tests/test_pipeline.py`，理解记忆、评估和 trace 为什么要这么记录。
+
+如果你只想先抓主线，就先读这 4 个文件：
+
+- `README.md`
+- `docs/architecture.md`
+- `src/agentic_research_copilot/graph_runtime.py`
+- `src/agentic_research_copilot/agents/researcher.py`
+
+这几个文件读通了，基本就能讲清楚“为什么不是纯 RAG、为什么是 ODR 风格、多 Agent 为什么只在复杂问题上出现、researcher loop 为什么要受预算约束”。
+
 ## 10. 推荐面试说法
 
 > 我做这个项目时没有把 RAG 当成主路径，而是把它放在研究工作流里的 grounding 层。主流程用 LangGraph 编排：Planner 先拆解子问题，research supervisor 再按 ODR 风格输出 `think_tool`、`ConductResearch` 和 `ResearchComplete`；每个 `ConductResearch` 决定外部搜索、本地知识库和记忆召回的工具组合与 query rewrite。外部搜索会读取 provider raw content 并压缩成 citation-ready evidence，本地文档会先解析成带 metadata 的 document/section/page segments，再做 contextual retrieval prefixing、paragraph-aware child chunking、LightRAG-inspired graph augmentation、Qdrant dense + SQLite BM25 fusion、rerank 和 parent/neighbor context expansion。最后 reporter 只能引用已有 evidence，verifier/evaluator 会检查引用覆盖、source quality 和 faithfulness proxy，整条链路可以通过 trace 和 replay 回看。
+## 11. MCP 这里怎么讲
+
+ODR 不是固定配了 filesystem、GitHub 或浏览器这类 MCP server。它的主线设计是 `mcp_config.url + mcp_config.tools + auth_required`，再通过 `MultiServerMCPClient` 把 allowlist 里的工具挂到 researcher tool loop 里。
+
+所以这个项目不要讲成“我照着 ODR 用了某几个 server”，而是讲：
+
+> 我参考 ODR 的 MCP 工具注册机制：运行时通过 `ARC_MCP_SERVER_URL` 和 `ARC_MCP_TOOLS` 注入工具，researcher 可以在 `think_tool`、`web_search`、`mcp_tool` 和 `ResearchComplete` 之间选择。为了让 demo 可复现，我做了一个本地 streamable HTTP MCP workbench，把运行中的研究系统能力暴露成工具：`search_grounding_corpus` 查已入库资料，`recall_project_memory` 召回 session/summary/canonical memory，`inspect_research_runs` 复盘历史 run 的 trace/evaluation，`check_demo_readiness` 检查模型、搜索、embedding、rerank、MCP、资料库、记忆和历史实验是否准备好。这样 MCP 不只是“能调用”，而是能服务真实实验和面试演示。
+
+这三个工具的面试价值：
+
+- `search_grounding_corpus`：说明 MCP 可以复用项目真实 RAG 链路，返回 Qdrant dense、SQLite BM25、parent-child、graph signal、rerank 等检索元数据。
+- `recall_project_memory`：说明 memory 不是 prompt 里写死的上下文，而是有 session/summary/canonical 分层和 governance 信息的可召回状态。
+- `inspect_research_runs`：说明系统有 trace/evaluation/replay，不是只输出一段最终答案。
+- `check_demo_readiness`：说明 demo 前可以自检 provider、工具、资料库、记忆和历史 run，避免现场才发现链路没跑通。
+- `search_reference_corpus`、`inspect_runtime_config`、`recommend_demo_questions`：作为可选工具，用于 ODR/PraisonAI 架构学习、运行配置检查和 demo playbook 准备。
+
+诚实边界也要讲清楚：这个本地 MCP server 是 demo/学习用的 controlled server，不是 ODR 官方内置 server，也不是企业 MCP 网关。真正对齐 ODR 的是配置式工具注册、工具 allowlist、researcher tool loop 和 trace-visible evidence。

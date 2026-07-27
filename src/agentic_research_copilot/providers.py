@@ -13,6 +13,7 @@ import httpx
 
 from .schemas import (
     ChunkContextContract,
+    ClarificationContract,
     CorpusProfile,
     EvidenceItem,
     MemoryRecord,
@@ -20,6 +21,7 @@ from .schemas import (
     PlannerContract,
     ReporterContract,
     ResearchRequest,
+    ResearcherToolDecisionContract,
     ResearchReport,
     ReportSection,
     RetrievalRoute,
@@ -31,6 +33,36 @@ from .schemas import (
 
 
 TOKEN_PATTERN = re.compile(r"[a-zA-Z0-9_]+|[\u4e00-\u9fff]")
+CLARIFICATION_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "about",
+    "for",
+    "from",
+    "how",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "what",
+    "with",
+}
+VAGUE_RESEARCH_TERMS = {
+    "agent",
+    "agents",
+    "ai",
+    "analysis",
+    "architecture",
+    "copilot",
+    "deep",
+    "project",
+    "rag",
+    "research",
+    "system",
+}
 
 TContract = TypeVar("TContract")
 
@@ -52,6 +84,25 @@ class ModelUsage:
 class ResearchModelProvider(Protocol):
     name: str
     embedding_dimensions: int
+
+    def clarify_request(
+        self,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+        memory_records: Sequence[MemoryRecord] = (),
+    ) -> tuple[ClarificationContract, ModelUsage]: ...
+
+    def decide_researcher_action(
+        self,
+        *,
+        item: PlanItem,
+        available_tools: Sequence[str],
+        previous_queries: Sequence[str],
+        evidence: Sequence[EvidenceItem],
+        gaps: Sequence[str],
+        iteration: int,
+        max_iterations: int,
+    ) -> tuple[ResearcherToolDecisionContract, ModelUsage]: ...
 
     def draft_plan(
         self,
@@ -125,6 +176,109 @@ class DeterministicResearchModelProvider:
     def __init__(self, embedding_dimensions: int = 256) -> None:
         self.embedding_dimensions = max(32, embedding_dimensions)
 
+    def clarify_request(
+        self,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+        memory_records: Sequence[MemoryRecord] = (),
+    ) -> tuple[ClarificationContract, ModelUsage]:
+        topic = request.topic.strip()
+        missing_dimensions = _clarification_missing_dimensions(topic)
+        if missing_dimensions:
+            question = (
+                "Before I start the research, please clarify the scope: "
+                + "; ".join(missing_dimensions[:3])
+                + "."
+            )
+            contract = ClarificationContract(
+                need_clarification=True,
+                question=question,
+                verification="",
+                missing_dimensions=missing_dimensions,
+                confidence=0.78,
+            )
+        else:
+            context_bits = [
+                f"I have enough information to research '{topic}' at {request.depth} depth.",
+                "I will turn it into a concrete research brief, gather citation-backed evidence, and return a traceable report.",
+            ]
+            if corpus_profile.has_private_docs and request.include_private_docs:
+                context_bits.append(
+                    f"I will also consider {corpus_profile.document_count} uploaded document segment(s) when they are relevant."
+                )
+            if memory_records and request.use_memory:
+                context_bits.append(f"I will reuse {len(memory_records)} memory item(s) only as supporting context.")
+            contract = ClarificationContract(
+                need_clarification=False,
+                question="",
+                verification=" ".join(context_bits),
+                missing_dimensions=[],
+                confidence=0.86,
+            )
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-clarifier",
+            prompt_tokens=48 + len(topic.split()) * 4,
+            completion_tokens=max(16, len((contract.question or contract.verification).split()) * 3),
+            latency_ms=1,
+        )
+        return contract, usage
+
+    def decide_researcher_action(
+        self,
+        *,
+        item: PlanItem,
+        available_tools: Sequence[str],
+        previous_queries: Sequence[str],
+        evidence: Sequence[EvidenceItem],
+        gaps: Sequence[str],
+        iteration: int,
+        max_iterations: int,
+    ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
+        if not gaps and evidence:
+            action = ResearcherToolDecisionContract(
+                action="ResearchComplete",
+                rationale="Evidence and source sufficiency criteria are satisfied.",
+                reflection=f"Research unit {item.id} can stop with {len(evidence)} evidence item(s).",
+                completion_reason="sufficiency_met",
+                confidence=0.86,
+            )
+        elif iteration > 1 and "mcp_tool" in available_tools and not any(
+            item.metadata.get("source_channel") == "mcp" for item in evidence
+        ):
+            action = ResearcherToolDecisionContract(
+                action="mcp_tool",
+                query=_researcher_follow_up_query(item, previous_queries, evidence, gaps),
+                mcp_tool_name="search_grounding_corpus",
+                rationale="Use the configured MCP workspace tools as an additional grounding channel.",
+                reflection="ODR-style researcher loop can call MCP tools when search evidence is still insufficient.",
+                confidence=0.72,
+            )
+        elif iteration >= max_iterations and evidence:
+            action = ResearcherToolDecisionContract(
+                action="ResearchComplete",
+                rationale="Iteration budget is exhausted; return the best grounded evidence collected so far.",
+                reflection="The researcher stops because max_iterations was reached.",
+                completion_reason="iteration_limit_reached",
+                confidence=0.62,
+            )
+        else:
+            action = ResearcherToolDecisionContract(
+                action="web_search",
+                query=_researcher_follow_up_query(item, previous_queries, evidence, gaps),
+                rationale="Search/read another source because evidence is not sufficient yet.",
+                reflection="Continue with web_search before deciding whether the delegated research unit is complete.",
+                confidence=0.74,
+            )
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-researcher-tool-loop",
+            prompt_tokens=64 + len(previous_queries) * 8 + len(evidence) * 12,
+            completion_tokens=48,
+            latency_ms=1,
+        )
+        return action, usage
+
     def draft_plan(
         self,
         request: ResearchRequest,
@@ -140,6 +294,7 @@ class DeterministicResearchModelProvider:
         brief_bits = [
             f"Research the topic '{topic}'.",
             "Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index.",
+            "Prefer official docs, primary papers, or original system sources when they are available.",
             f"Focus on {focus}.",
         ]
         if corpus_profile.has_private_docs:
@@ -202,6 +357,7 @@ class DeterministicResearchModelProvider:
         reflection_bits = [
             "Use an Open Deep Research-style supervisor loop: think, delegate focused research, then complete only after verification.",
             f"The plan has {len(plan)} research unit(s).",
+            "Prefer official, primary, or original sources when available, and keep source quality visible in the evaluator instead of hard-filtering it at runtime.",
         ]
         if corpus_profile.has_private_docs:
             reflection_bits.append(
@@ -471,6 +627,90 @@ class OpenAICompatibleResearchModelProvider:
         self.temperature = temperature
         self.embedding_dimensions = max(32, embedding_dimensions)
 
+    def clarify_request(
+        self,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+        memory_records: Sequence[MemoryRecord] = (),
+    ) -> tuple[ClarificationContract, ModelUsage]:
+        payload = {
+            "request": request.model_dump(),
+            "corpus_profile": corpus_profile.model_dump(),
+            "memory_records": [record.model_dump() for record in memory_records[:6]],
+            "instructions": (
+                "Follow the Open Deep Research clarify_with_user phase. Decide whether the "
+                "user request is specific enough to start research. Ask at most one concise "
+                "clarifying question when the scope, target audience, decision context, or "
+                "required source type is genuinely missing. If enough information is present, "
+                "return a short verification message summarizing the intended research scope."
+            ),
+        }
+        contract, usage = self._chat_structured(
+            system_prompt=(
+                "You are the clarification gate for an AI Research Copilot. Return valid JSON "
+                "only that conforms to the supplied schema. Do not ask unnecessary questions. "
+                "Prefer proceeding when the request already contains a concrete topic, target, "
+                "comparison, implementation scope, or deliverable."
+            ),
+            user_payload=payload,
+            schema=ClarificationContract.model_json_schema(),
+            response_model=ClarificationContract,
+        )
+        return _normalize_clarification_contract(contract, request), usage
+
+    def decide_researcher_action(
+        self,
+        *,
+        item: PlanItem,
+        available_tools: Sequence[str],
+        previous_queries: Sequence[str],
+        evidence: Sequence[EvidenceItem],
+        gaps: Sequence[str],
+        iteration: int,
+        max_iterations: int,
+    ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
+        payload = {
+            "plan_item": item.model_dump(),
+            "available_tools": list(available_tools),
+            "previous_queries": list(previous_queries),
+            "evidence": [
+                {
+                    "title": item.title,
+                    "source": item.source,
+                    "kind": item.kind,
+                    "url": item.url,
+                    "snippet": item.snippet,
+                    "score": item.score,
+                }
+                for item in evidence[:10]
+            ],
+            "gaps": list(gaps),
+            "iteration": iteration,
+            "max_iterations": max_iterations,
+            "instructions": (
+                "Follow the Open Deep Research researcher loop. Choose exactly one next action: "
+                "think_tool for reflection, web_search for a new external query, mcp_tool for a "
+                "configured MCP tool call, or ResearchComplete when enough evidence has been collected "
+                "or the iteration budget is exhausted. Use mcp_tool only when it is listed in "
+                "available_tools. When using mcp_tool, set mcp_tool_name when a known workspace tool "
+                "matches the need: search_grounding_corpus for ingested documents, recall_project_memory "
+                "for prior memory, inspect_research_runs for replay/evaluation, or check_demo_readiness "
+                "for runtime demo checks. Keep the query concrete and source-oriented."
+            ),
+        }
+        contract, usage = self._chat_structured(
+            system_prompt=(
+                "You are a focused researcher inside an AI Research Copilot. Return valid JSON "
+                "only that conforms to the supplied schema. Be decisive: search when evidence is "
+                "thin, use MCP tools when configured and useful, reflect when a pause is needed, "
+                "and complete when evidence is sufficient or the budget is exhausted."
+            ),
+            user_payload=payload,
+            schema=ResearcherToolDecisionContract.model_json_schema(),
+            response_model=ResearcherToolDecisionContract,
+        )
+        return _normalize_researcher_action(contract, item, available_tools, previous_queries, evidence, gaps), usage
+
     def draft_plan(
         self,
         request: ResearchRequest,
@@ -519,17 +759,18 @@ class OpenAICompatibleResearchModelProvider:
             "memory_records": [record.model_dump() for record in memory_records[:8]],
             "revision_count": revision_count,
             "revision_notes": list(revision_notes)[:8],
-            "instructions": (
-                "Follow the Open Deep Research supervisor pattern. First reflect with a "
-                "think_tool-style call, then use ConductResearch calls to delegate concrete "
-                "research units. Use ResearchComplete only as the completion decision after "
-                "delegation and verification criteria are clear. Preserve the provided "
-                "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
-                "mode, selected_tools, web_queries/internal_queries, memory_query, min_evidence, "
-                "min_sources, and sufficiency_criteria. Treat retrieval_routes as optional "
-                "candidate hints, not as mandatory final routing decisions."
-            ),
-        }
+                "instructions": (
+                    "Follow the Open Deep Research supervisor pattern. First reflect with a "
+                    "think_tool-style call, then use ConductResearch calls to delegate concrete "
+                    "research units. Use ResearchComplete only as the completion decision after "
+                    "delegation and verification criteria are clear. Preserve the provided "
+                    "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
+                    "mode, selected_tools, web_queries/internal_queries, memory_query, min_evidence, "
+                    "min_sources, and sufficiency_criteria. Prefer primary or official sources "
+                    "when they are available, keep source quality visible in evaluation, and "
+                    "treat retrieval_routes as optional candidate hints, not as mandatory final routing decisions."
+                ),
+            }
         return self._chat_structured(
             system_prompt=(
                 "You are the research supervisor for an AI Research Copilot. Return valid JSON only "
@@ -882,6 +1123,128 @@ def _focus_for_topic(topic: str) -> str:
     if any(word in lower for word in ("e-commerce", "order", "payment", "marketing")):
         return "transactional reliability, state consistency, and recovery"
     return "system design, execution flow, and measurable outcomes"
+
+
+def _clarification_missing_dimensions(topic: str) -> list[str]:
+    cleaned = _clean_text(topic)
+    tokens = [
+        token.lower()
+        for token in TOKEN_PATTERN.findall(cleaned)
+        if token.lower() not in CLARIFICATION_STOPWORDS
+    ]
+    latin_tokens = [token for token in tokens if re.search(r"[a-zA-Z0-9]", token)]
+    is_short = len(cleaned) < 18 and len(tokens) <= 3
+    is_generic = bool(latin_tokens) and all(token in VAGUE_RESEARCH_TERMS for token in latin_tokens)
+    if not is_short and not is_generic:
+        return []
+
+    missing = [
+        "the concrete research target or decision you want the report to support",
+        "the expected output shape, such as comparison, implementation plan, risk analysis, or interview notes",
+    ]
+    if len(tokens) <= 2:
+        missing.append("any constraints such as timeframe, domain, preferred sources, or technologies")
+    return missing
+
+
+def _normalize_clarification_contract(
+    contract: ClarificationContract,
+    request: ResearchRequest,
+) -> ClarificationContract:
+    missing_dimensions = [
+        _trim_text(item, 180)
+        for item in contract.missing_dimensions
+        if _clean_text(item)
+    ][:5]
+    question = _trim_text(contract.question, 500)
+    verification = _trim_text(contract.verification, 500)
+    if contract.need_clarification:
+        if not question:
+            fallback_missing = missing_dimensions or _clarification_missing_dimensions(request.topic)
+            question = (
+                "Before I start the research, please clarify the scope: "
+                + "; ".join(fallback_missing[:3])
+                + "."
+            )
+        verification = ""
+    else:
+        question = ""
+        if not verification:
+            verification = (
+                f"I have enough information to research '{request.topic}' at {request.depth} depth. "
+                "I will build a concrete research brief and gather citation-backed evidence."
+            )
+        missing_dimensions = []
+    return contract.model_copy(
+        update={
+            "question": question,
+            "verification": verification,
+            "missing_dimensions": missing_dimensions,
+            "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
+        }
+    )
+
+
+def _researcher_follow_up_query(
+    item: PlanItem,
+    previous_queries: Sequence[str],
+    evidence: Sequence[EvidenceItem],
+    gaps: Sequence[str],
+) -> str:
+    base = item.search_query or item.question
+    used = {query.strip().lower() for query in previous_queries if query.strip()}
+    source_terms = " ".join(evidence_item.title for evidence_item in evidence[:2] if evidence_item.title)
+    candidates = [
+        base,
+        f"{item.question} {item.purpose} official source evidence",
+        f"{base} independent source comparison {source_terms}".strip(),
+        f"{base} limitations verification {' '.join(gaps[:2])}".strip(),
+    ]
+    for candidate in candidates:
+        normalized = _clean_text(candidate)
+        if normalized and normalized.lower() not in used:
+            return normalized
+    return _clean_text(f"{base} follow up evidence")
+
+
+def _normalize_researcher_action(
+    contract: ResearcherToolDecisionContract,
+    item: PlanItem,
+    available_tools: Sequence[str],
+    previous_queries: Sequence[str],
+    evidence: Sequence[EvidenceItem],
+    gaps: Sequence[str],
+) -> ResearcherToolDecisionContract:
+    available = set(available_tools)
+    action = contract.action
+    if action == "mcp_tool" and "mcp_tool" not in available:
+        action = "web_search"
+    if action == "web_search" and "web_search" not in available:
+        action = "ResearchComplete" if evidence else "think_tool"
+    if action == "ResearchComplete" and not evidence and gaps:
+        action = "web_search" if "web_search" in available else "think_tool"
+
+    query = _trim_text(contract.query or "", 320)
+    if action in {"web_search", "mcp_tool"} and not query:
+        query = _researcher_follow_up_query(item, previous_queries, evidence, gaps)
+    if action not in {"web_search", "mcp_tool"}:
+        query = None
+
+    completion_reason = _trim_text(contract.completion_reason or "", 160) or None
+    if action == "ResearchComplete" and completion_reason is None:
+        completion_reason = "sufficiency_met" if not gaps and evidence else "research_complete"
+
+    return contract.model_copy(
+        update={
+            "action": action,
+            "query": query,
+            "mcp_tool_name": _trim_text(contract.mcp_tool_name or "", 120) or None,
+            "rationale": _trim_text(contract.rationale, 500),
+            "reflection": _trim_text(contract.reflection, 700),
+            "completion_reason": completion_reason,
+            "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
+        }
+    )
 
 
 def _summarize_memory(records: Sequence[MemoryRecord]) -> str:

@@ -11,12 +11,14 @@ from .agents import PlannerAgent, ResearchAgent, ReporterAgent, SupervisorAgent,
 from .document_reader import DocumentReader
 from .evaluation import RAGEvaluator
 from .ledger import JobLedger, RunLedger
+from .mcp_tools import build_mcp_tool
 from .providers import build_embedding_provider, build_model_provider
 from .provider_validation import provider_runtime_report, require_real_provider_config
 from .memory import MemoryStore
 from .retrieval import DocumentStore, RerankerConfig, build_reranker
 from .schemas import (
     AgentHandoff,
+    ClarificationContract,
     CorpusProfile,
     EvidenceItem,
     ResearchNote,
@@ -63,6 +65,7 @@ class ResearchCopilot:
             require_real_provider_config(self.settings)
         self.model_provider = build_model_provider(self.settings)
         self.embedding_provider = build_embedding_provider(self.settings, self.model_provider)
+        self.mcp_tool = build_mcp_tool(self.settings)
         self.reranker = build_reranker(
             RerankerConfig(
                 provider=self.settings.rerank_provider,
@@ -103,17 +106,20 @@ class ResearchCopilot:
             max_query_rewrites=self.settings.rag_max_query_rewrites,
             min_evidence_per_item=self.settings.rag_min_evidence_per_item,
             min_source_diversity=self.settings.rag_min_source_diversity,
+            mcp_enabled=self.settings.mcp_enabled,
         )
         self.planner = PlannerAgent(self.model_provider, self.settings)
         self.researcher = ResearchAgent(
             search_tool or build_search_tool(self.settings),
             model_provider=self.model_provider,
             embedding_provider=self.embedding_provider,
+            mcp_tool=self.mcp_tool,
             source_reader_enabled=self.settings.source_reader_enabled,
             source_reader_strategy=self.settings.source_reader_strategy,
             raw_content_max_chars=self.settings.source_reader_max_chars,
             excerpt_max_chars=self.settings.source_reader_excerpt_chars,
             chunk_context_window=self.settings.source_reader_chunk_context_window,
+            max_iterations=self.settings.research_max_iterations,
         )
         self.verifier = VerifierAgent(self.model_provider, self.settings)
         self.reporter = ReporterAgent(self.model_provider, self.settings)
@@ -201,6 +207,29 @@ class ResearchCopilot:
             "memory_deleted": memory_deleted,
             "memory_cleared": include_memory,
         }
+
+    def clarify(self, request: ResearchRequest) -> ClarificationContract:
+        corpus_profile = self.documents.profile()
+        memory_records = self._recall_memory_context(request, "clarification") if request.use_memory else []
+        contract, usage = self.model_provider.clarify_request(
+            request,
+            corpus_profile,
+            memory_records=memory_records,
+        )
+        self.telemetry.emit(
+            "clarification.checked",
+            request.topic,
+            actor="clarifier",
+            provider=usage.provider,
+            model=usage.model,
+            tokens_in=usage.prompt_tokens,
+            tokens_out=usage.completion_tokens,
+            cost_usd=usage.cost_usd,
+            latency_ms=usage.latency_ms,
+            need_clarification=contract.need_clarification,
+            missing_dimensions=contract.missing_dimensions,
+        )
+        return contract
 
     def add_memory(
         self,
@@ -339,6 +368,11 @@ class ResearchCopilot:
                 "research_path": "plan -> search/read -> synthesize -> verify/evaluate -> replay",
                 "seed_reference_knowledge": self.settings.seed_reference_knowledge,
             },
+            "clarification": {
+                "enabled": True,
+                "mode": "ODR-style clarify_with_user front door",
+                "purpose": "Ask at most one concise follow-up question when the request is too vague to research safely.",
+            },
             "orchestration": {
                 "runtime": self.settings.orchestration_runtime,
                 "strict_providers": self.settings.strict_providers,
@@ -384,10 +418,12 @@ class ResearchCopilot:
                     "name": "Open Deep Research",
                     "learning_priority": "primary",
                     "used_for": [
+                        "clarify_with_user front door and structured research brief generation",
                         "LangGraph-oriented research graph structure",
                         "plan -> research -> compress -> report loop",
                         "LLM supervisor tool loop with think/delegate/complete decisions",
                         "provider raw-content reading and compression",
+                        "MCP-compatible external tool layer",
                         "citation-backed final answer contract",
                         "research state shaped around questions, notes, evidence, and sections",
                         "judge/evaluator-style demo artifacts",
@@ -412,8 +448,10 @@ class ResearchCopilot:
                     "recall memory, synthesize, verify citations, evaluate, and replay."
                 ),
                 "matched_boundaries": [
+                    "ODR-style clarify_with_user front door before research starts",
                     "LangGraph-style supervisor/research/report graph",
                     "ODR-style supervisor decisions expressed as think_tool, ConductResearch, and ResearchComplete calls",
+                    "MCP-compatible tool registry as an additional external evidence channel",
                     "provider raw_content reading plus compression before report synthesis",
                     "citation-backed report sections mapped to existing evidence",
                     "source quality surfaced through evaluation rather than runtime source blocking",
@@ -428,6 +466,10 @@ class ResearchCopilot:
             },
             "agents": [
                 {"name": "planner", "role": "creates a research brief and decomposed plan"},
+                {
+                    "name": "clarifier",
+                    "role": "decides whether the request is specific enough to start research or needs one concise follow-up question",
+                },
                 {
                     "name": "research_supervisor",
                     "role": "emits ODR-style think_tool, ConductResearch, and ResearchComplete decisions before research execution",
@@ -464,6 +506,7 @@ class ResearchCopilot:
                     "reader_max_chars": self.settings.source_reader_max_chars,
                     "reader_excerpt_chars": self.settings.source_reader_excerpt_chars,
                     "reader_chunk_context_window": self.settings.source_reader_chunk_context_window,
+                    "research_max_iterations": self.settings.research_max_iterations,
                     "reader_contract": (
                         "split/rerank -> neighbor expansion -> summary/key_excerpts/relevance/limitations"
                         if self.settings.source_reader_strategy == "chunk_rerank_compress"
@@ -475,6 +518,21 @@ class ResearchCopilot:
                     if search_provider_requires_key(self.settings.search_provider)
                     else True,
                     "open_deep_research_style": self.settings.search_provider in OPEN_DEEP_RESEARCH_STYLE_PROVIDERS,
+                },
+                {
+                    "name": "mcp_tool",
+                    "provider": "model_context_protocol",
+                    "enabled": self.settings.mcp_enabled,
+                    "server_url_configured": bool(self.settings.mcp_server_url),
+                    "loaded": self.mcp_tool is not None,
+                    "tools": self.settings.mcp_tools,
+                    "tools_configured": bool(self.settings.mcp_tools),
+                    "auth_required": self.settings.mcp_auth_required,
+                    "auth_token_configured": bool(self.settings.mcp_auth_token),
+                    "mcp_prompt_configured": bool(self.settings.mcp_prompt),
+                    "transport": self.settings.mcp_transport,
+                    "timeout_seconds": self.settings.mcp_timeout_seconds,
+                    "reference_shape": "Open Deep Research loads configured MCP tools from mcp_config.url + mcp_config.tools into the researcher toolkit; this repo exposes the same configured tools as citation-backed evidence.",
                 },
                 {
                     "name": "model_provider",
@@ -547,7 +605,7 @@ class ResearchCopilot:
                 "agentic_rag": {
                     "query_rewrite": True,
                     "max_query_rewrites": self.settings.rag_max_query_rewrites,
-                    "tool_selection": ["web_search", "vector_retrieval", "memory_recall"],
+                    "tool_selection": ["web_search", "vector_retrieval", "memory_recall", "mcp_tool"],
                     "min_evidence_per_item": self.settings.rag_min_evidence_per_item,
                     "min_source_diversity": self.settings.rag_min_source_diversity,
                     "sufficiency_check": "route-level evidence thresholds feed the verifier/evaluator revision loop",
@@ -1296,6 +1354,9 @@ class ResearchCopilot:
                     sufficiency_score=note.sufficiency_score,
                     sufficiency_gaps=note.gaps,
                     follow_up_queries=note.follow_up_queries,
+                    research_iteration_count=len(note.research_iterations),
+                    research_iterations=note.research_iterations,
+                    completed_reason=note.completed_reason,
                     retrieval_mode=route.mode,
                     route_reason=route.reason,
                     selected_tools=route.selected_tools,
@@ -1311,6 +1372,9 @@ class ResearchCopilot:
                         "sufficiency_score": note.sufficiency_score,
                         "sufficiency_gaps": note.gaps,
                         "follow_up_queries": note.follow_up_queries,
+                        "research_iteration_count": len(note.research_iterations),
+                        "research_iterations": note.research_iterations,
+                        "completed_reason": note.completed_reason,
                         "retrieval_mode": route.mode,
                         "route_reason": route.reason,
                         "selected_tools": route.selected_tools,
@@ -1670,12 +1734,31 @@ class ResearchCopilot:
         document_evidence: list[EvidenceItem] = []
         web_latency_ms = 0
         document_latency_ms = 0
+        research_iterations: list[dict] = []
+        researcher_completed_reason: str | None = None
+        researcher_follow_up_queries: list[str] = []
 
-        if route.mode in {"external", "hybrid"}:
+        should_run_researcher_loop = route.mode in {"external", "hybrid"} or (
+            "mcp_tool" in getattr(route, "selected_tools", []) and self.mcp_tool is not None
+        )
+        if should_run_researcher_loop:
             start_collect = datetime.now(timezone.utc)
-            for query in (getattr(route, "web_queries", None) or [route.web_query or item.search_query or item.question]):
-                web_evidence.extend(self.researcher.collect(item, query=query))
-            web_evidence = self._dedupe_evidence(web_evidence)
+            web_queries = (
+                getattr(route, "web_queries", None)
+                or getattr(route, "internal_queries", None)
+                or [route.web_query or route.internal_query or item.search_query or item.question]
+            )
+            collection = self.researcher.collect_iterative(
+                item,
+                web_queries,
+                min_evidence=max(1, route.min_evidence),
+                min_sources=max(1, route.min_sources),
+                max_iterations=self.settings.research_max_iterations,
+            )
+            web_evidence = self._dedupe_evidence(collection.evidence)
+            research_iterations.extend(collection.iterations)
+            researcher_completed_reason = collection.completed_reason
+            researcher_follow_up_queries.extend(collection.follow_up_queries)
             web_latency_ms = int((datetime.now(timezone.utc) - start_collect).total_seconds() * 1000)
 
         if route.mode in {"internal", "hybrid"} and request.include_private_docs and corpus_profile.has_private_docs:
@@ -1694,6 +1777,16 @@ class ResearchCopilot:
 
         item_evidence = self._dedupe_evidence([*web_evidence, *document_evidence])
         note = self.workflow.compress_findings(item, item_evidence, route)
+        if research_iterations or researcher_completed_reason or researcher_follow_up_queries:
+            note = note.model_copy(
+                update={
+                    "research_iterations": research_iterations,
+                    "completed_reason": researcher_completed_reason,
+                    "follow_up_queries": self._unique_strings(
+                        [*note.follow_up_queries, *researcher_follow_up_queries]
+                    ),
+                }
+            )
         return PlanItemResearchResult(
             item_id=item.id,
             web_evidence=web_evidence,
@@ -1934,7 +2027,7 @@ class ResearchCopilot:
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
     ) -> list[str]:
-        valid = {"web_search", "vector_retrieval", "memory_recall"}
+        valid = {"web_search", "vector_retrieval", "memory_recall", "mcp_tool"}
         normalized: list[str] = []
         for tool in tools or []:
             if tool not in valid or tool in normalized:
@@ -2262,6 +2355,17 @@ class ResearchCopilot:
             seen.add(key)
             deduped.append(item)
         return deduped
+
+    def _unique_strings(self, values: Iterable[str]) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            cleaned = value.strip()
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            result.append(cleaned)
+        return result
 
     def _rank_evidence_for_report(self, items: Iterable[EvidenceItem]) -> list[EvidenceItem]:
         return sorted(

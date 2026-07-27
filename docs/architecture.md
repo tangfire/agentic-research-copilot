@@ -21,6 +21,42 @@ verification/evaluation -> replay**. RAG is a grounding and memory layer for
 contextual documents, already-read source excerpts, and prior run recall; it is
 not the only retrieval path and should not be described as the whole system.
 
+## Design Fit
+
+The architecture is intentionally shaped around complex research questions, not
+around a generic agent SDK or a private-knowledge-base chatbot. The selected
+technologies fit the product boundaries:
+
+- `LangGraph` is used because research runs have durable state, conditional
+  branches, bounded loops, revision paths, and replayable traces. The graph
+  nodes make clarification, planning, research delegation, verification,
+  evaluation, memory write, and finalization explicit.
+- `FastAPI` is used as a thin product API for jobs, documents, memory, runtime
+  readiness, and run artifacts. It keeps the AI workflow inspectable instead of
+  hiding it behind a single chat endpoint.
+- `Qdrant` is used for dense vector retrieval, but it is paired with SQLite
+  FTS5/BM25 and reranking because research evidence often depends on exact
+  terms, acronyms, dates, paper names, and component names.
+- The lightweight graph signal is an internal retrieval feature, not a full
+  GraphRAG platform. It improves candidate recall for entity-heavy documents
+  while keeping the ODR-style research workflow unchanged.
+- `SQLite` is used for local persistence and single-node checkpointing. That is
+  appropriate for a reproducible interview/demo project and should not be
+  described as distributed durable execution.
+- `Celery` and `Redis` are used for single-node API/worker separation in strict
+  real-provider mode. They are not a claim of production-grade scheduling or
+  multi-tenant operations.
+- MCP is used as a configurable tool boundary. The local workbench MCP server
+  is useful because it exposes the running project's grounding corpus, memory,
+  historical runs, evaluations, and readiness checks to the researcher.
+- Provider `raw_content` reading is the external reader boundary for v1. It is a
+  practical source-reading layer, not browser automation.
+
+The design is therefore coherent: each heavier component supports a concrete
+research-copilot requirement. The project should still be presented as a
+single-node AI Research Copilot, not as an enterprise browser agent, generic
+agent framework, distributed platform, or document-intelligence product.
+
 ## System Flow
 
 ```mermaid
@@ -34,8 +70,10 @@ flowchart LR
   Routes --> ParallelResearch["Concurrent Research Workers"]
   ParallelResearch --> Research
   Research --> Reader["Source Reading / Evidence Extraction"]
+  Research --> MCP["Configured MCP Tools"]
   Routes --> Retriever["Qdrant Grounding Layer"]
   Reader --> Evidence["Evidence Store"]
+  MCP --> Evidence
   Retriever --> Evidence
   Evidence --> Verifier["Verifier Agent"]
   Verifier --> Reporter["Report Generator"]
@@ -60,6 +98,7 @@ flowchart LR
 - The default runtime is a LangGraph `StateGraph`, matching the graph-first direction used by Open Deep Research.
 - The graph nodes are `supervisor_start`, `memory_recall`, `planner`, `research_supervisor`, `parallel_research`, `reporter`, `verifier_evaluator`, `revision_prepare`, `memory_write`, and `finalize`.
 - `research_supervisor` follows the ODR tool-loop boundary: it records `think_tool`, delegates concrete research units with `ConductResearch`, and carries `ResearchComplete` criteria into the trace/checkpoint artifacts.
+- Multi-agent execution follows ODR's practical rule: prefer the simplest single-researcher path unless the plan exposes independent research directions that can be explored concurrently.
 - The graph compiles with a single-node LangGraph SQLite checkpointer by default; it falls back to in-process `MemorySaver` only when strict provider mode is disabled.
 - The older custom workflow remains available through `ARC_ORCHESTRATION_RUNTIME=custom` for comparison and offline fallback.
 - `ARC_STRICT_PROVIDERS=true` turns the local app into a real-provider demo: missing model/search/embedding/rerank/Qdrant/checkpointer configuration fails startup instead of silently downgrading.
@@ -90,7 +129,11 @@ flowchart LR
 
 - Run plan-item research concurrently with a configurable worker budget.
 - Execute the `ConductResearch` calls selected by the research supervisor; offline deterministic providers only fill the same schema for test/fallback runs.
+- Each delegated external research unit runs a bounded ODR-style `think_tool` / `web_search` / configured `mcp_tool` / `ResearchComplete` loop. The researcher selects the next action through the model provider, converts provider `raw_content` or MCP output into evidence, checks minimum evidence and source diversity, records a reflection, and either stops or runs another tool call until `ARC_RESEARCH_MAX_ITERATIONS` is reached.
+- Research notes and checkpoints preserve `research_iterations`, `completed_reason`, and follow-up queries so the run can explain why a researcher stopped instead of hiding the loop behind a final answer.
 - Use a pluggable search registry inspired by Open Deep Research: Tavily, Exa, Perplexity, arXiv, PubMed, Linkup, OpenAI native web search, Anthropic native web search, plus DuckDuckGo, Brave, and SerpAPI adapters.
+- Use an ODR-shaped MCP registry for external tool integration. ODR does not hard-code MCP server names; it loads a configured `mcp_config.url` and `mcp_config.tools` allowlist through `MultiServerMCPClient`. This repo mirrors that boundary with `ARC_MCP_SERVER_URL`, `ARC_MCP_TOOLS`, optional bearer auth, `ARC_MCP_PROMPT`, and trace-visible MCP evidence records.
+- For interview/demo runs, the repo ships a local streamable HTTP research-workbench MCP server with `search_grounding_corpus`, `recall_project_memory`, `inspect_research_runs`, and `check_demo_readiness` in the default allowlist. Optional inspection tools still expose local ODR/PraisonAI reference search, runtime config inspection, and demo-question recommendations.
 - For Tavily, request provider `raw_content` when enabled and pass it through the source reader before report synthesis.
 - The v1 source reader has three strategies: `extract` for deterministic query-relevant snippets, `model_compress` for an Open Deep Research-style structured `summary/key_excerpts/relevance/limitations` contract, and `chunk_rerank_compress` for Open Deep Research legacy-style split/rerank plus neighbor-window expansion before compression.
 - This external web path matches the practical v1 boundary of the inspected Open Deep Research reference: provider search returns `raw_content`, the researcher compresses it, and final synthesis keeps citations attached to source URLs. It is not presented as a full browser automation stack.
@@ -100,6 +143,7 @@ flowchart LR
 ### External vs Internal Evidence
 
 - External search is used for fresh web evidence, papers, and public references.
+- MCP tools are used as optional external tool channels when a concrete MCP server URL and tool allowlist are configured. The local workbench MCP server is intentionally scoped to real experiment support: search the ingested grounding corpus, recall layered memory, inspect run trace/evaluation artifacts, and check demo readiness.
 - Internal grounding is used for uploaded documents, project notes, and prior runs.
 - A corpus profile summarizes what uploaded/project sources exist so the research supervisor can decide whether internal grounding is actually available.
 - The research supervisor can route a task to one or both sources through `ConductResearch` arguments.
@@ -217,6 +261,7 @@ boundary.
 - `GET /v1/research/jobs/{job_id}/status`: inspect queued/running/completed/failed/cancelled state.
 - `GET /v1/research/jobs/{job_id}/result`: fetch the completed run artifact.
 - `POST /v1/research/jobs/{job_id}/cancel`: request cancellation for queued/running jobs.
+- `POST /v1/research/clarify`: run the ODR-style clarification gate before starting a full research run.
 - `POST /v1/research/runs`: synchronous run endpoint for tests and simple clients.
 - `GET /v1/research/runs/{run_id}/status`: inspect completed run timing and source count.
 - `GET /v1/research/runs/{run_id}/result`: inspect report, issues, evidence, routes, and checkpoints.

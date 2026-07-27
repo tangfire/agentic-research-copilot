@@ -33,6 +33,21 @@ def test_root_page_includes_docs_link(tmp_path: Path, monkeypatch):
     assert "开始研究" in response.text
 
 
+def test_clarify_endpoint_returns_follow_up_for_vague_topic(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
+    monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "clarify-server.sqlite"))
+    monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "clarify-server-checkpoints.sqlite"))
+    client = TestClient(create_app())
+
+    response = client.post("/v1/research/clarify", json={"topic": "RAG"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["need_clarification"] is True
+    assert data["question"]
+    assert data["verification"] == ""
+
+
 def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "server.sqlite"))
@@ -56,6 +71,12 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     filtered_memory = client.get("/v1/memory?layer=summary")
     assert filtered_memory.status_code == 200
     assert filtered_memory.json()
+
+    memory_search_response = client.get("/v1/memory/search?q=layered%20memory")
+    assert memory_search_response.status_code == 200
+    memory_search_data = memory_search_response.json()
+    assert memory_search_data["result_count"] >= 1
+    assert "governance" in memory_search_data
 
     canonical_response = client.post(
         "/v1/memory",
@@ -104,6 +125,12 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     documents_response = client.get("/v1/documents")
     assert documents_response.status_code == 200
     assert any(doc["metadata"]["document_id"] == document_id for doc in documents_response.json())
+
+    document_search_response = client.get("/v1/documents/search?q=planning%20retrieval")
+    assert document_search_response.status_code == 200
+    document_search_data = document_search_response.json()
+    assert document_search_data["result_count"] >= 1
+    assert document_search_data["corpus_profile"]["document_count"] >= 1
 
     delete_document_response = client.delete(f"/v1/documents/{document_id}")
     assert delete_document_response.status_code == 200

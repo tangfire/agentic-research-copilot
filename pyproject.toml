@@ -36,6 +36,10 @@ documents = [
   "beautifulsoup4>=4.12",
   "pymupdf>=1.25",
 ]
+mcp = [
+  "langchain-mcp-adapters>=0.1.6,<0.2.0",
+  "mcp>=1.9.4",
+]
 eval = [
   "datasets>=2.19,<5.0",
   "langchain>=0.3.0,<0.4.0",
@@ -48,6 +52,9 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+
+[project.scripts]
+arc-research-mcp-server = "agentic_research_copilot.research_mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentic_research_copilot"]

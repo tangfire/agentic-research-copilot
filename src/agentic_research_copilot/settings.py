@@ -36,12 +36,21 @@ class AppSettings(BaseModel):
     search_timeout_seconds: float = 8.0
     search_max_results: int = 5
     search_include_raw_content: bool = True
+    mcp_enabled: bool = True
+    mcp_server_url: str = ""
+    mcp_tools: list[str] = Field(default_factory=list)
+    mcp_auth_required: bool = False
+    mcp_auth_token: str = ""
+    mcp_prompt: str = ""
+    mcp_transport: Literal["streamable_http", "sse"] = "streamable_http"
+    mcp_timeout_seconds: float = 20.0
     source_reader_enabled: bool = True
     source_reader_strategy: Literal["extract", "model_compress", "chunk_rerank_compress"] = "extract"
     source_reader_max_chars: int = 50000
     source_reader_excerpt_chars: int = 1600
     source_reader_chunk_context_window: int = 1
     research_max_workers: int = 4
+    research_max_iterations: int = 3
     job_max_attempts: int = 2
     job_timeout_seconds: float = 120.0
     job_queue_backend: Literal["in_process", "celery"] = "in_process"
@@ -100,12 +109,21 @@ def load_settings() -> AppSettings:
         search_timeout_seconds=float(os.getenv("ARC_SEARCH_TIMEOUT_SECONDS", "8")),
         search_max_results=int(os.getenv("ARC_SEARCH_MAX_RESULTS", "5")),
         search_include_raw_content=_env_bool("ARC_SEARCH_INCLUDE_RAW_CONTENT", True),
+        mcp_enabled=_env_bool("ARC_MCP_ENABLED", True),
+        mcp_server_url=os.getenv("ARC_MCP_SERVER_URL", "").rstrip("/"),
+        mcp_tools=_env_list("ARC_MCP_TOOLS"),
+        mcp_auth_required=_env_bool("ARC_MCP_AUTH_REQUIRED", False),
+        mcp_auth_token=_first_env("ARC_MCP_AUTH_TOKEN", "MCP_AUTH_TOKEN"),
+        mcp_prompt=os.getenv("ARC_MCP_PROMPT", ""),
+        mcp_transport=os.getenv("ARC_MCP_TRANSPORT", "streamable_http").lower(),
+        mcp_timeout_seconds=float(os.getenv("ARC_MCP_TIMEOUT_SECONDS", "20")),
         source_reader_enabled=_env_bool("ARC_SOURCE_READER_ENABLED", True),
         source_reader_strategy=os.getenv("ARC_SOURCE_READER_STRATEGY", "extract").lower(),
         source_reader_max_chars=int(os.getenv("ARC_SOURCE_READER_MAX_CHARS", "50000")),
         source_reader_excerpt_chars=int(os.getenv("ARC_SOURCE_READER_EXCERPT_CHARS", "1600")),
         source_reader_chunk_context_window=int(os.getenv("ARC_SOURCE_READER_CHUNK_CONTEXT_WINDOW", "1")),
         research_max_workers=int(os.getenv("ARC_RESEARCH_MAX_WORKERS", "4")),
+        research_max_iterations=int(os.getenv("ARC_RESEARCH_MAX_ITERATIONS", "3")),
         job_max_attempts=int(os.getenv("ARC_JOB_MAX_ATTEMPTS", "2")),
         job_timeout_seconds=float(os.getenv("ARC_JOB_TIMEOUT_SECONDS", "120")),
         job_queue_backend=os.getenv("ARC_JOB_QUEUE_BACKEND", "in_process").lower(),
@@ -180,6 +198,11 @@ def _first_env(*names: str) -> str:
         if value:
             return value
     return ""
+
+
+def _env_list(name: str) -> list[str]:
+    value = os.getenv(name, "")
+    return [part.strip() for part in value.split(",") if part.strip()]
 
 
 def _model_api_key(base_url: str) -> str:

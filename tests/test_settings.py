@@ -15,9 +15,16 @@ def test_default_reranker_uses_dashscope_with_local_fallback(monkeypatch):
     assert settings.rerank_base_url == DASHSCOPE_COMPATIBLE_BASE_URL
     assert settings.rerank_api_key == ""
     assert settings.search_include_raw_content is True
+    assert settings.mcp_enabled is True
+    assert settings.mcp_server_url == ""
+    assert settings.mcp_tools == []
+    assert settings.mcp_auth_required is False
+    assert settings.mcp_auth_token == ""
+    assert settings.mcp_prompt == ""
     assert settings.source_reader_enabled is True
     assert settings.source_reader_strategy == "extract"
     assert settings.source_reader_chunk_context_window == 1
+    assert settings.research_max_iterations == 3
     assert settings.rag_graph_enabled is True
     assert settings.rag_graph_max_entities_per_chunk == 12
     assert settings.rag_graph_neighbor_limit == 8

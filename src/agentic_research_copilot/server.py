@@ -85,6 +85,7 @@ def create_app() -> FastAPI:
                 <li><a href="/health">Health check</a></li>
                 <li><code>GET /v1/research/runs</code></li>
                 <li><code>POST /v1/research/runs</code></li>
+                <li><code>POST /v1/research/clarify</code></li>
                 <li><code>GET /v1/research/jobs</code></li>
                 <li><code>POST /v1/research/jobs</code></li>
                 <li><code>POST /v1/research/jobs/{job_id}/cancel</code></li>
@@ -92,11 +93,13 @@ def create_app() -> FastAPI:
                 <li><code>GET /v1/research/runs/{run_id}/checkpoints</code></li>
                 <li><code>POST /v1/research/runs/{run_id}/replay</code></li>
                 <li><code>GET /v1/documents</code></li>
+                <li><code>GET /v1/documents/search</code></li>
                 <li><code>POST /v1/documents</code></li>
                 <li><code>POST /v1/documents/ingest</code></li>
                 <li><code>DELETE /v1/documents/{document_id}</code></li>
                 <li><code>DELETE /v1/documents</code></li>
                 <li><code>DELETE /v1/research/history</code></li>
+                <li><code>GET /v1/memory/search</code></li>
                 <li><code>GET /v1/memory</code></li>
                 <li><code>GET /v1/memory/governance</code></li>
                 <li><code>POST /v1/memory</code></li>
@@ -115,6 +118,10 @@ def create_app() -> FastAPI:
     @app.post("/v1/research/runs")
     def create_run(request: ResearchRequest):
         return copilot.run(request)
+
+    @app.post("/v1/research/clarify")
+    def clarify_research(request: ResearchRequest):
+        return copilot.clarify(request)
 
     @app.post("/v1/research/jobs")
     def create_job(request: ResearchRequest):
@@ -267,6 +274,19 @@ def create_app() -> FastAPI:
     def list_documents():
         return copilot.documents.list()
 
+    @app.get("/v1/documents/search")
+    def search_documents(
+        q: str = Query(min_length=1),
+        limit: int = Query(default=5, ge=1, le=20),
+    ):
+        results = copilot.documents.search(q, limit=limit)
+        return {
+            "query": q,
+            "result_count": len(results),
+            "results": results,
+            "corpus_profile": copilot.documents.profile(),
+        }
+
     @app.post("/v1/documents")
     def add_document(payload: DocumentInput):
         return copilot.add_document(
@@ -308,6 +328,30 @@ def create_app() -> FastAPI:
     @app.delete("/v1/research/history")
     def clear_research_history(include_memory: bool = Query(default=False)):
         return copilot.clear_history(include_memory=include_memory)
+
+    @app.get("/v1/memory/search")
+    def search_memory(
+        q: str = Query(min_length=1),
+        layer: str | None = None,
+        topic: str | None = None,
+        run_id: str | None = None,
+        session_id: str | None = None,
+        limit: int = Query(default=5, ge=1, le=20),
+    ):
+        results = copilot.memory.recall(
+            q,
+            layer=layer,
+            topic=topic,
+            run_id=run_id,
+            session_id=session_id,
+            limit=limit,
+        )
+        return {
+            "query": q,
+            "result_count": len(results),
+            "results": results,
+            "governance": copilot.memory.governance_report(),
+        }
 
     @app.get("/v1/memory")
     def list_memory(
