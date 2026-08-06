@@ -13,7 +13,7 @@ DASHSCOPE_COMPATIBLE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/
 
 class AppSettings(BaseModel):
     storage_path: str = Field(default=".arc/agentic_research.db")
-    orchestration_runtime: Literal["langgraph", "custom"] = "langgraph"
+    orchestration_runtime: Literal["langgraph"] = "langgraph"
     strict_providers: bool = False
     search_provider: Literal[
         "none",

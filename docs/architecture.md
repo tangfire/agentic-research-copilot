@@ -100,7 +100,7 @@ flowchart LR
 - `research_supervisor` follows the ODR tool-loop boundary: it records `think_tool`, delegates concrete research units with `ConductResearch`, and carries `ResearchComplete` criteria into the trace/checkpoint artifacts.
 - Multi-agent execution follows ODR's practical rule: prefer the simplest single-researcher path unless the plan exposes independent research directions that can be explored concurrently.
 - The graph compiles with a single-node LangGraph SQLite checkpointer by default; it falls back to in-process `MemorySaver` only when strict provider mode is disabled.
-- The older custom workflow remains available through `ARC_ORCHESTRATION_RUNTIME=custom` for comparison and offline fallback.
+- LangGraph is the only orchestration runtime; the former duplicated custom workflow was removed to keep one inspectable execution path.
 - `ARC_STRICT_PROVIDERS=true` turns the local app into a real-provider demo: missing model/search/embedding/rerank/Qdrant/checkpointer configuration fails startup instead of silently downgrading.
 - This repo does not import Open Deep Research as a runtime dependency; it uses ODR as the primary learning/reference target and adapts the same graph-shaped design pattern with product-specific nodes and schemas.
 

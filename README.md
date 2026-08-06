@@ -446,10 +446,8 @@ python -m celery -A agentic_research_copilot.celery_app worker --loglevel=INFO -
 ```
 
 The code default `ARC_JOB_QUEUE_BACKEND=in_process` remains simpler for offline tests.
-The strict local demo config uses Celery/Redis.
-
-Use `ARC_ORCHESTRATION_RUNTIME=custom` only when you intentionally want to compare
-the older custom workflow fallback against the LangGraph runtime.
+The strict local demo config uses Celery/Redis. LangGraph is the only orchestration
+runtime; `ARC_ORCHESTRATION_RUNTIME` accepts `langgraph` only.
 
 Install `.[ai]` only if you want to experiment with the LangChain/OpenAI ecosystem
 extras beyond the current OpenAI-compatible provider adapter.
