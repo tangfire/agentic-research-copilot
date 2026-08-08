@@ -730,8 +730,19 @@ class OpenAICompatibleResearchModelProvider:
         schema = PlannerContract.model_json_schema()
         return self._chat_structured(
             system_prompt=(
-                "You are the planner for a deep research copilot. Return valid JSON only "
-                "that conforms to the supplied schema."
+                "You are the planner for a deep research copilot. Your job is to decompose a research topic "
+                "into a structured plan of 3-5 focused sub-questions, each independently researchable and "
+                "mapping to a distinct section of the final report.\n\n"
+                "Guidelines:\n"
+                "- Write a clear research_brief that summarizes the goal, approach, and key constraints.\n"
+                "- Each plan item must have a specific question (not vague), a clear purpose, and an "
+                "optimized search_query tuned for search engines (shorter and keyword-focused).\n"
+                "- Avoid overlapping questions. Cover different angles: background, methods, comparisons, "
+                "limitations, and practical implications where relevant.\n"
+                "- If revision_count > 0, use revision_notes to address previously identified gaps.\n"
+                "- If private documents are available (corpus_profile.has_private_docs), include items "
+                "that can be grounded in those documents.\n\n"
+                "Return valid JSON only that conforms to the supplied schema."
             ),
             user_payload=payload,
             schema=schema,

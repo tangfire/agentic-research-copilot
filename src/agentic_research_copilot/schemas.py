@@ -27,14 +27,14 @@ class ResearchRequest(BaseModel):
 
 
 class PlanItem(BaseModel):
-    id: str
-    question: str
-    purpose: str
-    status: Literal["pending", "running", "done"] = "pending"
-    requires_research: bool = True
-    search_query: str | None = None
-    evidence_count: int = 0
-    revision_hint: str | None = None
+    id: str = Field(description="Unique identifier for this plan item, e.g. 'item_1', 'item_2'.")
+    question: str = Field(description="A focused research sub-question that, when answered, contributes a distinct section to the final report. Should be specific and independently researchable.")
+    purpose: str = Field(description="Why this sub-question matters in the context of the overall research topic. Explains the role this item plays in the final report.")
+    status: Literal["pending", "running", "done"] = Field(default="pending", description="Execution status of this plan item. Always set to 'pending' when creating a new plan.")
+    requires_research: bool = Field(default=True, description="Whether this item needs external evidence gathering. Set to False only for items that can be answered from existing context alone.")
+    search_query: str | None = Field(default=None, description="An optimized search string for web or vector search. Should be different from the question — shorter, keyword-focused, and tuned for search engines.")
+    evidence_count: int = Field(default=0, description="Number of evidence items collected for this item. Leave as 0 when creating the plan.")
+    revision_hint: str | None = Field(default=None, description="If this item is being revised, a short note describing what was missing or incorrect in the previous attempt.")
 
 
 class SearchQuery(BaseModel):
@@ -136,12 +136,12 @@ class ClarificationContract(BaseModel):
 
 
 class PlannerContract(BaseModel):
-    research_brief: str
-    plan: list[PlanItem] = Field(default_factory=list)
-    assumptions: list[str] = Field(default_factory=list)
-    success_criteria: list[str] = Field(default_factory=list)
-    revision_budget: int = 0
-    confidence: float = 0.0
+    research_brief: str = Field(description="A 2-3 sentence summary of the research goal, the intended approach, and any important constraints or priorities. This guides all downstream agents.")
+    plan: list[PlanItem] = Field(default_factory=list, description="A list of 3-5 focused sub-questions that together cover the research topic. Each item must be independently researchable and map to a distinct section of the final report. Do not overlap questions.")
+    assumptions: list[str] = Field(default_factory=list, description="Key assumptions made while constructing this plan, e.g. about available sources, scope limits, or what prior knowledge exists.")
+    success_criteria: list[str] = Field(default_factory=list, description="Concrete, verifiable conditions that define a successful research run, e.g. 'Every section has at least one citation' or 'Coverage includes both theoretical and empirical perspectives'.")
+    revision_budget: int = Field(default=0, description="How many revision cycles are expected. Set to 0 for a fresh plan; incremented by the verifier if gaps are found.")
+    confidence: float = Field(default=0.0, description="Estimated confidence that this plan will produce a high-quality report, from 0.0 (very uncertain) to 1.0 (highly confident). Consider topic clarity and source availability.")
 
 
 class SupervisorToolCall(BaseModel):
