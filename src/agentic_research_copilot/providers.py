@@ -228,18 +228,18 @@ class OpenAICompatibleResearchModelProvider:
             "memory_records": [record.model_dump() for record in memory_records[:8]],
             "revision_count": revision_count,
             "revision_notes": list(revision_notes)[:8],
-                "instructions": (
-                    "Follow the Open Deep Research supervisor pattern. First reflect with a "
-                    "think_tool-style call, then use ConductResearch calls to delegate concrete "
-                    "research units. Use ResearchComplete only as the completion decision after "
-                    "delegation and verification criteria are clear. Preserve the provided "
-                    "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
-                    "mode, selected_tools, web_queries/internal_queries, memory_query, min_evidence, "
-                    "min_sources, and sufficiency_criteria. Prefer primary or official sources "
-                    "when they are available, keep source quality visible in evaluation, and "
-                    "treat retrieval_routes as optional candidate hints, not as mandatory final routing decisions."
-                ),
-            }
+            "instructions": (
+                "Follow the Open Deep Research supervisor pattern. First reflect with a "
+                "think_tool-style call, then use ConductResearch calls to delegate concrete "
+                "research units. Use ResearchComplete only as the completion decision after "
+                "delegation and verification criteria are clear. Preserve the provided "
+                "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
+                "mode, selected_tools, web_queries/internal_queries, memory_query, min_evidence, "
+                "min_sources, and sufficiency_criteria. Prefer primary or official sources "
+                "when they are available, keep source quality visible in evaluation, and "
+                "treat retrieval_routes as optional candidate hints, not as mandatory final routing decisions."
+            ),
+        }
         return self._chat_structured(
             system_prompt=(
                 "You are the research supervisor for an AI Research Copilot. Return valid JSON only "
