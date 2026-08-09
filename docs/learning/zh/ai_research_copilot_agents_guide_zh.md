@@ -47,6 +47,16 @@ flowchart LR
 
 所以你读 `agents/` 时，不要把它理解成“算法都写在这里”。更准确地说，它是 **把模型能力包装成可调用的角色接口**。
 
+这一点很容易误会：
+
+> 你如果只看 `agents/`，会觉得里面没有多少“大模型逻辑”。这是正常的。真正的 prompt、结构化 JSON schema 调用、OpenAI-compatible HTTP 请求、embedding 调用和 deterministic test double 都在 `providers.py`。`agents/` 的价值是定义角色边界，`providers.py` 才是模型能力实现层。
+
+继续学习时建议接着看：
+
+```text
+docs\learning\zh\ai_research_copilot_providers_py_guide_zh.md
+```
+
 ## 2. `__init__.py`：公共入口
 
 `__init__.py` 只做 re-export：
@@ -164,11 +174,15 @@ src\agentic_research_copilot\agents\researcher.py
 - `source_reader_enabled`：是否启用原文读取
 - `max_iterations`：最大循环轮次
 
-这里有个很重要的默认值：
+这里有个容易误解的默认值：
 
 > `ResearchAgent` 默认用的是 `DeterministicResearchModelProvider()`。
 
-这通常意味着它希望在测试、demo 或可复现场景下更稳定，而不是完全依赖不确定的大模型行为。
+这个默认值主要用于直接单测或单独实例化 `ResearchAgent` 时保证对象能跑起来。真实主链路不是让 `ResearchAgent` 自己决定用哪个 provider，而是 `ResearchCopilot` 在 `pipeline.py` 里统一创建 `self.model_provider`，再注入给 `PlannerAgent`、`ResearchAgent`、`ReporterAgent`、`VerifierAgent` 和 `SupervisorAgent`。
+
+所以要记住：
+
+> `agents/` 只是角色调用入口，真实模型路径由 `settings.py -> build_model_provider(...) -> providers.py` 决定。严格真实 provider demo 下，应该通过 `ARC_STRICT_PROVIDERS=true` 和 `ARC_MODEL_PROVIDER=openai_compatible` 让系统启动时就拒绝本地 deterministic 配置。
 
 ### 它做什么
 
@@ -228,6 +242,8 @@ src\agentic_research_copilot\agents\reporter.py
 
 这个类负责最后一步的“表达”。它不是再搜一次，而是把已有证据编排成报告。
 
+注意：`ReporterAgent` 收到的 `sections` 已经是 `pipeline.py` 依据 `plan + notes + evidence` 生成的 topic 相关草稿。早期代码曾经生成固定系统介绍章节，这已经修掉了。现在 `ReporterAgent` 的职责是对这些 topic 相关章节做最终合成，并把 citation index 绑定回已有证据。
+
 ### 它做什么
 
 - `compose()`：调用 `model_provider.compose_report(...)`
@@ -242,7 +258,9 @@ src\agentic_research_copilot\agents\reporter.py
 1. 去重 citation。
 2. 去重 source。
 
-然后它会把 `ReporterContract` 里的章节结构转成 `ResearchReport.sections`。如果 contract 里的章节不完整，它会回退到 `fallback_sections`。
+然后它会把 `ReporterContract` 里的章节结构转成 `ResearchReport.sections`。如果模型返回的章节不完整，或者 citation index 对不上，它会回退到 `fallback_sections`。
+
+这里的 `fallback_sections` 不是“本地假模型 fallback”，而是 `pipeline.py` 已经构造好的 topic 章节草稿。这个设计是为了避免最终报告因为模型输出格式小问题而直接丢掉可用证据。
 
 这点很重要，因为它说明这个模块不是“无脑信模型”，而是尽量让报告结构保持可用。
 
@@ -303,12 +321,14 @@ PlannerAgent
 
 ### 1）它们都是“薄封装”
 
-大多数 agent 并不自己实现复杂算法，而是：
+大多数 agent 并不自己实现复杂模型逻辑，而是：
 
 - 持有 `model_provider`
 - 调用 provider
 - 记录 `last_usage`
 - 做必要的规范化或后处理
+
+所以你现在的阅读重点应该从 `agents/` 转到 `providers.py`：那里才有 `draft_plan`、`supervise_research`、`decide_researcher_action`、`compose_report`、`assess_report` 这些真模型方法。
 
 ### 2）它们在替模型结果兜底
 
@@ -342,8 +362,9 @@ PlannerAgent
 1. `researcher.py`
 2. `supervisor.py`
 3. `reporter.py`
+4. `providers.py`
 
-因为这三块最能代表这个项目的核心链路。
+因为这几块最能代表这个项目的核心链路。
 
 ## 11. 面试时怎么讲
 
