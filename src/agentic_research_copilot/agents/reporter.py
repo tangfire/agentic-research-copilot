@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from ..providers import ResearchModelProvider, build_model_provider
+from ..provider_base import ResearchModelProvider
+from ..providers import build_model_provider
 from ..schemas import EvidenceItem, ResearchReport, ReportSection, ReporterContract
 from ..settings import AppSettings, load_settings
 

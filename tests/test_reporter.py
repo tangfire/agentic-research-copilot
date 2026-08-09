@@ -1,5 +1,5 @@
 from agentic_research_copilot.agents import ReporterAgent
-from agentic_research_copilot.providers import ModelUsage
+from agentic_research_copilot.provider_base import ModelUsage
 from agentic_research_copilot.schemas import (
     EvidenceItem,
     ReporterContract,

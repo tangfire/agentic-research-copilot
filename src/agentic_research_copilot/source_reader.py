@@ -5,7 +5,7 @@ import math
 import re
 from typing import Literal
 
-from .providers import ResearchModelProvider
+from .provider_base import ResearchModelProvider
 
 
 SourceReaderStrategy = Literal["extract", "model_compress", "chunk_rerank_compress"]

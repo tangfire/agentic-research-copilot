@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from ..providers import DeterministicResearchModelProvider, ModelUsage, ResearchModelProvider
+from ..deterministic_provider import DeterministicResearchModelProvider
+from ..provider_base import ModelUsage, ResearchModelProvider
 from ..schemas import ChunkContextContract, CorpusProfile, EvidenceItem
 from .fulltext import SQLiteBM25Index
 from .rerank import BaseReranker, RuleBasedReranker

@@ -1,5 +1,5 @@
 from agentic_research_copilot.memory import MemoryStore
-from agentic_research_copilot.providers import DeterministicResearchModelProvider
+from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
 
 
 def test_memory_store_supports_layered_recall():

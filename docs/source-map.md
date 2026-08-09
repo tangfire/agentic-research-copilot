@@ -47,7 +47,9 @@
 ### Original modules in this repo
 
 - public API
-- `providers.py`: OpenAI-compatible model adapter and deterministic test doubles
+- `provider_base.py`: shared model provider contract and `ModelUsage` telemetry container
+- `providers.py`: OpenAI-compatible chat/embedding adapter, structured JSON schema calls, provider builders, and real-provider normalization helpers
+- `deterministic_provider.py`: deterministic test double for CI, offline runs, and contract-compatible local embeddings
 - `source_reader.py`: provider raw-content reading with `extract`, `model_compress`, and `chunk_rerank_compress` strategies, including chunk rerank plus neighbor-window expansion before compression
 - `document_reader.py`: local text/Markdown/HTML reader with heading-aware section metadata, plus optional PyMuPDF PDF block/table-aware page segmentation before grounding retrieval
 - `workflow.py`: query building, note compression, and source formatting

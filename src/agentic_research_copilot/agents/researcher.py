@@ -4,7 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..providers import DeterministicResearchModelProvider, ResearchModelProvider
+from ..deterministic_provider import DeterministicResearchModelProvider
+from ..provider_base import ResearchModelProvider
 from ..schemas import EvidenceItem, PlanItem
 from ..source_reader import SourceReader, SourceReaderStrategy
 

@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from agentic_research_copilot.pipeline import ResearchCopilot
+from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
 from agentic_research_copilot.providers import (
-    DeterministicResearchModelProvider,
     OpenAICompatibleResearchModelProvider,
     build_embedding_provider,
     build_model_provider,

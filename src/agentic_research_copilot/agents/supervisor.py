@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from ..providers import ModelUsage, ResearchModelProvider, build_model_provider
+from ..provider_base import ModelUsage, ResearchModelProvider
+from ..providers import build_model_provider
 from ..schemas import (
     CorpusProfile,
     MemoryRecord,

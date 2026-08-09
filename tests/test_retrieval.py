@@ -1,6 +1,7 @@
 import pytest
 
-from agentic_research_copilot.providers import DeterministicResearchModelProvider, ModelUsage
+from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
+from agentic_research_copilot.provider_base import ModelUsage
 from agentic_research_copilot.retrieval import (
     BaseReranker,
     DashScopeReranker,

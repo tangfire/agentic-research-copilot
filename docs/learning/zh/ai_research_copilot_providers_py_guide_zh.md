@@ -3,10 +3,12 @@
 对应源码：
 ```text
 D:\kn\projects\agentic-research-copilot\src\agentic_research_copilot\providers.py
+D:\kn\projects\agentic-research-copilot\src\agentic_research_copilot\provider_base.py
+D:\kn\projects\agentic-research-copilot\src\agentic_research_copilot\deterministic_provider.py
 ```
 
 一句话定位：
-> `providers.py` 是这个项目的模型能力层。`agents/` 只是角色封装，真正的大模型方法、结构化输出 schema、OpenAI-compatible HTTP 调用、embedding 调用、本地 deterministic test double 都在这里。
+> `providers.py` 是这个项目的真实模型适配层。`provider_base.py` 放统一接口和 `ModelUsage`，`providers.py` 放 OpenAI-compatible 真模型实现和 builder，`deterministic_provider.py` 放测试/离线用的 deterministic test double。
 
 你可以把它理解成整个系统的“模型适配器”：
 
@@ -27,7 +29,7 @@ VerifierAgent.assess()
 -> model_provider.assess_report(...)
 ```
 
-所以你的直觉是对的：只看 `agents/` 会觉得没什么，因为很多真正的方法都下沉到了 `providers.py`。
+所以你的直觉是对的：只看 `agents/` 会觉得没什么，因为真正的大模型方法都在 provider 层。现在 deterministic 已经拆到单独文件，读 `providers.py` 会更接近真实运行主链路。
 
 ## 1. 这个文件解决什么问题
 
@@ -38,12 +40,12 @@ VerifierAgent.assess()
 3. 模型输出不稳定，需要结构化校验。
 4. 测试不能每次都真实调用 API。
 
-`providers.py` 主要解决这些问题：
+这组 provider 文件主要解决这些问题：
 
 | 问题 | 这里的设计 |
 | --- | --- |
 | 模型接口不统一 | 用 `ResearchModelProvider` 协议统一方法 |
-| 真模型和测试模型不同 | 提供 `OpenAICompatibleResearchModelProvider` 和 `DeterministicResearchModelProvider` |
+| 真模型和测试模型不同 | 真模型在 `providers.py`，测试替身在 `deterministic_provider.py` |
 | 模型输出不稳定 | 每个方法都返回 Pydantic schema |
 | 要记录成本和延迟 | 每次调用返回 `ModelUsage` |
 | 要支持 embedding | 同一个 provider 协议里包含 `embed_text` / `embed_texts` |
@@ -54,7 +56,7 @@ VerifierAgent.assess()
 
 位置：
 ```text
-providers.py:71-81
+provider_base.py:27-37
 ```
 
 它记录一次模型调用的用量：
@@ -72,7 +74,7 @@ providers.py:71-81
 
 位置：
 ```text
-providers.py:84-170
+provider_base.py:40-119
 ```
 
 这是一个 `Protocol`，也就是接口约定。它规定所有模型 provider 必须实现这些方法：
@@ -93,10 +95,10 @@ providers.py:84-170
 
 ### 两个实现类
 
-| 类 | 用途 |
+| 类 | 文件 | 用途 |
 | --- | --- |
-| `DeterministicResearchModelProvider` | 本地 deterministic test double，用于测试、CI、离线复现 |
-| `OpenAICompatibleResearchModelProvider` | 真模型 provider，通过 OpenAI-compatible API 调 chat/completions 和 embeddings |
+| `OpenAICompatibleResearchModelProvider` | `providers.py` | 真模型 provider，通过 OpenAI-compatible API 调 chat/completions 和 embeddings |
+| `DeterministicResearchModelProvider` | `deterministic_provider.py` | 本地 deterministic test double，用于测试、CI、离线复现 |
 
 ## 3. 本地 deterministic 要不要删
 
@@ -120,11 +122,19 @@ providers.py:84-170
 真实 demo / 面试展示 -> openai_compatible + strict_providers
 ```
 
+为了让主链路更好读，代码现在已经把它拆出去了：
+
+```text
+providers.py               -> 真模型 provider + builder
+provider_base.py           -> ModelUsage + ResearchModelProvider 协议
+deterministic_provider.py  -> 测试替身和离线启发式实现
+```
+
 ## 4. 真模型类：`OpenAICompatibleResearchModelProvider`
 
 位置：
 ```text
-providers.py:608-1026
+providers.py:67-484
 ```
 
 这是你现在最应该看的类。
@@ -154,7 +164,7 @@ providers.py:608-1026
 
 位置：
 ```text
-providers.py:630-659
+providers.py:89-118
 ```
 
 作用：
@@ -179,7 +189,7 @@ providers.py:630-659
 
 位置：
 ```text
-providers.py:661-712
+providers.py:120-171
 ```
 
 作用：
@@ -212,7 +222,7 @@ providers.py:661-712
 
 位置：
 ```text
-providers.py:714-750
+providers.py:173-209
 ```
 
 作用：
@@ -235,7 +245,7 @@ providers.py:714-750
 
 位置：
 ```text
-providers.py:752-797
+providers.py:211-256
 ```
 
 作用：
@@ -269,7 +279,7 @@ providers.py:752-797
 
 位置：
 ```text
-providers.py:799-823
+providers.py:258-282
 ```
 
 作用：
@@ -300,7 +310,7 @@ providers.py:799-823
 
 位置：
 ```text
-providers.py:825-868
+providers.py:284-327
 ```
 
 作用：
@@ -318,7 +328,7 @@ providers.py:825-868
 
 位置：
 ```text
-providers.py:870-902
+providers.py:329-361
 ```
 
 作用：
@@ -341,7 +351,7 @@ providers.py:870-902
 
 位置：
 ```text
-providers.py:904-946
+providers.py:363-405
 ```
 
 作用：
@@ -366,7 +376,7 @@ providers.py:904-946
 
 位置：
 ```text
-providers.py:948-967
+providers.py:407-427
 ```
 
 作用：
@@ -392,7 +402,7 @@ payload 包括：
 
 位置：
 ```text
-providers.py:970-1005
+providers.py:429-464
 ```
 
 这是所有 chat 类方法共用的底座。
@@ -431,7 +441,7 @@ prompt + payload + schema
 
 位置：
 ```text
-providers.py:1028-1042
+providers.py:487-501
 ```
 
 逻辑：
@@ -447,7 +457,7 @@ providers.py:1028-1042
 
 位置：
 ```text
-providers.py:1044-1064
+providers.py:503-523
 ```
 
 逻辑：
@@ -467,14 +477,16 @@ providers.py:1044-1064
 | `_normalize_clarification_contract` | 清理 clarification 输出，避免空问题或空确认 |
 | `_normalize_researcher_action` | 修正非法 action，例如没有 MCP 工具却选择 `mcp_tool` |
 | `_normalize_chunk_context_contract` | 限制 chunk context 长度和 key terms |
+| `_extract_chat_content` | 从 OpenAI-compatible response 里取 message content |
 | `_extract_json_object` | 从模型输出里提取 JSON |
-| `_hashed_dense_vector` | deterministic embedding |
-| `_heuristic_source_compression` | 本地 source 压缩 |
-| `_heuristic_chunk_context` | 本地 chunk contextualization |
+| `_scalar_metadata` | 控制传给 chunk contextualizer 的 metadata |
+| `_limit_words` | 限制模型返回的上下文长度 |
 
 这些 helper 的意义是：
 
 > 即使模型输出有小偏差，也尽量在 provider 层把它规范成稳定 contract，不把脏数据扩散到 graph runtime。
+
+deterministic 相关的 `_hashed_dense_vector`、`_heuristic_source_compression`、`_heuristic_chunk_context` 已经挪到 `deterministic_provider.py`，读真模型链路时可以先跳过。
 
 ## 9. 读代码顺序
 
@@ -489,7 +501,7 @@ providers.py:1044-1064
 7. `OpenAICompatibleResearchModelProvider.compose_report`
 8. `OpenAICompatibleResearchModelProvider.assess_report`
 9. `build_model_provider` / `build_embedding_provider`
-10. 再回头看 deterministic provider，把它理解成 test double
+10. 最后看 `deterministic_provider.py`，把它理解成 test double
 
 不要一开始就陷进 deterministic 的启发式规则里。你秋招讲项目时，重点应该讲真模型 provider 和结构化 contract。
 

@@ -49,7 +49,7 @@ flowchart LR
 
 这一点很容易误会：
 
-> 你如果只看 `agents/`，会觉得里面没有多少“大模型逻辑”。这是正常的。真正的 prompt、结构化 JSON schema 调用、OpenAI-compatible HTTP 请求、embedding 调用和 deterministic test double 都在 `providers.py`。`agents/` 的价值是定义角色边界，`providers.py` 才是模型能力实现层。
+> 你如果只看 `agents/`，会觉得里面没有多少“大模型逻辑”。这是正常的。真正的 prompt、结构化 JSON schema 调用、OpenAI-compatible HTTP 请求和 embedding 调用都在 `providers.py`。为了让主链路更好读，deterministic test double 已经拆到 `deterministic_provider.py`，`providers.py` 现在更聚焦真实模型适配。
 
 继续学习时建议接着看：
 
