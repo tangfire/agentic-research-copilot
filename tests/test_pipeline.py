@@ -9,7 +9,15 @@ from agentic_research_copilot.providers import (
 )
 from agentic_research_copilot.agents import ResearchAgent
 from agentic_research_copilot.settings import AppSettings
-from agentic_research_copilot.schemas import EvidenceItem, PlanItem, ResearchJob, ResearchRequest
+from agentic_research_copilot.schemas import (
+    EvidenceItem,
+    PlanItem,
+    ResearchJob,
+    ResearchNote,
+    ResearchRequest,
+    RetrievalRoute,
+    SearchQuery,
+)
 from agentic_research_copilot.source_reader import SourceReader
 
 
@@ -147,12 +155,17 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(checkpoint.stage == "rag.evaluated" for checkpoint in result.checkpoints)
     assert result.report.source_index
     assert any(item.kind == "run-artifact" for item in result.evidence)
-    assert any(
-        item.kind == "run-artifact"
-        for section in result.report.sections
-        if section.heading == "Execution flow"
-        for item in section.citations
-    )
+    legacy_system_headings = {
+        "Problem framing",
+        "Execution flow",
+        "Contextual grounding",
+        "Trade-offs and failure modes",
+    }
+    plan_questions = {item.question for item in result.plan}
+    assert not any(section.heading in legacy_system_headings for section in result.report.sections)
+    assert all(section.heading in plan_questions for section in result.report.sections)
+    assert all(section.citations for section in result.report.sections)
+    assert any("multi-agent memory" in section.content.lower() for section in result.report.sections)
     assert result.web_hits is not None
     assert result.document_hits
     assert any(hit.kind == "document-chunk" for hit in result.document_hits)
@@ -166,6 +179,74 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(record.metadata.get("run_id") == result.run_id for record in copilot.memory.list())
     assert copilot.list_runs()
     assert copilot.get_run(result.run_id) is not None
+
+
+def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):
+    copilot = ResearchCopilot(settings=AppSettings(storage_path=str(tmp_path / "sections.sqlite")))
+    request = ResearchRequest(topic="battery recycling supply chain", max_sections=1)
+    plan = [
+        PlanItem(
+            id="item_1",
+            question="How do closed-loop recycling partnerships affect battery material supply?",
+            purpose="Explain whether recycling can reduce supply pressure for critical minerals.",
+            search_query="closed loop battery recycling partnerships critical minerals",
+        )
+    ]
+    route = RetrievalRoute(
+        plan_item_id="item_1",
+        mode="external",
+        reason="Need current market evidence.",
+        selected_tools=["web_search"],
+        web_queries=["closed loop battery recycling partnerships critical minerals"],
+        min_evidence=1,
+        min_sources=1,
+    )
+    evidence = [
+        EvidenceItem(
+            title="Battery recycling partnership report",
+            source="market-report",
+            kind="web",
+            url="https://example.test/battery-recycling",
+            snippet="Closed-loop battery recycling partnerships recover lithium, nickel, and cobalt for reuse.",
+            content="Closed-loop battery recycling partnerships can reduce critical mineral supply pressure.",
+            score=0.91,
+            metadata={"plan_item_id": "item_1"},
+        )
+    ]
+    note = ResearchNote(
+        plan_item_id="item_1",
+        question=plan[0].question,
+        finding="Closed-loop recycling partnerships recover lithium, nickel, and cobalt for reuse.",
+        evidence_titles=["Battery recycling partnership report"],
+        confidence=0.84,
+        sufficiency_score=1.0,
+    )
+
+    sections = copilot._build_sections(
+        request=request,
+        research_brief="Assess battery recycling supply chain effects.",
+        plan=plan,
+        retrieval_routes=[route],
+        evidence=evidence,
+        web_hits=evidence,
+        memory_hits=[],
+        document_hits=[],
+        notes=[note],
+        search_queries=[
+            SearchQuery(
+                query="closed loop battery recycling partnerships critical minerals",
+                intent="Gather evidence for battery recycling supply effects.",
+                plan_item_id="item_1",
+            )
+        ],
+    )
+
+    assert len(sections) == 1
+    assert sections[0].heading == plan[0].question
+    assert "battery recycling supply chain" in sections[0].content.lower()
+    assert "closed-loop recycling partnerships" in sections[0].content
+    assert "LangGraph StateGraph" not in sections[0].content
+    assert [item.title for item in sections[0].citations] == ["Battery recycling partnership report"]
 
 
 def test_report_evidence_ranking_keeps_weak_sources_visible_but_not_primary(tmp_path: Path):

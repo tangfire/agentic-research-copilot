@@ -949,25 +949,36 @@ pipeline.py:1399-1606
 
 这里生成的是给 `ReporterAgent` 的 section 草稿，不是最终报告。
 
-它会构造这些章节：
+它现在不是生成固定的系统介绍章节，而是按 `plan` 里的 `PlanItem` 生成 topic 相关章节。
 
-- Problem framing
-- Execution flow
-- Contextual grounding
-- Trade-offs and failure modes
-- Verification and next steps
-- 如果是 deep 模式，还会加 Delivery and evaluation
+核心逻辑是：
+
+1. 先对 evidence 排序，过滤掉 `run-artifact` 这类过程指标，优先保留真正回答 topic 的证据。
+2. 按 `metadata.plan_item_id` 把 evidence 归到对应计划项。
+3. 用 `ResearchNote.evidence_titles` 再补充一次 citation 对齐。
+4. 每个计划项生成一个 `ReportSection`，heading 来自 `PlanItem.question`。
+5. section content 会融合：
+   - 用户 topic。
+   - 计划项目的 question 和 purpose。
+   - `ResearchNote.finding`。
+   - citation 的标题、snippet、content 摘要。
+   - retrieval route 和 search query 信息。
+   - 如果有 gaps 或 follow-up queries，也会写进章节。
+
+这个改动很重要：
+
+> 早期实现曾经把 `_build_sections` 写成固定的系统自述章节，例如 `Problem framing`、`Execution flow`、`Contextual grounding`。这会让报告偏离用户真正的研究 topic。现在章节草稿已经改成围绕 `plan + notes + evidence` 生成，`ReporterAgent` 再在这个 topic 相关草稿上做最终合成。
 
 你要理解：
 
-> `_build_sections` 是规则层的报告骨架，`ReporterAgent` 再用模型把这些骨架合成为更自然的报告。
+> `_build_sections` 是规则层的 topic 报告骨架，`ReporterAgent` 再用模型把这些骨架合成为更自然的报告。它的职责不是介绍这个项目怎么运行，而是把前面研究阶段收集到的结果变成可以写报告的章节草稿。
 
 ## 17. Confidence、evidence 和排序 helper
 
 位置：
 
 ```text
-pipeline.py:1607-1730
+pipeline.py:1626-1749
 ```
 
 ### `_estimate_confidence`

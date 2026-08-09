@@ -1485,124 +1485,143 @@ class ResearchCopilot:
         search_queries: list[SearchQuery],
     ) -> list[ReportSection]:
         sections: list[ReportSection] = []
-        plan_count = len(plan)
         base_sources = self._source_names(evidence)
         ranked_evidence = self._rank_evidence_for_report(evidence)
-        run_artifacts = [item for item in ranked_evidence if item.kind == "run-artifact"]
-        external_grounding = [
+        topic_evidence = [
             item
             for item in ranked_evidence
-            if item.kind == "web" and item.source not in {"memory", "internal-note"}
+            if item.kind != "run-artifact" and item.source not in {"run-ledger", "internal-note"}
         ]
-        project_grounding = self._rank_evidence_for_report(document_hits)[:4] or ranked_evidence[:4]
-        non_memory_grounding = [
-            item
-            for item in ranked_evidence
-            if item.kind != "memory" and item.source != "memory"
-        ]
+        note_lookup = {note.plan_item_id: note for note in notes}
+        route_lookup = {route.plan_item_id: route for route in retrieval_routes}
+        search_query_lookup: dict[str, list[SearchQuery]] = {}
+        evidence_by_plan: dict[str, list[EvidenceItem]] = {}
+        evidence_by_title = {item.title: item for item in topic_evidence}
 
-        section_specs: list[tuple[str, str, list[EvidenceItem]]] = [
-            (
-                "Problem framing",
-                (
-                    f"{research_brief} The current plan splits the topic into {plan_count} steps "
-                    "and frames the project as an AI Research Copilot: it starts from a complex question, "
-                    "plans the investigation, then uses LangGraph + Agentic RAG to route between public and "
-                    "contextual evidence, verify citations, and store reusable memory."
-                ),
-                project_grounding + external_grounding[:2],
-            ),
-            (
-                "Execution flow",
-                (
-                    "The LangGraph StateGraph runs as supervisor -> memory -> planner -> research_supervisor -> researcher/retriever "
-                    "-> reporter -> verifier/evaluator -> memory. "
-                    f"It combines {len(search_queries)} generated queries, {len(retrieval_routes)} retrieval routes, "
-                    f"{len(web_hits)} web hits, {len(notes)} compressed notes, "
-                    f"{len(memory_hits)} memory hits, and {len(document_hits)} contextual grounding hits "
-                    "to keep the result evidence-backed and traceable. The research supervisor emits think_tool, "
-                    "ConductResearch, and ResearchComplete decisions; each delegated unit records external search, "
-                    "vector_retrieval, memory_recall, tool selection, query rewrite counts, and source-indexed "
-                    "checkpoints so the handoff trace can be reviewed after the run. The graph uses single-node "
-                    "LangGraph SQLite checkpointing by default, while SQLite also stores durable run traces and replay artifacts; "
-                    "the job layer is a single-worker queue with queued, retry, and cancelled states rather than a "
-                    "distributed scheduler."
-                ),
-                run_artifacts + project_grounding[:3],
-            ),
-            (
-                "Contextual grounding",
-                (
-                    "Memory stores session notes, canonical facts, and topic summaries with confidence metadata, while the "
-                    "grounding layer prepends chunk-specific contextual retrieval prefixes before writing to a "
-                    "Qdrant-backed dense embedding index plus SQLite FTS5 BM25 keyword search, then uses "
-                    "RRF/DBSF hybrid fusion and a Qwen/DashScope reranker that falls back to a "
-                    "deterministic rule_diversity_chunk_bonus reranker when no API key is configured. "
-                    "Web search stays separate until report assembly, so project context stays traceable and fresh evidence "
-                    "remains distinct. The same retrieval contract can still swap in a cross-encoder or another hosted "
-                    "reranker later."
-                ),
-                project_grounding + external_grounding[:2],
-            ),
-            (
-                "Trade-offs and failure modes",
-                (
-                    "The system does not pretend that every search result is authoritative. Search providers can surface "
-                    "tutorials, community discussions, or low-signal pages, so source quality is handled as an evaluation "
-                    "and presentation concern: weak sources remain visible in trace artifacts, while the report should "
-                    "prefer project documents, official references, papers, and source-backed run artifacts for core "
-                    "claims. The single-node queue and SQLite checkpoint design are intentional for a personal research "
-                    "assistant; a multi-tenant SaaS would need stronger auth, rate limits, distributed queue operations, "
-                    "human review, and production monitoring."
-                ),
-                run_artifacts + non_memory_grounding[:4],
-            ),
-            (
-                "Verification and next steps",
-                (
-                    "The verifier checks source diversity, plan coverage, evidence sufficiency, and confidence, while the "
-                    "RAG evaluator records retrieval coverage, source quality, citation precision, citation source coverage, "
-                    "context precision, context recall, faithfulness proxy, and unsupported sections before the report is "
-                    "considered complete. Source quality is evaluation-side instead of a runtime hard filter, matching the "
-                    "Open Deep Research reference shape and leaving provider ranking to Tavily, Exa, Perplexity, Brave, "
-                    "SerpAPI, arXiv, PubMed, or other configured search providers. Real demos can use an OpenAI-compatible "
-                    "chat provider, Qwen embeddings, and Tavily search, while deterministic providers remain the default "
-                    "for stable tests. When citations or evidence sufficiency fail, the Verifier and Evaluator trigger the "
-                    "revision loop until the revision budget is exhausted. "
-                    f"This run recalled {len(memory_hits)} memory items; when memory is thin, the trace makes that gap visible "
-                    "instead of hiding it behind fluent output."
-                ),
-                run_artifacts + non_memory_grounding[:4],
-            ),
-        ]
+        for query in search_queries:
+            if query.plan_item_id:
+                search_query_lookup.setdefault(query.plan_item_id, []).append(query)
 
-        if request.depth == "deep":
-            section_specs.append(
-                (
-                    "Delivery and evaluation",
-                    (
-                        "A stronger version of the project should expose run replay, evaluation metrics, and provider swaps "
-                        "so the copilot can be demonstrated as a usable product instead of a demo. The intended demo path "
-                        "uses an OpenAI-compatible chat provider, Qwen embeddings, and Tavily or another real search "
-                        "provider, while deterministic providers remain the default for tests."
-                    ),
-                    evidence[1:7],
+        for evidence_item in topic_evidence:
+            plan_item_id = evidence_item.metadata.get("plan_item_id")
+            if plan_item_id:
+                evidence_by_plan.setdefault(str(plan_item_id), []).append(evidence_item)
+
+        planned_items = [item for item in plan if getattr(item, "requires_research", True)] or list(plan)
+        max_sections = max(1, request.max_sections)
+        for index, item in enumerate(planned_items[:max_sections], start=1):
+            note = note_lookup.get(item.id)
+            route = route_lookup.get(item.id)
+            citations = list(evidence_by_plan.get(item.id, []))
+            if note is not None:
+                citations.extend(
+                    evidence_by_title[title]
+                    for title in note.evidence_titles
+                    if title in evidence_by_title
                 )
-            )
+            if not citations:
+                citations = topic_evidence[:4] or ranked_evidence[:4]
 
-        for heading, content, citations in section_specs[: request.max_sections]:
             section_citations = self._dedupe_evidence(citations)
             sections.append(
                 ReportSection(
-                    heading=heading,
-                    content=content,
+                    heading=self._section_heading(item, index),
+                    content=self._section_content(
+                        request=request,
+                        research_brief=research_brief,
+                        item=item,
+                        note=note,
+                        route=route,
+                        citations=section_citations,
+                        search_queries=search_query_lookup.get(item.id, []),
+                    ),
                     citations=section_citations,
                     evidence_count=len(section_citations),
                     source_summary=self._source_names(section_citations) or base_sources[:3],
                 )
             )
 
+        if not sections and ranked_evidence:
+            section_citations = self._dedupe_evidence(topic_evidence[:4] or ranked_evidence[:4])
+            sections.append(
+                ReportSection(
+                    heading=request.topic,
+                    content=self._fallback_section_content(request.topic, research_brief, section_citations),
+                    citations=section_citations,
+                    evidence_count=len(section_citations),
+                    source_summary=self._source_names(section_citations) or base_sources[:3],
+                )
+            )
         return sections
+
+    def _section_heading(self, item, index: int) -> str:
+        heading = " ".join(str(getattr(item, "question", "")).split())
+        if not heading:
+            return f"Research question {index}"
+        return heading[:120].rstrip()
+
+    def _section_content(
+        self,
+        *,
+        request: ResearchRequest,
+        research_brief: str,
+        item,
+        note: ResearchNote | None,
+        route: RetrievalRoute | None,
+        citations: list[EvidenceItem],
+        search_queries: list[SearchQuery],
+    ) -> str:
+        finding = (note.finding if note is not None else "").strip()
+        if not finding:
+            finding = self._fallback_section_content(item.question, research_brief, citations)
+
+        evidence_summary = self._evidence_summary(citations)
+        parts = [
+            f"This section answers: {item.question}",
+            f"Research goal: {request.topic}.",
+            f"Why it matters: {item.purpose}",
+            f"Finding: {finding}",
+        ]
+        if evidence_summary:
+            parts.append(f"Grounding evidence: {evidence_summary}")
+        if route is not None:
+            tool_summary = ", ".join(route.selected_tools) or route.mode
+            parts.append(
+                f"Retrieval route: {route.mode} using {tool_summary}; "
+                f"sufficiency target is {route.min_evidence} evidence item(s) "
+                f"from {route.min_sources} source group(s)."
+            )
+        if search_queries:
+            query_text = "; ".join(query.query for query in search_queries[:3])
+            parts.append(f"Queries used: {query_text}.")
+        if note is not None and note.gaps:
+            parts.append(f"Remaining caveats: {'; '.join(note.gaps[:3])}.")
+        if note is not None and note.follow_up_queries:
+            parts.append(f"Useful follow-up: {'; '.join(note.follow_up_queries[:2])}.")
+        return " ".join(part.strip() for part in parts if part and part.strip())
+
+    def _fallback_section_content(
+        self,
+        topic: str,
+        research_brief: str,
+        citations: list[EvidenceItem],
+    ) -> str:
+        evidence_summary = self._evidence_summary(citations)
+        if evidence_summary:
+            return f"{research_brief} Evidence related to {topic}: {evidence_summary}"
+        return f"{research_brief} No citation-backed evidence was available for {topic}."
+
+    def _evidence_summary(self, citations: list[EvidenceItem]) -> str:
+        snippets: list[str] = []
+        for item in citations[:3]:
+            text = " ".join(
+                part.strip()
+                for part in [item.title, item.snippet or "", item.content or ""]
+                if part and part.strip()
+            )
+            if text:
+                snippets.append(text[:320].rstrip())
+        return " ".join(snippets)
 
     def _estimate_confidence(
         self,
