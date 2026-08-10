@@ -27,7 +27,10 @@ def test_default_reranker_uses_dashscope_with_local_fallback(monkeypatch):
     assert settings.research_max_iterations == 3
     assert settings.rag_graph_enabled is True
     assert settings.rag_graph_max_entities_per_chunk == 12
+    assert settings.rag_graph_max_relationships_per_chunk == 16
     assert settings.rag_graph_neighbor_limit == 8
+    assert settings.rag_graph_entity_candidate_limit == 8
+    assert settings.rag_graph_relation_candidate_limit == 8
 
 
 def test_load_settings_reads_dotenv_and_common_key_aliases(tmp_path, monkeypatch):

@@ -73,7 +73,7 @@ It turns a user question into a research artifact by combining:
 - Jobs: single-worker background queue for offline tests, plus Celery/Redis for strict single-node worker separation; queued/running/completed/failed/cancelled states, retry metadata, and cancellation records
 - Search/reading: offline-safe local mode by default, with Open Deep Research-style providers (`tavily`, `exa`, `perplexity`, `arxiv`, `pubmed`, `linkup`, `openai_web`, `anthropic_web`) plus practical adapters (`duckduckgo`, `brave`, `serpapi`) behind the same tool contract; Tavily can request raw page content and the source reader compresses it into source-backed evidence excerpts; strict demo mode requires a configured real provider
 - Document ingestion: local file reader for text/Markdown/HTML and optional PyMuPDF-backed PDF parsing; Markdown/HTML headings are preserved as section segments, and PDF pages are stored as separate block/table-aware segments with `page_number`/`page_count`, layout, heading-hint, and table metadata before vector chunking
-- Retrieval: paragraph-aware child chunking + Anthropic-style indexing-time contextual retrieval prefixes + parent-child context expansion + LightRAG-inspired entity/relation graph signal + Qdrant-backed dense vectors + SQLite FTS5/BM25 keyword index + RRF/DBSF fusion + Qwen/DashScope reranking, with local fallbacks reserved for tests/offline mode and disabled by `ARC_STRICT_PROVIDERS=true`
+- Retrieval: paragraph-aware child chunking + Anthropic-style indexing-time contextual retrieval prefixes + parent-child context expansion + LightRAG-inspired structured entity/relation graph extraction + Qdrant-backed dense vectors + SQLite FTS5/BM25 keyword index + RRF/DBSF fusion + Qwen/DashScope reranking, with local fallbacks reserved for tests/offline mode and disabled by `ARC_STRICT_PROVIDERS=true`
 - Memory: layered session, canonical fact, and summary records persisted in SQLite, with embedding-assisted recall and conflict governance
 - Model runtime: OpenAI-compatible chat/embedding adapter with deterministic test doubles
 - UI: dependency-light research workspace served by FastAPI, with provider readiness, job progress, report review, route inspection, and trace timeline in one local console
@@ -197,12 +197,14 @@ FTS5 keyword index, fuses dense and BM25 results with
 RRF/DBSF, and reranks the candidates. The returned evidence uses a parent-child
 pattern: precise child chunks are retrieved, then the same document/section/page
 parent context plus neighboring child chunks are returned for synthesis. The
-store also maintains a LightRAG-inspired lightweight entity co-occurrence graph:
-query entities retrieve directly matched chunks and nearby relation-neighbor
-chunks, then the graph score is fused with dense/BM25 candidates before
-reranking. Parsing, chunking, graph indexing, retrieval, and report synthesis
-stay separated so the reader can be strengthened later without rewriting the
-research graph.
+store also maintains a LightRAG-inspired structured entity/relation graph: the
+indexer asks the model for canonical entities and explicit relationships, then
+falls back to deterministic extraction only when real-provider mode is not
+available. Query-time graph retrieval separates local entity keywords from
+global relationship keywords, scores both entity and relation matches, and fuses
+the graph score with dense/BM25 candidates before reranking. Parsing, chunking,
+graph indexing, retrieval, and report synthesis stay separated so the reader
+can be strengthened later without rewriting the research graph.
 
 Install the document parsing extra when PDF ingestion is needed:
 
@@ -266,7 +268,10 @@ pip install -e .[documents]
 - `ARC_RAG_HYBRID_FUSION=rrf`
 - `ARC_RAG_GRAPH_ENABLED=true`
 - `ARC_RAG_GRAPH_MAX_ENTITIES_PER_CHUNK=12`
+- `ARC_RAG_GRAPH_MAX_RELATIONSHIPS_PER_CHUNK=16`
 - `ARC_RAG_GRAPH_NEIGHBOR_LIMIT=8`
+- `ARC_RAG_GRAPH_ENTITY_CANDIDATE_LIMIT=8`
+- `ARC_RAG_GRAPH_RELATION_CANDIDATE_LIMIT=8`
 - `ARC_RERANK_PROVIDER=dashscope`
 - `ARC_RERANK_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1`
 - `ARC_RERANK_API_KEY=`
@@ -571,7 +576,7 @@ agentic-research-copilot/
 - The API is runnable and exposes research jobs, status/result views, memory, documents, telemetry, config, and run history.
 - A local web workspace is available at `/` for the portal and admin inspection flows.
 - The pipeline now runs through a LangGraph `StateGraph` with supervisor, memory, planner, research_supervisor, parallel research, reporter, verifier/evaluator, memory-write, and finalization nodes.
-- It includes ODR-style supervisor tool calls, supervisor-driven handoffs, Agentic RAG routes derived from `ConductResearch`, query rewrites, tool selection, evidence sufficiency checks, concurrent plan-item research, provider raw-content source reading, optional model compression, LightRAG-inspired entity/relation graph augmentation, parent-child retrieval, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, Qwen/DashScope reranking, strict real-provider demo mode, layered memory, semantic memory recall, memory governance, structured contracts, single-node LangGraph SQLite checkpoint support, SQLite replay traces, RAG/citation/source evaluation, and report generation.
+- It includes ODR-style supervisor tool calls, supervisor-driven handoffs, Agentic RAG routes derived from `ConductResearch`, query rewrites, tool selection, evidence sufficiency checks, concurrent plan-item research, provider raw-content source reading, optional model compression, LightRAG-inspired structured entity/relation graph augmentation, parent-child retrieval, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, Qwen/DashScope reranking, strict real-provider demo mode, layered memory, semantic memory recall, memory governance, structured contracts, single-node LangGraph SQLite checkpoint support, SQLite replay traces, RAG/citation/source evaluation, and report generation.
 - Strict real-provider runs are supported with an OpenAI-compatible chat provider, Qwen/DashScope embeddings and reranking, Tavily search, Qdrant, Celery/Redis, LangGraph SQLite checkpointing, and the local MCP workbench.
 - Demo artifacts should be regenerated before interviews from a populated grounding corpus and at least one completed memory-writing run. An empty corpus or empty memory store means the system is technically ready but the demonstration is not yet convincing.
 - The local Open Deep Research reference does not implement a standalone runtime source-quality filter. This repo follows that shape: source quality is scored in evaluation and traces, while search provider ranking/filtering is left to the configured provider.
@@ -602,7 +607,7 @@ Interview explanation:
 
 Advanced RAG explanation:
 
-> The grounding layer combines Contextual Retrieval, Hybrid Search, Rerank, Query Rewrite, Parent-Child retrieval, and a LightRAG-inspired graph signal. Each child chunk receives an indexing-time context prefix before it is written to Qdrant dense vectors and a real SQLite FTS5/BM25 keyword index; entity/relation graph hits are fused into the candidate set, a reranker orders the evidence, and the final evidence expands back to parent/neighbor context for report synthesis. This is graph-augmented RAG inside an ODR-style research workflow, not a standalone GraphRAG framework.
+> The grounding layer combines Contextual Retrieval, Hybrid Search, Rerank, Query Rewrite, Parent-Child retrieval, and a LightRAG-inspired structured entity/relation graph. Each child chunk receives an indexing-time context prefix before it is written to Qdrant dense vectors and a real SQLite FTS5/BM25 keyword index; the model extracts canonical entities and explicit relationships, graph hits are fused into the candidate set, a reranker orders the evidence, and the final evidence expands back to parent/neighbor context for report synthesis. This is graph-augmented RAG inside an ODR-style research workflow, not a standalone GraphRAG framework.
 
 Do not present upstream code as your original work.
 

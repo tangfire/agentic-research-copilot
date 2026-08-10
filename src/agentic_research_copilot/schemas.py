@@ -71,6 +71,57 @@ class ChunkContextContract(BaseModel):
     confidence: float = 0.0
 
 
+class KnowledgeGraphEntity(BaseModel):
+    name: str
+    entity_type: str = "concept"
+    description: str = ""
+    aliases: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def _normalize_aliases(cls, value: Any) -> Any:
+        return _none_to_empty_list(value)
+
+
+class KnowledgeGraphRelationship(BaseModel):
+    source: str
+    target: str
+    relation_type: str = "related_to"
+    description: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    weight: float = 1.0
+    confidence: float = 0.0
+
+    @field_validator("keywords", mode="before")
+    @classmethod
+    def _normalize_keywords(cls, value: Any) -> Any:
+        return _none_to_empty_list(value)
+
+
+class KnowledgeGraphExtractionContract(BaseModel):
+    entities: list[KnowledgeGraphEntity] = Field(default_factory=list)
+    relationships: list[KnowledgeGraphRelationship] = Field(default_factory=list)
+    summary: str = ""
+    confidence: float = 0.0
+
+    @field_validator("entities", "relationships", mode="before")
+    @classmethod
+    def _normalize_graph_lists(cls, value: Any) -> Any:
+        return _none_to_empty_list(value)
+
+
+class KnowledgeGraphQueryContract(BaseModel):
+    local_keywords: list[str] = Field(default_factory=list)
+    global_keywords: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+
+    @field_validator("local_keywords", "global_keywords", mode="before")
+    @classmethod
+    def _normalize_query_keywords(cls, value: Any) -> Any:
+        return _none_to_empty_list(value)
+
+
 class ResearchNote(BaseModel):
     plan_item_id: str
     question: str

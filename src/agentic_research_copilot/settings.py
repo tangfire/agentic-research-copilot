@@ -79,7 +79,10 @@ class AppSettings(BaseModel):
     rag_hybrid_fusion: Literal["rrf", "dbsf"] = "rrf"
     rag_graph_enabled: bool = True
     rag_graph_max_entities_per_chunk: int = 12
+    rag_graph_max_relationships_per_chunk: int = 16
     rag_graph_neighbor_limit: int = 8
+    rag_graph_entity_candidate_limit: int = 8
+    rag_graph_relation_candidate_limit: int = 8
     rerank_provider: Literal["rule", "dashscope", "qwen", "qwen3"] = "dashscope"
     rerank_base_url: str = DASHSCOPE_COMPATIBLE_BASE_URL
     rerank_api_key: str = ""
@@ -155,7 +158,10 @@ def load_settings() -> AppSettings:
         rag_hybrid_fusion=os.getenv("ARC_RAG_HYBRID_FUSION", "rrf").lower(),
         rag_graph_enabled=_env_bool("ARC_RAG_GRAPH_ENABLED", True),
         rag_graph_max_entities_per_chunk=int(os.getenv("ARC_RAG_GRAPH_MAX_ENTITIES_PER_CHUNK", "12")),
+        rag_graph_max_relationships_per_chunk=int(os.getenv("ARC_RAG_GRAPH_MAX_RELATIONSHIPS_PER_CHUNK", "16")),
         rag_graph_neighbor_limit=int(os.getenv("ARC_RAG_GRAPH_NEIGHBOR_LIMIT", "8")),
+        rag_graph_entity_candidate_limit=int(os.getenv("ARC_RAG_GRAPH_ENTITY_CANDIDATE_LIMIT", "8")),
+        rag_graph_relation_candidate_limit=int(os.getenv("ARC_RAG_GRAPH_RELATION_CANDIDATE_LIMIT", "8")),
         rerank_provider=os.getenv("ARC_RERANK_PROVIDER", "dashscope").lower(),
         rerank_base_url=os.getenv("ARC_RERANK_BASE_URL", DASHSCOPE_COMPATIBLE_BASE_URL).rstrip("/"),
         rerank_api_key=_first_env("ARC_RERANK_API_KEY", "DASHSCOPE_API_KEY", "QWEN_API_KEY"),

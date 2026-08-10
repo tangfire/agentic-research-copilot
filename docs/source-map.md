@@ -41,8 +41,8 @@
 - Conceptual ideas used here: graph-enhanced text indexing, entity/relation
   signals, vector + graph retrieval fusion, and lightweight incremental updates.
 - No LightRAG runtime code is copied into this repo. The local implementation is
-  a product-specific, lightweight entity co-occurrence index fused into the
-  existing contextual-retrieval + Qdrant dense + SQLite FTS5/BM25 + rerank grounding layer.
+  a product-specific structured entity/relation index fused into the existing
+  contextual-retrieval + Qdrant dense + SQLite FTS5/BM25 + rerank grounding layer.
 
 ### Original modules in this repo
 
@@ -67,7 +67,7 @@
 - `scripts/run_llm_judge_eval.py`: optional Open Deep Research-style LLM-as-judge evaluation artifact for saved demo reports
 - `scripts/run_ragas_eval.py`: optional Ragas evaluation artifact over saved report and trace evidence
 - `scripts/start_real.ps1`: strict real-provider startup that validates providers, prepares Redis/Qdrant, starts the local MCP workbench server, starts a Celery worker, and serves the workspace
-- `retrieval/store.py`: parent-child chunking, indexing-time contextual retrieval prefixes, LightRAG-inspired entity/relation graph indexing, Qdrant dense vectors, SQLite FTS5/BM25 keyword indexing, RRF/DBSF fusion, local fallback fusion, graph-score fusion, parent/neighbor context expansion, and reranking contract
+- `retrieval/store.py`: parent-child chunking, indexing-time contextual retrieval prefixes, LightRAG-inspired structured entity/relation graph indexing, Qdrant dense vectors, SQLite FTS5/BM25 keyword indexing, RRF/DBSF fusion, local fallback fusion, graph-score fusion, parent/neighbor context expansion, and reranking contract
 - `retrieval/fulltext.py`: single-node SQLite FTS5 keyword index using SQLite's `bm25()` ranking so lexical recall is a real BM25 path rather than a pseudo hashed-token vector
 - `retrieval/rerank.py`: Qwen/DashScope reranker plus offline rule rerank fallback, disabled by strict demo mode
 - `memory/store.py`: layered session, canonical fact, and summary memory with embedding-assisted recall and governance metadata
@@ -108,7 +108,7 @@ Interview study checkpoint:
   and evaluation each solve a concrete research-copilot problem.
 - You should be able to name the honest boundaries: single-node deployment,
   provider raw-content reading instead of browser automation, page/block/table PDF
-  metadata instead of OCR, lightweight graph signal instead of full GraphRAG, and
+  metadata instead of OCR, structured graph signal instead of full GraphRAG, and
   proxy evaluation instead of a large benchmark.
 - You should be able to demo at least one populated run with documents, memory,
   MCP evidence, trace, and evaluation artifacts.

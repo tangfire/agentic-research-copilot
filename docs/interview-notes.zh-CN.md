@@ -80,7 +80,7 @@ RAG 最容易被忽视的一块其实是解析和分块。向量库、rerank、�
 当前本地 grounding 路径拆成两个阶段：
 
 1. `DocumentReader` 负责文件解析和 segment metadata。
-2. `DocumentStore` 负责 contextual retrieval prefixing、paragraph-aware child chunking、LightRAG-inspired entity/relation graph indexing、embedding、dense/BM25 fusion、graph-score fusion、rerank，以及命中后的 parent/neighbor context 扩展。
+2. `DocumentStore` 负责 contextual retrieval prefixing、paragraph-aware child chunking、LightRAG-inspired structured entity/relation graph indexing、embedding、dense/BM25 fusion、graph-score fusion、rerank，以及命中后的 parent/neighbor context 扩展。
 
 `POST /v1/documents/ingest` 支持读取本地文件：
 
@@ -143,7 +143,7 @@ RAG 最容易被忽视的一块其实是解析和分块。向量库、rerank、�
 
 当前检索链路是：
 
-`contextual retrieval prefix + child chunks -> LightRAG-inspired graph signal + Qdrant dense + SQLite BM25 fusion -> reranker -> parent/neighbor context expansion`
+`contextual retrieval prefix + child chunks -> structured entity/relation graph + Qdrant dense + SQLite BM25 fusion -> reranker -> parent/neighbor context expansion`
 
 可以这样讲：
 
@@ -153,21 +153,21 @@ RAG 最容易被忽视的一块其实是解析和分块。向量库、rerank、�
 
 不要说“我完整复现了 LightRAG”，这样容易被追问到图存储、实体关系抽取、dual-level retrieval、增量更新和实验对比。更稳的说法是：
 
-> 我参考 LightRAG 的图增强检索思想，在本地 grounding 层里实现了轻量 entity/relation graph signal。文档进入索引时，系统会从标题、来源和原始 child chunk 中抽取实体，维护 chunk -> entity、entity -> chunk、entity -> neighbor entity 的共现关系。查询时先做 dense/BM25 hybrid retrieval，再用 query entity 命中和邻居关系补充候选，融合 `graph_score` 后交给 reranker。这样可以补足纯 embedding 对短实体名、组件名和跨 chunk 关系不敏感的问题。
+> 我参考 LightRAG 的图增强检索思想，在本地 grounding 层里实现了结构化 entity/relation graph signal。索引阶段由模型按 schema 抽取 canonical entities、entity types、descriptions 和 explicit relationships；查询阶段把问题拆成 local entity keywords 和 global relationship keywords，再分别匹配实体和关系候选，把 `graph_score` 融合进 dense/BM25 结果后交给 reranker。这样可以补足纯 embedding 对短实体名、组件名和跨 chunk 关系不敏感的问题。
 
 当前这块能讲的价值：
 
 - 它不是把 LightRAG 当 buzzword，而是把“图信号 + 向量检索 + rerank”接进了真实检索链路。
-- 图索引从原始 chunk 文本抽实体，避免把 `Document`、`Metadata`、`Excerpt` 这种包装字段当成实体。
-- graph hit 会体现在 evidence metadata 里，比如 `graph_query_entities`、`graph_matched_entities`、`graph_expanded_entities`、`graph_score`。
+- 图索引从 provider 的结构化 contract 进来，不再靠正则抽词。
+- graph hit 会体现在 evidence metadata 里，比如 `graph_query_entities`、`graph_query_local_keywords`、`graph_query_global_keywords`、`graph_matched_entities`、`graph_matched_relationships`、`graph_score`。
 - 这层图增强不改变 ODR 主流程；它只是强化内部资料、已读资料缓存和记忆召回的 grounding 能力。
 
 诚实边界也要说清楚：
 
-- 当前是 LightRAG-inspired lightweight graph，不是完整 LightRAG runtime。
-- 现在主要是实体共现和邻居扩展，还没有做 LLM 级别的实体/关系类型抽取。
-- 图索引随单节点内存和文档索引维护，还不是独立持久化图数据库。
-- 后续如果要继续强化，可以加 LLM relation extraction、persistent graph store、relation type、multi-hop traversal 和 retrieval ablation 实验。
+- 当前是 LightRAG-inspired structured graph，不是完整 LightRAG runtime。
+- 现在已经有 LLM 级别的实体/关系抽取，但还没有做独立持久化图数据库。
+- 图索引随单节点内存和文档索引维护，还不是独立图服务。
+- 后续如果要继续强化，可以加 persistent graph store、relation traversal depth、graph ablation experiments 和 graph-aware evaluation artifacts。
 
 ## 9. 当前诚实边界
 
@@ -248,7 +248,7 @@ Demo artifact 也要注意：`examples/llm-judge-report.json` 里如果出现“
 
 ## 10. 推荐面试说法
 
-> 我做这个项目时没有把 RAG 当成主路径，而是把它放在研究工作流里的 grounding 层。主流程用 LangGraph 编排：Planner 先拆解子问题，research supervisor 再按 ODR 风格输出 `think_tool`、`ConductResearch` 和 `ResearchComplete`；每个 `ConductResearch` 决定外部搜索、本地知识库和记忆召回的工具组合与 query rewrite。外部搜索会读取 provider raw content 并压缩成 citation-ready evidence，本地文档会先解析成带 metadata 的 document/section/page segments，再做 contextual retrieval prefixing、paragraph-aware child chunking、LightRAG-inspired graph augmentation、Qdrant dense + SQLite BM25 fusion、rerank 和 parent/neighbor context expansion。最后 reporter 只能引用已有 evidence，verifier/evaluator 会检查引用覆盖、source quality 和 faithfulness proxy，整条链路可以通过 trace 和 replay 回看。
+> 我做这个项目时没有把 RAG 当成主路径，而是把它放在研究工作流里的 grounding 层。主流程用 LangGraph 编排：Planner 先拆解子问题，research supervisor 再按 ODR 风格输出 `think_tool`、`ConductResearch` 和 `ResearchComplete`；每个 `ConductResearch` 决定外部搜索、本地知识库和记忆召回的工具组合与 query rewrite。外部搜索会读取 provider raw content 并压缩成 citation-ready evidence，本地文档会先解析成带 metadata 的 document/section/page segments，再做 contextual retrieval prefixing、paragraph-aware child chunking、LightRAG-inspired structured entity/relation graph augmentation、Qdrant dense + SQLite BM25 fusion、rerank 和 parent/neighbor context expansion。最后 reporter 只能引用已有 evidence，verifier/evaluator 会检查引用覆盖、source quality 和 faithfulness proxy，整条链路可以通过 trace 和 replay 回看。
 ## 11. MCP 这里怎么讲
 
 ODR 不是固定配了 filesystem、GitHub 或浏览器这类 MCP server。它的主线设计是 `mcp_config.url + mcp_config.tools + auth_required`，再通过 `MultiServerMCPClient` 把 allowlist 里的工具挂到 researcher tool loop 里。

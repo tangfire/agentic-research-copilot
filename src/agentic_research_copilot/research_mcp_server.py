@@ -284,7 +284,7 @@ def recommend_demo_questions(query: str) -> dict[str, Any]:
             "title": "Local grounding quality",
             "question": (
                 "Evaluate how contextual retrieval prefixes, SQLite BM25, Qdrant dense search, "
-                "LightRAG-inspired graph signal, and rerank improve local document grounding."
+                "LightRAG-inspired structured entity/relation graph signal, and rerank improve local document grounding."
             ),
             "uses": ["vector_retrieval", "mcp_tool", "ragas_artifact", "source_index"],
             "why": "Good for showing advanced RAG engineering instead of a toy vector search.",

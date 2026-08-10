@@ -13,6 +13,10 @@ from .schemas import (
     ClarificationContract,
     CorpusProfile,
     EvidenceItem,
+    KnowledgeGraphEntity,
+    KnowledgeGraphExtractionContract,
+    KnowledgeGraphQueryContract,
+    KnowledgeGraphRelationship,
     MemoryRecord,
     PlanItem,
     PlannerContract,
@@ -403,6 +407,99 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         )
         return _normalize_chunk_context_contract(contract), usage
 
+    def extract_knowledge_graph(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+        max_entities: int,
+        max_relationships: int,
+    ) -> tuple[KnowledgeGraphExtractionContract, ModelUsage]:
+        payload = {
+            "document": {
+                "title": document_title,
+                "source": source,
+                "metadata": _scalar_metadata(metadata, limit=12),
+                "excerpt": document_excerpt[:12000],
+            },
+            "chunk": {
+                "index": chunk_index + 1,
+                "total_chunks": total_chunks,
+                "text": chunk_text[:4000],
+            },
+            "limits": {
+                "max_entities": max_entities,
+                "max_relationships": max_relationships,
+            },
+            "instructions": (
+                "Extract a compact knowledge graph grounded only in this document chunk. "
+                "Entities must use stable canonical names, specific entity types, concise factual "
+                "descriptions, aliases only when explicitly supported, and confidence from 0 to 1. "
+                "Relationships must connect extracted entity names, describe an explicit relation "
+                "supported by the chunk, include a short normalized relation_type plus retrieval "
+                "keywords, and avoid generic co-occurrence. Prefer fewer high-value records over "
+                "speculative records. Do not invent entities or relations."
+            ),
+        }
+        contract, usage = self._chat_structured(
+            system_prompt=(
+                "You are the indexing-time knowledge graph extractor for a LightRAG-inspired "
+                "retrieval system. Return valid JSON only that conforms to the supplied schema. "
+                "Extract both entity-level facts and relationship-level facts so downstream "
+                "retrieval can support local entity queries and global relationship queries."
+            ),
+            user_payload=payload,
+            schema=KnowledgeGraphExtractionContract.model_json_schema(),
+            response_model=KnowledgeGraphExtractionContract,
+        )
+        return _normalize_knowledge_graph_extraction_contract(
+            contract,
+            max_entities=max_entities,
+            max_relationships=max_relationships,
+        ), usage
+
+    def extract_graph_query(
+        self,
+        *,
+        query: str,
+        max_local_keywords: int,
+        max_global_keywords: int,
+    ) -> tuple[KnowledgeGraphQueryContract, ModelUsage]:
+        payload = {
+            "query": query,
+            "limits": {
+                "max_local_keywords": max_local_keywords,
+                "max_global_keywords": max_global_keywords,
+            },
+            "instructions": (
+                "Split the query into two retrieval views. local_keywords should contain concrete "
+                "entity names, components, people, organizations, systems, locations, identifiers, "
+                "or narrow concepts. global_keywords should contain relationship types, themes, "
+                "actions, mechanisms, risks, causes, effects, or high-level concepts. Keep phrases "
+                "short, deduplicated, and grounded in the query."
+            ),
+        }
+        contract, usage = self._chat_structured(
+            system_prompt=(
+                "You create dual-level graph retrieval keywords for a LightRAG-inspired system. "
+                "Return valid JSON only that conforms to the supplied schema. Local keywords target "
+                "entities; global keywords target relationships and themes."
+            ),
+            user_payload=payload,
+            schema=KnowledgeGraphQueryContract.model_json_schema(),
+            response_model=KnowledgeGraphQueryContract,
+        )
+        return _normalize_knowledge_graph_query_contract(
+            contract,
+            max_local_keywords=max_local_keywords,
+            max_global_keywords=max_global_keywords,
+        ), usage
+
     def embed_text(self, text: str) -> tuple[list[float], ModelUsage]:
         start = time.perf_counter()
         payload = {"model": self.embedding_model, "input": text, "dimensions": self.embedding_dimensions}
@@ -655,6 +752,110 @@ def _normalize_chunk_context_contract(contract: ChunkContextContract) -> ChunkCo
             "context": context,
             "key_terms": key_terms,
             "provenance_hint": _trim_text(contract.provenance_hint, 220),
+            "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
+        }
+    )
+
+
+def _normalize_knowledge_graph_extraction_contract(
+    contract: KnowledgeGraphExtractionContract,
+    *,
+    max_entities: int,
+    max_relationships: int,
+) -> KnowledgeGraphExtractionContract:
+    entities: list[KnowledgeGraphEntity] = []
+    known_names: set[str] = set()
+    for entity in contract.entities:
+        name = _trim_text(entity.name, 160)
+        normalized_name = name.casefold()
+        if not name or normalized_name in known_names:
+            continue
+        known_names.add(normalized_name)
+        aliases = [
+            alias
+            for alias in dict.fromkeys(_trim_text(value, 120) for value in entity.aliases)
+            if alias and alias.casefold() != normalized_name
+        ][:8]
+        entities.append(
+            entity.model_copy(
+                update={
+                    "name": name,
+                    "entity_type": _trim_text(entity.entity_type, 80) or "concept",
+                    "description": _trim_text(entity.description, 500),
+                    "aliases": aliases,
+                    "confidence": max(0.0, min(1.0, float(entity.confidence or 0.0))),
+                }
+            )
+        )
+        if len(entities) >= max(1, max_entities):
+            break
+
+    canonical_names = {entity.name.casefold(): entity.name for entity in entities}
+    relationships: list[KnowledgeGraphRelationship] = []
+    seen_relations: set[tuple[str, str, str]] = set()
+    for relationship in contract.relationships:
+        source = canonical_names.get(_clean_text(relationship.source).casefold())
+        target = canonical_names.get(_clean_text(relationship.target).casefold())
+        relation_type = _trim_text(relationship.relation_type, 100) or "related_to"
+        relation_key = (
+            (source or "").casefold(),
+            (target or "").casefold(),
+            relation_type.casefold(),
+        )
+        if not source or not target or source == target or relation_key in seen_relations:
+            continue
+        seen_relations.add(relation_key)
+        keywords = [
+            keyword
+            for keyword in dict.fromkeys(_trim_text(value, 100) for value in relationship.keywords)
+            if keyword
+        ][:10]
+        relationships.append(
+            relationship.model_copy(
+                update={
+                    "source": source,
+                    "target": target,
+                    "relation_type": relation_type,
+                    "description": _trim_text(relationship.description, 500),
+                    "keywords": keywords,
+                    "weight": max(0.05, min(3.0, float(relationship.weight or 1.0))),
+                    "confidence": max(0.0, min(1.0, float(relationship.confidence or 0.0))),
+                }
+            )
+        )
+        if len(relationships) >= max(1, max_relationships):
+            break
+
+    return contract.model_copy(
+        update={
+            "entities": entities,
+            "relationships": relationships,
+            "summary": _trim_text(contract.summary, 600),
+            "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
+        }
+    )
+
+
+def _normalize_knowledge_graph_query_contract(
+    contract: KnowledgeGraphQueryContract,
+    *,
+    max_local_keywords: int,
+    max_global_keywords: int,
+) -> KnowledgeGraphQueryContract:
+    local_keywords = [
+        keyword
+        for keyword in dict.fromkeys(_trim_text(value, 120) for value in contract.local_keywords)
+        if keyword
+    ][: max(1, max_local_keywords)]
+    global_keywords = [
+        keyword
+        for keyword in dict.fromkeys(_trim_text(value, 120) for value in contract.global_keywords)
+        if keyword
+    ][: max(1, max_global_keywords)]
+    return contract.model_copy(
+        update={
+            "local_keywords": local_keywords,
+            "global_keywords": global_keywords,
             "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
         }
     )

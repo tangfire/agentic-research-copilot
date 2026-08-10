@@ -40,7 +40,7 @@ Research Copilot, not as an enterprise research platform.
 | MCP | Configurable tool boundary for grounding search, memory recall, run/eval inspection, and readiness checks. | Local workbench server, not an enterprise MCP gateway. |
 | Provider raw-content reader | Reads and compresses source content beyond snippets. | Provider reading layer, not browser automation or crawling. |
 | PyMuPDF document reader | Preserves useful PDF page/block/table metadata for grounding. | Not OCR or full document intelligence. |
-| LightRAG-inspired graph signal | Adds entity/relation candidate expansion before rerank. | Lightweight graph signal, not a full LightRAG/GraphRAG runtime. |
+| LightRAG-inspired graph signal | Adds structured entity/relation candidate expansion before rerank. | Not a full LightRAG/GraphRAG runtime, but no longer just co-occurrence heuristics. |
 | Proxy evaluation + optional judge/Ragas | Makes quality failures visible without adding heavy benchmark cost to every run. | Demo/eval artifacts, not a large public benchmark. |
 
 This makes the resume story defensible: the architecture is built around a real
@@ -201,7 +201,7 @@ Target coverage:
 - indexing-time contextual retrieval prefixing
 - Qdrant dense retrieval plus SQLite FTS5/BM25 keyword retrieval
 - parent-child retrieval with parent/neighbor context expansion
-- LightRAG-inspired entity/relation graph signal fused before reranking
+- LightRAG-inspired structured entity/relation graph signal fused before reranking
 - citation and evidence verification
 - memory governance and conflict review
 - source-quality evaluation boundary
@@ -395,7 +395,7 @@ and report synthesis as explicit stages.
   `table_count`, `table_cell_count`, and `has_tables`
 - `DocumentStore` still owns paragraph-aware child chunking, chunk overlap,
   indexing-time contextual retrieval prefixing, title/source/chunk metadata injection, Qdrant dense indexing,
-  SQLite FTS5/BM25 keyword indexing, a lightweight entity/relation graph index, RRF/DBSF fusion,
+  SQLite FTS5/BM25 keyword indexing, a structured entity/relation graph index, RRF/DBSF fusion,
   graph-score fusion, reranking, and same-document parent/neighbor context
   expansion after child retrieval
 - long-paragraph sentence splitting uses explicit English and Chinese punctuation
@@ -408,7 +408,7 @@ chunking, table-position citations, and stronger page/section citation rendering
 
 ### P1: LightRAG-Inspired Graph-Augmented Retrieval
 
-Status: implemented as a lightweight graph signal inside the existing grounding
+Status: implemented as a structured graph signal inside the existing grounding
 layer.
 
 Why: plain vector top-k retrieval can miss short proper nouns, component names,
@@ -416,17 +416,18 @@ and cross-chunk relationships. LightRAG is useful as a reference because it
 pushes graph-enhanced indexing and retrieval instead of relying only on semantic
 similarity. This repo keeps the implementation smaller and product-specific:
 local document chunks are still the primary retrievable units, but ingestion also
-extracts entity labels from each child chunk and records chunk/entity and
-entity/entity co-occurrence edges.
+asks the model to extract canonical entities and explicit relationships from
+each child chunk, then records chunk/entity and chunk/relation indexes.
 
 Current behavior:
 
-- extracts lightweight entities from chunk titles, sources, and raw chunk text
-- avoids indexing contextual wrapper labels such as `Document`, `Metadata`, or
-  `Excerpt` as graph entities
-- keeps chunk -> entity, entity -> chunk, and entity -> neighbor entity indexes in
-  memory alongside the Qdrant/local vector index
-- expands a query through matched entities and neighboring relation entities
+- extracts structured entities and explicit relationships from chunk metadata
+  produced at indexing time
+- keeps chunk -> entity, entity -> chunk, chunk -> relation, and relation -> chunk
+  indexes in memory alongside the Qdrant/local vector index
+- splits query graph retrieval into local entity keywords and global relation
+  keywords
+- expands a query through matched entities, neighbor entities, and relation hits
 - fuses `graph_score` into the dense/BM25 candidate set before reranking
 - preserves graph metadata such as `graph_query_entities`,
   `graph_matched_entities`, `graph_expanded_entities`, and
@@ -436,12 +437,12 @@ How to present it:
 
 > The project does not claim to be a full LightRAG clone. It adopts the useful
 > idea of graph-enhanced retrieval: dense vectors provide semantic recall, BM25
-> keyword retrieval preserves exact terms, the lightweight entity/relation graph improves
+> keyword retrieval preserves exact terms, the structured entity/relation graph improves
 > cross-chunk recall, and the reranker decides the final evidence order.
 
-Future hardening can add LLM-based entity/relation extraction, persistent graph
-storage, relation typing, graph traversal depth control, and offline retrieval
-ablation experiments. Those are useful research directions, but not required for
+Future hardening can add persistent graph storage, relation traversal depth
+control, graph ablation experiments, richer entity typing, and graph-aware
+evaluation artifacts. Those are useful research directions, but not required for
 the current single-node AI Research Copilot demo.
 
 ## Resume-Safe Boundary

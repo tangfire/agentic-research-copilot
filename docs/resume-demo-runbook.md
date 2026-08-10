@@ -112,7 +112,7 @@ because page parsing, contextualization, embeddings, and Qdrant writes all used
 real providers.
 
 Fix: The demo script seeds bounded excerpts through `/v1/documents`. This still
-exercises real embedding, BM25, Qdrant, graph signals, and reranking, but avoids
+exercises real embedding, BM25, Qdrant, structured entity/relation graph signals, and reranking, but avoids
 making interview prep depend on full-PDF indexing latency. Full ingestion remains
 available; the demo path is intentionally bounded and reproducible.
 
@@ -197,8 +197,8 @@ The core story is:
   delegation, source reading, retrieval, reporting, verification, evaluation,
   memory writes, and replay.
 - Built an Agentic RAG grounding layer with Qdrant dense vectors, SQLite
-  FTS5/BM25, parent/neighbor context expansion, LightRAG-inspired graph signals,
-  and Qwen/DashScope reranking.
+  FTS5/BM25, parent/neighbor context expansion, LightRAG-inspired structured
+  entity/relation graph signals, and Qwen/DashScope reranking.
 - Added real-provider strict mode over OpenAI-compatible chat, Qwen/DashScope
   embeddings/rerank, Tavily search, Qdrant, Celery/Redis, and MCP tools.
 - Produced reproducible demo artifacts: 5-paper corpus, 3 memory records, 2

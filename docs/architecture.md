@@ -37,9 +37,11 @@ technologies fit the product boundaries:
 - `Qdrant` is used for dense vector retrieval, but it is paired with SQLite
   FTS5/BM25 and reranking because research evidence often depends on exact
   terms, acronyms, dates, paper names, and component names.
-- The lightweight graph signal is an internal retrieval feature, not a full
+- The structured graph signal is an internal retrieval feature, not a full
   GraphRAG platform. It improves candidate recall for entity-heavy documents
-  while keeping the ODR-style research workflow unchanged.
+  with model-extracted entities, explicit relationships, dual-level query
+  keywords, and graph-score fusion while keeping the ODR-style research
+  workflow unchanged.
 - `SQLite` is used for local persistence and single-node checkpointing. That is
   appropriate for a reproducible interview/demo project and should not be
   described as distributed durable execution.
@@ -161,7 +163,7 @@ flowchart LR
 - Splits PDFs into page segments with `page_number`, `page_count`, block count,
   heading hints, table hints, page dimensions, and rotation metadata before
   chunking so provenance and layout signals can survive retrieval.
-- Performs paragraph-aware child chunking with overlap, indexing-time contextual retrieval prefixing, LightRAG-inspired entity/relation graph indexing, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, RRF/DBSF fusion, reranking, and parent/neighbor context expansion.
+- Performs paragraph-aware child chunking with overlap, indexing-time contextual retrieval prefixing, LightRAG-inspired structured entity/relation graph indexing, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, RRF/DBSF fusion, reranking, and parent/neighbor context expansion.
 - Preserves source attribution so each report section can be traced back.
 - Works as the internal evidence channel, distinct from web search.
 
@@ -176,7 +178,7 @@ chunk-specific contextual retrieval prefix before embedding and BM25 indexing.
 The prefix is generated at ingestion time, cached by document/chunk hash and
 prompt version, and stored in evidence metadata as `context_prefix` so retrieval
 behavior is inspectable. Search retrieves precise child chunks, fuses a
-lightweight entity/relation graph signal into the candidate set, then returns a
+structured entity/relation graph signal into the candidate set, then returns a
 same-document parent context window around the matched child so report synthesis
 gets enough surrounding context. This avoids hiding parser decisions inside
 vector search and makes it clear which stage should be improved when retrieval
@@ -193,9 +195,9 @@ boundary.
 - Retrieval is used as a grounding layer for the planner, researcher, and reporter.
 - Memory stores preferences and distilled conclusions; retrieval brings back supporting evidence.
 - Fine-tuning is a poor fit because the source set changes and provenance matters.
-- Plain keyword RAG is too weak here, so the repo uses contextual retrieval prefixing, parent-child retrieval, LightRAG-inspired graph augmentation, Qdrant dense vectors, a real SQLite FTS5/BM25 keyword index, fusion, and reranking first.
+- Plain keyword RAG is too weak here, so the repo uses contextual retrieval prefixing, parent-child retrieval, LightRAG-inspired structured entity/relation graph augmentation, Qdrant dense vectors, a real SQLite FTS5/BM25 keyword index, fusion, and reranking first.
 - Agentic RAG adds query rewrite, tool selection, multi-query retrieval, sufficiency scoring, and revision-triggering quality gates.
-- Full GraphRAG, RAPTOR, or LLM-heavy knowledge graph construction remain out of scope for v1. The implemented graph layer is a lightweight entity co-occurrence and neighbor-expansion signal inspired by LightRAG, designed to improve cross-chunk recall without changing the ODR-style research workflow.
+- Full GraphRAG, RAPTOR, persistent graph storage, community summarization, and deep multihop graph reasoning remain out of scope for v1. The implemented graph layer is a LightRAG-inspired structured entity/relation signal: ingestion asks the model for canonical entities and explicit relationships, query time separates local entity keywords from global relation keywords, and both graph views are fused with dense/BM25 retrieval before reranking.
 - For larger corpora, the same contract can be swapped to pgvector or another hybrid retrieval backend without changing the orchestration flow.
 - The hybrid implementation uses Anthropic-style contextual retrieval prefixes, Qdrant dense vector search, and SQLite FTS5 `bm25()` keyword search, then fuses results with `RRF` or `DBSF` before applying a pluggable reranker.
 - It intentionally does not run Elasticsearch/OpenSearch in v1. The project is a single-node research copilot, so SQLite FTS5 gives a real BM25 lexical signal without adding dual-write consistency, analyzer configuration, or search-cluster operations. Elasticsearch remains a future scale-out option if the corpus grows or fielded search/highlighting becomes a product requirement.

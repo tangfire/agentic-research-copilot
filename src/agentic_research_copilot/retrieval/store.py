@@ -10,7 +10,15 @@ from typing import Any
 
 from ..deterministic_provider import DeterministicResearchModelProvider
 from ..provider_base import ModelUsage, ResearchModelProvider
-from ..schemas import ChunkContextContract, CorpusProfile, EvidenceItem
+from ..schemas import (
+    ChunkContextContract,
+    CorpusProfile,
+    EvidenceItem,
+    KnowledgeGraphEntity,
+    KnowledgeGraphExtractionContract,
+    KnowledgeGraphQueryContract,
+    KnowledgeGraphRelationship,
+)
 from .fulltext import SQLiteBM25Index
 from .rerank import BaseReranker, RuleBasedReranker
 
@@ -29,41 +37,36 @@ DEFAULT_CHUNK_OVERLAP = 160
 DEFAULT_PARENT_CONTEXT_WINDOW = 1
 DEFAULT_PARENT_CONTEXT_MAX_CHARS = 2400
 DEFAULT_GRAPH_MAX_ENTITIES_PER_CHUNK = 12
+DEFAULT_GRAPH_MAX_RELATIONSHIPS_PER_CHUNK = 16
 DEFAULT_GRAPH_NEIGHBOR_LIMIT = 8
+DEFAULT_GRAPH_ENTITY_CANDIDATE_LIMIT = 8
+DEFAULT_GRAPH_RELATION_CANDIDATE_LIMIT = 8
 DENSE_VECTOR_NAME = "dense"
 CONTEXTUALIZER_PROMPT_VERSION = "contextual-retrieval-v1"
-STOPWORDS = {
-    "about",
-    "after",
-    "also",
-    "and",
-    "are",
-    "before",
-    "between",
-    "but",
-    "can",
-    "for",
-    "from",
-    "how",
-    "into",
-    "not",
-    "that",
-    "the",
-    "this",
-    "through",
-    "with",
-    "when",
-    "where",
-    "which",
-    "while",
-    "will",
-}
+GRAPH_EXTRACTION_PROMPT_VERSION = "knowledge-graph-extraction-v1"
+GRAPH_QUERY_PROMPT_VERSION = "graph-query-keywords-v1"
 
 
 @dataclass(frozen=True)
-class GraphEntity:
+class GraphEntityRecord:
     key: str
     label: str
+    entity_type: str
+    description: str
+    aliases: tuple[str, ...]
+    confidence: float
+
+
+@dataclass(frozen=True)
+class GraphRelationshipRecord:
+    key: str
+    source_key: str
+    target_key: str
+    relation_type: str
+    description: str
+    keywords: tuple[str, ...]
+    weight: float
+    confidence: float
 
 
 @dataclass(frozen=True)
@@ -100,10 +103,14 @@ class DocumentStore:
         parent_context_max_chars: int = DEFAULT_PARENT_CONTEXT_MAX_CHARS,
         graph_enabled: bool = True,
         graph_max_entities_per_chunk: int = DEFAULT_GRAPH_MAX_ENTITIES_PER_CHUNK,
+        graph_max_relationships_per_chunk: int = DEFAULT_GRAPH_MAX_RELATIONSHIPS_PER_CHUNK,
         graph_neighbor_limit: int = DEFAULT_GRAPH_NEIGHBOR_LIMIT,
+        graph_entity_candidate_limit: int = DEFAULT_GRAPH_ENTITY_CANDIDATE_LIMIT,
+        graph_relation_candidate_limit: int = DEFAULT_GRAPH_RELATION_CANDIDATE_LIMIT,
         hybrid_fusion: str = "rrf",
         reranker: BaseReranker | None = None,
         contextualizer_provider: ResearchModelProvider | None = None,
+        graph_provider: ResearchModelProvider | None = None,
         allow_local_fallback: bool = True,
     ) -> None:
         self._docs: list[EvidenceItem] = []
@@ -116,19 +123,39 @@ class DocumentStore:
         self.parent_context_max_chars = max(320, parent_context_max_chars)
         self.graph_enabled = graph_enabled
         self.graph_max_entities_per_chunk = max(2, graph_max_entities_per_chunk)
+        self.graph_max_relationships_per_chunk = max(1, graph_max_relationships_per_chunk)
         self.graph_neighbor_limit = max(0, graph_neighbor_limit)
+        self.graph_entity_candidate_limit = max(1, graph_entity_candidate_limit)
+        self.graph_relation_candidate_limit = max(1, graph_relation_candidate_limit)
         self.hybrid_fusion = hybrid_fusion if hybrid_fusion in {"rrf", "dbsf"} else "rrf"
         self.reranker = reranker or RuleBasedReranker()
         self.contextualizer_provider = contextualizer_provider or self.embedding_provider
+        self.graph_provider = graph_provider or self.contextualizer_provider
         self._fallback_contextualizer = DeterministicResearchModelProvider(
             embedding_dimensions=getattr(self.embedding_provider, "embedding_dimensions", 256)
         )
+        self._fallback_graph_provider = self._fallback_contextualizer
         self.allow_local_fallback = allow_local_fallback
         self._contextualization_cache: dict[str, tuple[ChunkContextContract, ModelUsage]] = {}
+        self._graph_extraction_cache: dict[
+            str,
+            tuple[KnowledgeGraphExtractionContract, ModelUsage, str | None],
+        ] = {}
+        self._graph_query_cache: dict[
+            str,
+            tuple[KnowledgeGraphQueryContract, ModelUsage, str | None],
+        ] = {}
         self._entity_chunks: dict[str, set[str]] = defaultdict(set)
-        self._entity_labels: dict[str, str] = {}
+        self._entity_profiles: dict[str, GraphEntityRecord] = {}
+        self._entity_embeddings: dict[str, list[float]] = {}
+        self._entity_embedding_texts: dict[str, str] = {}
         self._entity_neighbors: dict[str, Counter[str]] = defaultdict(Counter)
+        self._relationship_profiles: dict[str, GraphRelationshipRecord] = {}
+        self._relationship_chunks: dict[str, set[str]] = defaultdict(set)
+        self._relationship_embeddings: dict[str, list[float]] = {}
+        self._relationship_embedding_texts: dict[str, str] = {}
         self._chunk_entities: dict[str, tuple[str, ...]] = {}
+        self._chunk_relationships: dict[str, tuple[str, ...]] = {}
         self._keyword_index = SQLiteBM25Index()
         self._keyword_backend = self._keyword_index.backend
         self._client = self._build_client(
@@ -198,7 +225,7 @@ class DocumentStore:
             scored_chunks.extend(self._search_local(query, query_text, query_tokens, query_embedding))
 
         scored_chunks = self._merge_keyword_candidates(query, query_text, query_tokens, scored_chunks, limit)
-        scored_chunks = self._merge_graph_candidates(query_text, query_tokens, scored_chunks)
+        scored_chunks = self._merge_graph_candidates(query_text, query_tokens, query_embedding, scored_chunks)
         reranked = self._rerank(query_text, scored_chunks, limit)
         evidence: list[EvidenceItem] = []
         for score, chunk, scores in reranked:
@@ -235,6 +262,7 @@ class DocumentStore:
                         "child_retrieval": "dense_bm25_fusion_rerank",
                         "parent_expansion": "same-document_neighbor_window",
                         "graph_augmented_retrieval": self.graph_enabled,
+                        "graph_strategy": "structured_entity_relation_dual_level",
                         "retrieval_backend": f"{self._vector_backend}_embedding_hybrid",
                         "hybrid_fusion": self.hybrid_fusion,
                         "keyword_backend": self._keyword_backend,
@@ -283,8 +311,10 @@ class DocumentStore:
         self._docs.clear()
         self._chunks.clear()
         self._contextualization_cache.clear()
+        self._graph_extraction_cache.clear()
+        self._graph_query_cache.clear()
         self._keyword_index.clear()
-        self._clear_graph_index()
+        self._clear_graph_index(clear_embedding_cache=True)
         if self._client is not None and qmodels is not None:
             try:
                 if self._collection_exists():
@@ -302,6 +332,11 @@ class DocumentStore:
         self._chunks = [chunk for chunk in self._chunks if chunk.document_id != document_id]
         self._contextualization_cache = {
             key: value for key, value in self._contextualization_cache.items() if not key.startswith(f"{document_id}:")
+        }
+        self._graph_extraction_cache = {
+            key: value
+            for key, value in self._graph_extraction_cache.items()
+            if not key.startswith(f"{document_id}:")
         }
         self._keyword_index.delete_document(document_id)
         self._rebuild_graph_index()
@@ -336,6 +371,13 @@ class DocumentStore:
                 chunk_index=index,
                 total_chunks=total_chunks,
             )
+            graph_contract, graph_usage, graph_fallback = self._extract_knowledge_graph(
+                doc=doc,
+                document_text=text,
+                chunk_text=chunk_text,
+                chunk_index=index,
+                total_chunks=total_chunks,
+            )
             chunk_metadata = {
                 **doc.metadata,
                 "contextual_retrieval": True,
@@ -346,6 +388,16 @@ class DocumentStore:
                 "context_confidence": round(float(chunk_context.confidence), 4),
                 "contextualizer_provider": getattr(context_usage, "provider", "unknown"),
                 "contextualizer_model": getattr(context_usage, "model", "unknown"),
+                "graph_extraction": self.graph_enabled,
+                "graph_extraction_prompt_version": GRAPH_EXTRACTION_PROMPT_VERSION,
+                "graph_extractor_provider": getattr(graph_usage, "provider", "disabled"),
+                "graph_extractor_model": getattr(graph_usage, "model", "disabled"),
+                "graph_extraction_fallback": graph_fallback or "",
+                "graph_entities": [entity.model_dump() for entity in graph_contract.entities],
+                "graph_relationships": [
+                    relationship.model_dump()
+                    for relationship in graph_contract.relationships
+                ],
             }
             contextual_text = _build_contextual_text(
                 doc,
@@ -425,6 +477,72 @@ class DocumentStore:
         self._contextualization_cache[cache_key] = result
         return result
 
+    def _extract_knowledge_graph(
+        self,
+        *,
+        doc: EvidenceItem,
+        document_text: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> tuple[KnowledgeGraphExtractionContract, ModelUsage, str | None]:
+        if not self.graph_enabled:
+            return (
+                KnowledgeGraphExtractionContract(),
+                ModelUsage(provider="disabled", model="graph-disabled"),
+                None,
+            )
+
+        document_id = _document_identity(doc)
+        chunk_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()[:16]
+        provider_name = getattr(self.graph_provider, "name", "unknown")
+        cache_key = f"{document_id}:{chunk_index}:{chunk_hash}:{provider_name}:{GRAPH_EXTRACTION_PROMPT_VERSION}"
+        cached = self._graph_extraction_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        document_excerpt = _document_context_excerpt(document_text, chunk_text)
+        fallback_reason: str | None = None
+        try:
+            contract, usage = self.graph_provider.extract_knowledge_graph(
+                document_title=doc.title,
+                source=doc.source,
+                metadata=doc.metadata,
+                document_excerpt=document_excerpt,
+                chunk_text=chunk_text,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+                max_entities=self.graph_max_entities_per_chunk,
+                max_relationships=self.graph_max_relationships_per_chunk,
+            )
+        except Exception as exc:
+            if not self.allow_local_fallback:
+                raise RuntimeError(f"Knowledge graph extraction failed: {exc}") from exc
+            fallback_reason = exc.__class__.__name__
+            contract, usage = self._fallback_graph_provider.extract_knowledge_graph(
+                document_title=doc.title,
+                source=doc.source,
+                metadata=doc.metadata,
+                document_excerpt=document_excerpt,
+                chunk_text=chunk_text,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+                max_entities=self.graph_max_entities_per_chunk,
+                max_relationships=self.graph_max_relationships_per_chunk,
+            )
+
+        result = (
+            _normalize_graph_contract(
+                contract,
+                max_entities=self.graph_max_entities_per_chunk,
+                max_relationships=self.graph_max_relationships_per_chunk,
+            ),
+            usage,
+            fallback_reason,
+        )
+        self._graph_extraction_cache[cache_key] = result
+        return result
+
     def _with_document_id(self, doc: EvidenceItem) -> EvidenceItem:
         metadata = dict(doc.metadata)
         document_id = _document_identity(doc)
@@ -458,7 +576,7 @@ class DocumentStore:
     def _rebuild_index(self) -> None:
         docs = list(self._docs)
         self._chunks.clear()
-        self._contextualization_cache.clear()
+        self._graph_query_cache.clear()
         self._keyword_index.clear()
         self._clear_graph_index()
         if self._client is not None and qmodels is not None:
@@ -652,28 +770,136 @@ class DocumentStore:
     def _index_graph_chunk(self, chunk: DocumentChunk) -> None:
         if not self.graph_enabled:
             return
-        entities = _extract_graph_entities(
-            " ".join([chunk.title, chunk.source, chunk.text]),
-            max_entities=self.graph_max_entities_per_chunk,
-        )
+        contract = _graph_contract_from_metadata(chunk.metadata)
+        entities = [
+            entity
+            for entity in contract.entities
+            if _graph_key(entity.name)
+        ][: self.graph_max_entities_per_chunk]
         if not entities:
             return
-        self._chunk_entities[chunk.chunk_id] = tuple(entity.key for entity in entities)
-        for entity in entities:
-            self._entity_chunks[entity.key].add(chunk.chunk_id)
-            self._entity_labels.setdefault(entity.key, entity.label)
-        for left_index, left in enumerate(entities):
-            for right in entities[left_index + 1 :]:
-                if left.key == right.key:
-                    continue
-                self._entity_neighbors[left.key][right.key] += 1
-                self._entity_neighbors[right.key][left.key] += 1
 
-    def _clear_graph_index(self) -> None:
+        entity_keys: list[str] = []
+        for entity in entities:
+            key = _graph_key(entity.name)
+            if not key or key in entity_keys:
+                continue
+            entity_keys.append(key)
+            self._entity_chunks[key].add(chunk.chunk_id)
+            self._upsert_graph_entity_profile(key, entity)
+
+        relationships = [
+            relationship
+            for relationship in contract.relationships
+            if _graph_key(relationship.source) in entity_keys
+            and _graph_key(relationship.target) in entity_keys
+        ][: self.graph_max_relationships_per_chunk]
+
+        relationship_keys: list[str] = []
+        for relationship in relationships:
+            source_key = _graph_key(relationship.source)
+            target_key = _graph_key(relationship.target)
+            if not source_key or not target_key or source_key == target_key:
+                continue
+            relationship_key = _graph_relationship_key(relationship)
+            if relationship_key in relationship_keys:
+                continue
+            relationship_keys.append(relationship_key)
+            self._relationship_chunks[relationship_key].add(chunk.chunk_id)
+            self._upsert_graph_relationship_profile(relationship_key, relationship)
+            edge_weight = max(
+                1,
+                round(
+                    float(relationship.weight or 1.0)
+                    * max(0.1, relationship.confidence or 0.5)
+                ),
+            )
+            self._entity_neighbors[source_key][target_key] += edge_weight
+            self._entity_neighbors[target_key][source_key] += edge_weight
+
+        if not relationship_keys and len(entity_keys) > 1:
+            for left_index, left_key in enumerate(entity_keys):
+                for right_key in entity_keys[left_index + 1 :]:
+                    if left_key == right_key:
+                        continue
+                    self._entity_neighbors[left_key][right_key] += 1
+                    self._entity_neighbors[right_key][left_key] += 1
+
+        self._chunk_entities[chunk.chunk_id] = tuple(entity_keys)
+        self._chunk_relationships[chunk.chunk_id] = tuple(relationship_keys)
+
+    def _upsert_graph_entity_profile(self, key: str, entity: KnowledgeGraphEntity) -> None:
+        current = self._entity_profiles.get(key)
+        confidence = max(0.0, min(1.0, float(entity.confidence or 0.0)))
+        if current is None or confidence >= current.confidence:
+            aliases = tuple(
+                alias
+                for alias in (_clean_entity_label(value) for value in entity.aliases)
+                if alias
+            )[:8]
+            record = GraphEntityRecord(
+                key=key,
+                label=_clean_entity_label(entity.name),
+                entity_type=_clean_entity_label(entity.entity_type) or "concept",
+                description=_trim(entity.description, 600),
+                aliases=aliases,
+                confidence=confidence,
+            )
+            self._entity_profiles[key] = record
+            embedding_text = _graph_entity_embedding_text(record)
+            if self._entity_embedding_texts.get(key) != embedding_text:
+                self._entity_embeddings[key] = self._embed(embedding_text)
+                self._entity_embedding_texts[key] = embedding_text
+
+    def _upsert_graph_relationship_profile(
+        self,
+        key: str,
+        relationship: KnowledgeGraphRelationship,
+    ) -> None:
+        current = self._relationship_profiles.get(key)
+        confidence = max(0.0, min(1.0, float(relationship.confidence or 0.0)))
+        if current is None or confidence >= current.confidence:
+            keywords = tuple(
+                keyword
+                for keyword in (
+                    _clean_entity_label(value)
+                    for value in relationship.keywords
+                )
+                if keyword
+            )[:10]
+            record = GraphRelationshipRecord(
+                key=key,
+                source_key=_graph_key(relationship.source),
+                target_key=_graph_key(relationship.target),
+                relation_type=_clean_entity_label(relationship.relation_type)
+                or "related_to",
+                description=_trim(relationship.description, 600),
+                keywords=keywords,
+                weight=max(0.05, min(3.0, float(relationship.weight or 1.0))),
+                confidence=confidence,
+            )
+            self._relationship_profiles[key] = record
+            embedding_text = _graph_relationship_embedding_text(
+                record,
+                self._entity_profiles,
+            )
+            if self._relationship_embedding_texts.get(key) != embedding_text:
+                self._relationship_embeddings[key] = self._embed(embedding_text)
+                self._relationship_embedding_texts[key] = embedding_text
+
+    def _clear_graph_index(self, *, clear_embedding_cache: bool = False) -> None:
         self._entity_chunks.clear()
-        self._entity_labels.clear()
+        self._entity_profiles.clear()
         self._entity_neighbors.clear()
+        self._relationship_profiles.clear()
+        self._relationship_chunks.clear()
         self._chunk_entities.clear()
+        self._chunk_relationships.clear()
+        if clear_embedding_cache:
+            self._entity_embeddings.clear()
+            self._entity_embedding_texts.clear()
+            self._relationship_embeddings.clear()
+            self._relationship_embedding_texts.clear()
 
     def _rebuild_graph_index(self) -> None:
         self._clear_graph_index()
@@ -684,12 +910,13 @@ class DocumentStore:
         self,
         query_text: str,
         query_tokens: tuple[str, ...],
+        query_embedding: list[float],
         scored_chunks: list[tuple[float, DocumentChunk, dict[str, object]]],
     ) -> list[tuple[float, DocumentChunk, dict[str, object]]]:
         if not self.graph_enabled or not self._chunk_entities:
             return scored_chunks
 
-        graph_scores = self._search_graph(query_text, query_tokens)
+        graph_scores = self._search_graph(query_text, query_tokens, query_embedding)
         if not graph_scores:
             return scored_chunks
 
@@ -722,30 +949,96 @@ class DocumentStore:
         self,
         query_text: str,
         query_tokens: tuple[str, ...],
+        query_embedding: list[float],
     ) -> dict[str, dict[str, object]]:
-        query_entities = _extract_graph_entities(query_text, max_entities=self.graph_max_entities_per_chunk)
-        query_keys = [entity.key for entity in query_entities if entity.key in self._entity_chunks]
+        query_contract, query_usage, query_fallback = self._extract_graph_query(
+            query_text,
+            query_tokens,
+        )
+        local_keywords = list(query_contract.local_keywords)
+        global_keywords = list(query_contract.global_keywords)
+        local_query_text = " ".join(local_keywords) or query_text
+        global_query_text = " ".join(global_keywords) or local_query_text
+        local_embedding = (
+            query_embedding
+            if local_query_text == query_text
+            else self._embed(local_query_text)
+        )
+        global_embedding = (
+            query_embedding
+            if global_query_text == query_text
+            else self._embed(global_query_text)
+        )
+
+        query_keys: list[str] = []
+        for keyword in local_keywords:
+            key = _graph_key(keyword)
+            if key in self._entity_chunks and key not in query_keys:
+                query_keys.append(key)
         if not query_keys:
-            token_keys = [token for token in dict.fromkeys(query_tokens) if token in self._entity_chunks]
-            query_keys = token_keys[: self.graph_max_entities_per_chunk]
-        if not query_keys:
-            return {}
+            for token in dict.fromkeys(query_tokens):
+                key = _graph_key(token)
+                if key in self._entity_chunks and key not in query_keys:
+                    query_keys.append(key)
+                if len(query_keys) >= self.graph_max_entities_per_chunk:
+                    break
 
         chunk_scores: dict[str, float] = defaultdict(float)
         matched_entities: dict[str, set[str]] = defaultdict(set)
         expanded_entities: dict[str, set[str]] = defaultdict(set)
+        matched_relationships: dict[str, set[str]] = defaultdict(set)
 
         for key in query_keys:
-            label = self._entity_labels.get(key, key)
+            profile = self._entity_profiles.get(key)
+            label = profile.label if profile is not None else key
             for chunk_id in self._entity_chunks.get(key, set()):
                 chunk_scores[chunk_id] += 1.0
                 matched_entities[chunk_id].add(label)
             for neighbor_key, weight in self._entity_neighbors.get(key, Counter()).most_common(self.graph_neighbor_limit):
-                neighbor_label = self._entity_labels.get(neighbor_key, neighbor_key)
+                neighbor_profile = self._entity_profiles.get(neighbor_key)
+                neighbor_label = (
+                    neighbor_profile.label
+                    if neighbor_profile is not None
+                    else neighbor_key
+                )
                 relation_score = min(0.45, 0.18 + 0.05 * weight)
                 for chunk_id in self._entity_chunks.get(neighbor_key, set()):
                     chunk_scores[chunk_id] += relation_score
                     expanded_entities[chunk_id].add(neighbor_label)
+
+        for key, score in self._semantic_graph_matches(
+            local_embedding,
+            self._entity_embeddings,
+            self.graph_entity_candidate_limit,
+        ):
+            profile = self._entity_profiles.get(key)
+            if profile is None:
+                continue
+            semantic_entity_score = min(0.82, score * 0.72)
+            for chunk_id in self._entity_chunks.get(key, set()):
+                chunk_scores[chunk_id] += semantic_entity_score
+                matched_entities[chunk_id].add(profile.label)
+
+        for relationship_key, score in self._semantic_graph_matches(
+            global_embedding,
+            self._relationship_embeddings,
+            self.graph_relation_candidate_limit,
+        ):
+            relationship = self._relationship_profiles.get(relationship_key)
+            if relationship is None:
+                continue
+            relationship_score = min(
+                0.9,
+                score * 0.65
+                + relationship.weight * relationship.confidence * 0.18,
+            )
+            label = _relationship_label(relationship, self._entity_profiles)
+            for chunk_id in self._relationship_chunks.get(
+                relationship_key,
+                set(),
+            ):
+                chunk_scores[chunk_id] += relationship_score
+                matched_relationships[chunk_id].add(label)
 
         if not chunk_scores:
             return {}
@@ -755,11 +1048,80 @@ class DocumentStore:
                 "graph_score": round(score / max_score, 4),
                 "graph_matched_entities": sorted(matched_entities.get(chunk_id, set()))[:8],
                 "graph_expanded_entities": sorted(expanded_entities.get(chunk_id, set()))[:8],
-                "graph_query_entities": [self._entity_labels.get(key, key) for key in query_keys],
+                "graph_matched_relationships": sorted(
+                    matched_relationships.get(chunk_id, set())
+                )[:8],
+                "graph_query_entities": [
+                    self._entity_profiles[key].label
+                    for key in query_keys
+                    if key in self._entity_profiles
+                ],
+                "graph_query_local_keywords": local_keywords[:8],
+                "graph_query_global_keywords": global_keywords[:8],
+                "graph_query_prompt_version": GRAPH_QUERY_PROMPT_VERSION,
+                "graph_query_provider": getattr(query_usage, "provider", "unknown"),
+                "graph_query_model": getattr(query_usage, "model", "unknown"),
+                "graph_query_fallback": query_fallback or "",
+                "graph_query_confidence": round(float(query_contract.confidence or 0.0), 4),
                 "graph_neighbor_limit": self.graph_neighbor_limit,
             }
             for chunk_id, score in chunk_scores.items()
         }
+
+    def _extract_graph_query(
+        self,
+        query_text: str,
+        query_tokens: tuple[str, ...],
+    ) -> tuple[KnowledgeGraphQueryContract, ModelUsage, str | None]:
+        provider_name = getattr(self.graph_provider, "name", "unknown")
+        query_hash = hashlib.sha256(query_text.encode("utf-8")).hexdigest()[:16]
+        cache_key = f"{query_hash}:{provider_name}:{GRAPH_QUERY_PROMPT_VERSION}"
+        cached = self._graph_query_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        fallback_reason: str | None = None
+        try:
+            contract, usage = self.graph_provider.extract_graph_query(
+                query=query_text,
+                max_local_keywords=self.graph_max_entities_per_chunk,
+                max_global_keywords=self.graph_relation_candidate_limit,
+            )
+        except Exception as exc:
+            if not self.allow_local_fallback:
+                raise RuntimeError(f"Graph query extraction failed: {exc}") from exc
+            fallback_reason = exc.__class__.__name__
+            contract, usage = self._fallback_graph_provider.extract_graph_query(
+                query=query_text,
+                max_local_keywords=self.graph_max_entities_per_chunk,
+                max_global_keywords=self.graph_relation_candidate_limit,
+            )
+
+        normalized = _normalize_graph_query_contract(
+            contract,
+            query_tokens=query_tokens,
+            max_local_keywords=self.graph_max_entities_per_chunk,
+            max_global_keywords=self.graph_relation_candidate_limit,
+        )
+        result = (normalized, usage, fallback_reason)
+        self._graph_query_cache[cache_key] = result
+        return result
+
+    @staticmethod
+    def _semantic_graph_matches(
+        query_embedding: list[float],
+        candidate_embeddings: dict[str, list[float]],
+        limit: int,
+    ) -> list[tuple[str, float]]:
+        matches = [
+            (key, _cosine_similarity(query_embedding, embedding))
+            for key, embedding in candidate_embeddings.items()
+        ]
+        return [
+            (key, score)
+            for key, score in sorted(matches, key=lambda item: -item[1])[:limit]
+            if score >= 0.18
+        ]
 
     def _parent_context_for_child(self, child: DocumentChunk) -> str:
         siblings = [
@@ -1043,96 +1405,208 @@ def _phrase_score(query: str, text: str) -> float:
     return 1.0 if query in text else 0.0
 
 
-def _extract_graph_entities(text: str, *, max_entities: int) -> list[GraphEntity]:
-    candidates: Counter[str] = Counter()
-    labels: dict[str, str] = {}
-
-    for phrase in re.findall(r"\b[A-Z][A-Za-z0-9+.#/-]*(?:\s+[A-Z][A-Za-z0-9+.#/-]*){0,4}\b", text):
-        normalized = _normalize_entity(phrase)
-        if normalized:
-            candidates[normalized] += 3
-            labels.setdefault(normalized, _clean_entity_label(phrase))
-
-    token_counts = Counter(_tokenize(text))
-    for token, count in token_counts.items():
-        if _is_graph_token(token):
-            candidates[token] += count
-            labels.setdefault(token, token)
-
-    entities: list[GraphEntity] = []
-    for key, _score in candidates.most_common(max_entities * 2):
-        label = labels.get(key, key)
-        if any(key != existing.key and (key in existing.key or existing.key in key) for existing in entities):
-            continue
-        entities.append(GraphEntity(key=key, label=label))
-        if len(entities) >= max_entities:
-            break
-    return entities
-
-
-def _normalize_entity(value: str) -> str:
-    label = _clean_entity_label(value)
-    if not label:
-        return ""
-    tokens = [
-        token.lower()
-        for token in TOKEN_PATTERN.findall(label)
-        if _is_graph_token(token.lower(), allow_short=True)
-    ]
-    return " ".join(tokens)
-
-
 def _clean_entity_label(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip(" -_/.,:;()[]{}")).strip()
 
 
-def _is_graph_token(token: str, *, allow_short: bool = False) -> bool:
-    if len(token) <= 2 or token in STOPWORDS:
-        return False
-    if token.isdigit():
-        return False
-    if allow_short and len(token) >= 3:
-        return True
-    return (
-        any(char.isdigit() for char in token)
-        or "_" in token
-        or "-" in token
-        or token in {
-            "agent",
-            "agentic",
-            "callback",
-            "canonical",
-            "celery",
-            "checkpoint",
-            "citation",
-            "conductresearch",
-            "contextual",
-            "dashscope",
-            "dense",
-            "embedding",
-            "evidence",
-            "fusion",
-            "graph",
-            "grounding",
-            "hybrid",
-            "langgraph",
-            "lightrag",
-            "memory",
-            "parent",
-            "planner",
-            "qdrant",
-            "query",
-            "rag",
-            "rerank",
-            "retrieval",
-            "scheduler",
-            "supervisor",
-            "tavily",
-            "vector",
-            "workflow",
-        }
-        or len(token) >= 5
+def _graph_key(value: str) -> str:
+    cleaned = _clean_entity_label(value).casefold()
+    cleaned = re.sub(r"[^\w\u4e00-\u9fff+.#/-]+", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _graph_relationship_key(relationship: KnowledgeGraphRelationship) -> str:
+    return "|".join(
+        [
+            _graph_key(relationship.source),
+            _graph_key(relationship.target),
+            _graph_key(relationship.relation_type),
+        ]
     )
+
+
+def _graph_contract_from_metadata(
+    metadata: dict[str, object],
+) -> KnowledgeGraphExtractionContract:
+    try:
+        entities = [
+            KnowledgeGraphEntity.model_validate(value)
+            for value in metadata.get("graph_entities", [])
+            if isinstance(value, dict)
+        ]
+        relationships = [
+            KnowledgeGraphRelationship.model_validate(value)
+            for value in metadata.get("graph_relationships", [])
+            if isinstance(value, dict)
+        ]
+    except Exception:
+        return KnowledgeGraphExtractionContract()
+    return KnowledgeGraphExtractionContract(
+        entities=entities,
+        relationships=relationships,
+    )
+
+
+def _normalize_graph_contract(
+    contract: KnowledgeGraphExtractionContract,
+    *,
+    max_entities: int,
+    max_relationships: int,
+) -> KnowledgeGraphExtractionContract:
+    entities: list[KnowledgeGraphEntity] = []
+    known: set[str] = set()
+    for entity in contract.entities:
+        name = _trim(entity.name, 160)
+        key = _graph_key(name)
+        if not key or key in known:
+            continue
+        known.add(key)
+        aliases = [
+            alias
+            for alias in dict.fromkeys(
+                _trim(value, 120) for value in entity.aliases
+            )
+            if alias and _graph_key(alias) != key
+        ][:8]
+        entities.append(
+            entity.model_copy(
+                update={
+                    "name": name,
+                    "entity_type": _trim(entity.entity_type, 80) or "concept",
+                    "description": _trim(entity.description, 600),
+                    "aliases": aliases,
+                    "confidence": max(
+                        0.0,
+                        min(1.0, float(entity.confidence or 0.0)),
+                    ),
+                }
+            )
+        )
+        if len(entities) >= max(1, max_entities):
+            break
+
+    canonical_names = {_graph_key(entity.name): entity.name for entity in entities}
+    relationships: list[KnowledgeGraphRelationship] = []
+    relation_keys: set[str] = set()
+    for relationship in contract.relationships:
+        source = canonical_names.get(_graph_key(relationship.source))
+        target = canonical_names.get(_graph_key(relationship.target))
+        if not source or not target or source == target:
+            continue
+        relation_type = _trim(relationship.relation_type, 100) or "related_to"
+        normalized = relationship.model_copy(
+            update={
+                "source": source,
+                "target": target,
+                "relation_type": relation_type,
+                "description": _trim(relationship.description, 600),
+                "keywords": [
+                    keyword
+                    for keyword in dict.fromkeys(
+                        _trim(value, 100) for value in relationship.keywords
+                    )
+                    if keyword
+                ][:10],
+                "weight": max(
+                    0.05,
+                    min(3.0, float(relationship.weight or 1.0)),
+                ),
+                "confidence": max(
+                    0.0,
+                    min(1.0, float(relationship.confidence or 0.0)),
+                ),
+            }
+        )
+        relation_key = _graph_relationship_key(normalized)
+        if relation_key in relation_keys:
+            continue
+        relation_keys.add(relation_key)
+        relationships.append(normalized)
+        if len(relationships) >= max(1, max_relationships):
+            break
+
+    return KnowledgeGraphExtractionContract(
+        entities=entities,
+        relationships=relationships,
+        summary=_trim(contract.summary, 600),
+        confidence=max(0.0, min(1.0, float(contract.confidence or 0.0))),
+    )
+
+
+def _normalize_graph_query_contract(
+    contract: KnowledgeGraphQueryContract,
+    *,
+    query_tokens: tuple[str, ...],
+    max_local_keywords: int,
+    max_global_keywords: int,
+) -> KnowledgeGraphQueryContract:
+    local_keywords = [
+        keyword
+        for keyword in dict.fromkeys(
+            _trim(value, 120) for value in contract.local_keywords
+        )
+        if keyword
+    ][: max(1, max_local_keywords)]
+    global_keywords = [
+        keyword
+        for keyword in dict.fromkeys(
+            _trim(value, 120) for value in contract.global_keywords
+        )
+        if keyword
+    ][: max(1, max_global_keywords)]
+    if not local_keywords:
+        local_keywords = list(dict.fromkeys(query_tokens))[: max(1, max_local_keywords)]
+    if not global_keywords:
+        global_keywords = local_keywords[: max(1, max_global_keywords)]
+    return contract.model_copy(
+        update={
+            "local_keywords": local_keywords,
+            "global_keywords": global_keywords,
+            "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
+        }
+    )
+
+
+def _graph_entity_embedding_text(record: GraphEntityRecord) -> str:
+    aliases = ", ".join(record.aliases)
+    return "\n".join(
+        [
+            f"Entity: {record.label}",
+            f"Type: {record.entity_type}",
+            f"Aliases: {aliases}",
+            f"Description: {record.description}",
+        ]
+    )
+
+
+def _graph_relationship_embedding_text(
+    record: GraphRelationshipRecord,
+    profiles: dict[str, GraphEntityRecord],
+) -> str:
+    source = profiles.get(record.source_key)
+    target = profiles.get(record.target_key)
+    source_label = source.label if source is not None else record.source_key
+    target_label = target.label if target is not None else record.target_key
+    return "\n".join(
+        [
+            f"Source: {source_label}",
+            f"Target: {target_label}",
+            f"Relation type: {record.relation_type}",
+            f"Keywords: {', '.join(record.keywords)}",
+            f"Description: {record.description}",
+        ]
+    )
+
+
+def _relationship_label(
+    relationship: GraphRelationshipRecord,
+    profiles: dict[str, GraphEntityRecord],
+) -> str:
+    source = profiles.get(relationship.source_key)
+    target = profiles.get(relationship.target_key)
+    source_label = source.label if source is not None else relationship.source_key
+    target_label = target.label if target is not None else relationship.target_key
+    return f"{source_label} -[{relationship.relation_type}]-> {target_label}"
 
 
 def _cosine_similarity(left: list[float], right: list[float]) -> float:

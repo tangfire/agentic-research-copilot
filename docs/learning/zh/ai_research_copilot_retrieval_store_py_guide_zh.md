@@ -17,12 +17,12 @@ D:\kn\projects\agentic-research-copilot\src\agentic_research_copilot\retrieval\s
 -> 分块
 -> 生成上下文前缀
 -> 生成 embedding
--> 写入 Qdrant / SQLite BM25 / 轻量实体关系索引
+-> 写入 Qdrant / SQLite BM25 / 结构化实体关系索引
 
 查询
 -> dense 语义召回
 -> BM25 关键词召回
--> graph 实体关系扩展
+-> graph 实体/关系扩展
 -> 融合候选
 -> rerank 重排序
 -> parent context 扩展
@@ -39,7 +39,7 @@ D:\kn\projects\agentic-research-copilot\src\agentic_research_copilot\retrieval\s
 | `rerank` | 对初步召回的候选重新排序 |
 | `parent-child retrieval` | 用较小的 child chunk 负责命中，用父文档邻近片段补充上下文 |
 | `contextual retrieval` | 在 chunk 前面补充文档背景，减少小片段脱离原文语境的问题 |
-| `graph signal` | 用实体共现关系帮助检索相关片段 |
+| `graph signal` | 用结构化实体和关系帮助检索相关片段 |
 
 ## 2. 它在整条主链路中的位置
 
@@ -71,20 +71,14 @@ DocumentStore.search(
 
 ## 3. 先看三个数据结构
 
-### 3.1 `GraphEntity`
+### 3.1 `GraphEntityRecord` / `GraphRelationshipRecord`
 
-```python
-class GraphEntity:
-    key: str
-    label: str
-```
+它们是 `DocumentStore` 内部维护的图索引记录，不是原始 LLM contract。
 
-它代表从文本中抽出来的一个实体或重要术语。
+- `GraphEntityRecord`：保存实体 key、展示名、类型、描述、别名和置信度。
+- `GraphRelationshipRecord`：保存 source、target、relation_type、描述、关键词、权重和置信度。
 
-- `key`：归一化后的内部键。
-- `label`：展示给人看的实体名称。
-
-这里的 graph 不是完整的 GraphRAG 知识图谱。当前实现是轻量实体共现图：如果两个实体出现在同一个 chunk 里，就认为它们存在弱关系。
+这里的 graph 不是完整的 GraphRAG 知识图谱，但也不只是共现计数。当前实现会先从模型抽取结构化实体和显式关系，再把它们转成可检索的实体/关系索引。
 
 ### 3.2 `DocumentChunk`
 
@@ -119,7 +113,7 @@ contextual_text -> 用于更稳定地做检索
 1. 原始文档：`self._docs`
 2. 文档 chunk：`self._chunks`
 3. SQLite FTS5/BM25 索引：`self._keyword_index`
-4. 轻量实体关系索引：`self._entity_chunks`、`self._entity_neighbors`
+4. 结构化实体/关系索引：`self._entity_chunks`、`self._relationship_chunks`、`self._entity_neighbors`
 
 如果配置了 Qdrant，还会把 dense 向量和 chunk payload 写到 Qdrant collection。
 
@@ -138,9 +132,13 @@ DocumentStore(
     chunk_overlap=...,
     parent_context_window=...,
     graph_enabled=True,
+    graph_max_entities_per_chunk=12,
+    graph_max_relationships_per_chunk=16,
+    graph_neighbor_limit=8,
     hybrid_fusion="rrf",
     reranker=...,
     contextualizer_provider=...,
+    graph_provider=...,
     allow_local_fallback=...,
 )
 ```
@@ -185,7 +183,11 @@ Qdrant 是向量数据库，当前用名为 `dense` 的向量字段保存 embedd
 - `parent_context_max_chars`：最终补充上下文的最大字符数。
 - `hybrid_fusion`：选择 `rrf` 或 `dbsf` 融合 dense 与 BM25。
 - `reranker`：最终候选排序器。
-- `graph_enabled`：是否启用轻量实体关系信号。
+- `graph_enabled`：是否启用结构化实体/关系信号。
+- `graph_provider`：负责抽取 graph entities、relationships 和 query keywords 的模型 provider。
+- `graph_max_entities_per_chunk`：每个 chunk 最多保留多少实体。
+- `graph_max_relationships_per_chunk`：每个 chunk 最多保留多少显式关系。
+- `graph_neighbor_limit`：查询实体命中后，最多扩展多少邻居实体。
 
 ## 5. 文档入库链路
 
@@ -213,6 +215,7 @@ add(...)
 snippet + content
 -> _chunk_text
 -> 每个 chunk 调 _contextualize_chunk
+-> 每个 chunk 调 _extract_knowledge_graph
 -> _build_contextual_text
 -> _embed
 -> 保存到内存
@@ -227,7 +230,7 @@ snippet + content
 | --- | --- |
 | `self._chunks` | 本地 dense 搜索、父级上下文扩展 |
 | `SQLiteBM25Index` | 精确术语和关键词检索 |
-| graph index | 实体命中和关系扩展 |
+| graph index | 结构化实体命中、关系命中和邻居扩展 |
 | Qdrant | 远程或本地向量检索 |
 
 ### 5.3 `_chunk_text()`
@@ -392,31 +395,34 @@ BM25 对这些内容尤其有用：
 
 所以一次召回为什么排在前面，是可以解释和调试的。
 
-### 6.5 轻量 graph signal
+### 6.5 结构化 graph signal
 
-`_index_graph_chunk()` 会为每个 chunk 抽取实体和重要术语：
+`_index_graph_chunk()` 会把每个 chunk 里的结构化 graph contract 转成索引：
 
 ```text
-实体 -> 出现在哪些 chunk
-实体 <-> 实体 -> 在同一 chunk 中共现了多少次
+实体记录 -> 出现在哪些 chunk
+实体记录 -> embedding
+关系记录 -> 出现在哪些 chunk
+关系记录 -> embedding
+实体 -> 邻居实体
 ```
 
 查询时 `_search_graph()`：
 
-1. 从 query 中抽取实体。
-2. 找到直接包含这些实体的 chunk。
-3. 沿实体邻居扩展少量候选。
-4. 计算 `graph_score`。
-5. 在 `_merge_graph_candidates()` 中给候选加权。
+1. 先用模型把 query 拆成 `local_keywords` 和 `global_keywords`。
+2. `local_keywords` 命中实体记录，补实体分数和邻居分数。
+3. `global_keywords` 命中关系记录，补关系分数。
+4. 再分别用 entity embedding 和 relationship embedding 做 semantic match。
+5. 把 graph score 融入 `_merge_graph_candidates()`。
 
-当前实现是 LightRAG-inspired，也就是借鉴了轻量图增强思路，但不是完整 LightRAG 或完整 GraphRAG：
+当前实现是 LightRAG-inspired，但不是完整 LightRAG 或完整 GraphRAG：
 
-- 没有构建完整知识图谱。
-- 没有社区发现和多级图摘要。
 - 没有图数据库。
-- 主要是实体共现和邻居扩展。
+- 没有社区发现和多级图摘要。
+- 没有多跳推理图遍历。
+- 但已经不再是“正则抽几个词 + 共现”的玩具版本。
 
-面试时应该诚实地说成“轻量实体关系信号”，不要说成“完整 GraphRAG”。
+面试时应该诚实地说成“结构化实体/关系图信号”，不要说成“完整 GraphRAG”。
 
 ### 6.6 rerank 重排序
 
@@ -552,7 +558,7 @@ Planner 和 clarification 阶段可以使用这个 profile 判断本地资料库
 | 小 chunk 脱离文档背景 | contextual retrieval prefix |
 | 语义相似但术语不精确 | dense + BM25 hybrid |
 | 一个 child 命中但上下文不够 | parent/neighbor context expansion |
-| 相关内容通过实体关联出现 | lightweight graph signal |
+| 相关内容通过实体/关系关联出现 | structured graph signal |
 | 初排结果不够准确 | pluggable reranker |
 | 外部 Qdrant 暂时不可用 | local dense fallback 或 strict error |
 | 后续无法解释为什么命中 | retrieval metadata 和 score breakdown |
@@ -560,7 +566,7 @@ Planner 和 clarification 阶段可以使用这个 profile 判断本地资料库
 但它也有明确边界：
 
 1. `SQLiteBM25Index` 当前是进程内内存索引，服务重启后需要重新从文档重建。
-2. graph 是轻量实体共现图，不是完整 GraphRAG。
+2. graph 是结构化实体/关系图，不是完整 GraphRAG。
 3. 当前系统是单节点产品形态，不是分布式向量检索平台。
 4. graph entity extraction 对英文术语和预设技术词更友好，复杂中文实体识别不是它的强项。
 
@@ -598,11 +604,11 @@ Planner 和 clarification 阶段可以使用这个 profile 判断本地资料库
 
 可以这样回答：
 
-> 本地 RAG 的核心在 `DocumentStore`。文档入库时，我先按段落和句子做 parent-child chunking，再调用 contextualizer 给每个 child 生成索引上下文前缀，使用 embedding provider 生成向量，同时写入 Qdrant dense index、SQLite FTS5/BM25 keyword index 和轻量实体共现图。查询时把 query、任务 context 和 purpose 合并，先做 dense prefetch，再融合 BM25 精确匹配和 graph signal，随后通过可插拔 reranker 重排，最后把命中的 child 扩展为同文档邻近上下文，统一返回带来源、分数和检索阶段 metadata 的 `EvidenceItem`。这样 reporter 获得的是可追踪证据，而不是一段没有来源的字符串。
+> 本地 RAG 的核心在 `DocumentStore`。文档入库时，我先按段落和句子做 parent-child chunking，再调用 contextualizer 给每个 child 生成索引上下文前缀，使用 embedding provider 生成向量，同时写入 Qdrant dense index、SQLite FTS5/BM25 keyword index 和结构化实体/关系图。查询时把 query、任务 context 和 purpose 合并，先做 dense prefetch，再融合 BM25 精确匹配和 graph signal，随后通过可插拔 reranker 重排，最后把命中的 child 扩展为同文档邻近上下文，统一返回带来源、分数和检索阶段 metadata 的 `EvidenceItem`。这样 reporter 获得的是可追踪证据，而不是一段没有来源的字符串。
 
 如果面试官继续追问 graph，可以补充：
 
-> 这里借鉴了 LightRAG 的图增强思想，但当前实现是轻量实体共现和邻居扩展，不是完整 GraphRAG。它解决的是技术术语、系统组件和相关概念之间的补充召回问题，同时保持单节点、可复现和容易调试。
+> 这里借鉴了 LightRAG 的图增强思想，但当前实现是结构化实体/关系抽取加邻居扩展，不是完整 GraphRAG。它解决的是技术术语、系统组件和相关概念之间的补充召回问题，同时保持单节点、可复现和容易调试。
 
 ## 12. 自测问题
 

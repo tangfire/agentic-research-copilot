@@ -89,6 +89,8 @@ provider_base.py:40-119
 | `assess_report` | `VerifierAgent` | 检查报告质量，决定是否返工 |
 | `compress_source` | `SourceReader` | 把网页原文压缩成可引用证据 |
 | `contextualize_chunk` | `DocumentStore` | 给文档 chunk 生成索引用上下文前缀 |
+| `extract_knowledge_graph` | `DocumentStore` | 从 chunk 抽取结构化实体、类型、描述和显式关系 |
+| `extract_graph_query` | `DocumentStore` | 把查询拆成 local entity keywords 和 global relationship keywords |
 | `embed_text` / `embed_texts` | `MemoryStore` / `DocumentStore` | 生成向量 |
 
 这就是模型能力的总接口。
@@ -371,6 +373,57 @@ providers.py:363-405
 - chunk index
 
 生成 50-100 token 左右的上下文，让孤立 chunk 在 embedding 和 BM25 检索时更有语境。
+
+### `extract_knowledge_graph`
+
+位置：
+```text
+providers.py:407-482
+```
+
+作用：
+```text
+在文档入库时，把每个 child chunk 转成结构化 knowledge graph contract。
+```
+
+输出包括：
+
+- canonical entity name
+- entity type
+- entity description
+- aliases
+- explicit relationship
+- relation type
+- relation keywords
+- confidence
+
+它和旧版的正则抽词不同：真实 provider 会根据 chunk 语义判断实体边界和关系语义，`DocumentStore` 只负责规范化、缓存、建立索引和记录 metadata。
+
+模型被明确要求：
+
+- 关系两端必须来自已抽取实体。
+- 关系必须被当前 chunk 明确支持。
+- 不要把“共同出现”直接伪装成有语义的关系。
+- 少抽但可靠，不要为了填满上限而猜测。
+
+### `extract_graph_query`
+
+位置：
+```text
+providers.py:484-534
+```
+
+作用：
+```text
+把用户 query 转成两套图检索关键词。
+```
+
+| 输出 | 含义 |
+| --- | --- |
+| `local_keywords` | 具体实体、系统、组件、论文、组织、标识符或窄概念 |
+| `global_keywords` | 关系类型、主题、机制、因果、风险或高层概念 |
+
+这是 LightRAG dual-level retrieval 思路在本项目中的收敛实现：实体检索回答“在找谁/什么”，关系检索回答“它们之间发生了什么”。
 
 ### `embed_text` / `embed_texts`
 

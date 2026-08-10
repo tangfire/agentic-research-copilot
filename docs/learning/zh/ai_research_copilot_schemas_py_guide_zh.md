@@ -315,6 +315,61 @@ schemas.py:67-71
 
 > chunk 本身可能很短，脱离标题和章节后不好检索。`ChunkContextContract` 让模型为 chunk 补背景，然后再进入 embedding 和 BM25 索引。
 
+### 4.4 `KnowledgeGraphEntity` / `KnowledgeGraphRelationship`
+
+位置：
+
+```text
+schemas.py:74-101
+```
+
+作用：
+
+```text
+把文档 chunk 中的实体和实体之间的显式关系建模成可校验 contract。
+```
+
+`KnowledgeGraphEntity` 记录：
+
+- canonical name
+- entity type
+- description
+- aliases
+- confidence
+
+`KnowledgeGraphRelationship` 记录：
+
+- source entity
+- target entity
+- relation type
+- relation description
+- retrieval keywords
+- weight
+- confidence
+
+这两个对象很重要，因为 graph 不再是 `store.py` 里临时抽几个 token，而是 provider 输出、schema 校验、store 建索引的一条正式链路。
+
+### 4.5 `KnowledgeGraphExtractionContract` / `KnowledgeGraphQueryContract`
+
+`KnowledgeGraphExtractionContract` 是索引阶段的输出：
+
+```text
+chunk -> entities + relationships
+```
+
+`KnowledgeGraphQueryContract` 是查询阶段的输出：
+
+```text
+query -> local_keywords + global_keywords
+```
+
+其中：
+
+- `local_keywords` 面向具体实体、组件、系统和标识符。
+- `global_keywords` 面向关系、主题、机制和因果语义。
+
+这让 `DocumentStore` 可以分别匹配 entity embedding 和 relationship embedding，再和 dense/BM25 候选融合。
+
 ## 5. 研究执行对象
 
 ### 5.1 `ResearchNote`
@@ -1190,4 +1245,3 @@ ResearchReport + EvidenceItem[] + PlanItem[]
 最短版本：
 
 > `schemas.py` 定义了这个大模型研究系统的对象边界。它让规划、工具选择、证据、报告、评估和运行记录都变成可验证、可保存、可复盘的数据结构。
-

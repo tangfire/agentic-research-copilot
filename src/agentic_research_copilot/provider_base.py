@@ -8,6 +8,8 @@ from .schemas import (
     ClarificationContract,
     CorpusProfile,
     EvidenceItem,
+    KnowledgeGraphExtractionContract,
+    KnowledgeGraphQueryContract,
     MemoryRecord,
     PlanItem,
     PlannerContract,
@@ -121,6 +123,28 @@ class ResearchModelProvider(Protocol):
         chunk_index: int,
         total_chunks: int,
     ) -> tuple[ChunkContextContract, ModelUsage]: ...
+
+    def extract_knowledge_graph(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, object],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+        max_entities: int,
+        max_relationships: int,
+    ) -> tuple[KnowledgeGraphExtractionContract, ModelUsage]: ...
+
+    def extract_graph_query(
+        self,
+        *,
+        query: str,
+        max_local_keywords: int,
+        max_global_keywords: int,
+    ) -> tuple[KnowledgeGraphQueryContract, ModelUsage]: ...
 
     def embed_text(self, text: str) -> tuple[list[float], ModelUsage]: ...
     def embed_texts(self, texts: Sequence[str]) -> tuple[list[list[float]], ModelUsage]: ...

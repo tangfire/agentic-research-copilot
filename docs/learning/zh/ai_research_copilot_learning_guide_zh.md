@@ -475,7 +475,7 @@ PDF、Markdown、HTML 或纯文本文件
 
 这些容易被追问穿：
 
-- 完整 GraphRAG 或 LightRAG 运行时。这里的 GraphRAG/LightRAG 指以实体关系图辅助检索、组织和总结知识的更完整系统，通常会构建实体关系图、社区或多级图摘要；本项目只实现了轻量实体关系增强。
+- 完整 GraphRAG 或 LightRAG 运行时。这里的 GraphRAG/LightRAG 指以实体关系图辅助检索、组织和总结知识的更完整系统，通常会构建实体关系图、社区或多级图摘要；本项目实现了模型结构化实体/关系抽取、dual-level graph retrieval 和候选融合，但仍不包含持久化图数据库、社区摘要和多跳推理。
 - 企业级 MCP 网关。
 - 生产级分布式调度平台。
 - 企业级 OCR 光学字符识别或文档智能平台。
@@ -659,13 +659,13 @@ PDF、Markdown、HTML 或纯文本文件
 
 受 LightRAG 启发的轻量图关系信号怎么讲：
 
-> 这里不是完整的 GraphRAG 或 LightRAG 系统，而是一个轻量图关系增强信号。系统从文本片段的标题、来源和正文中识别实体，记录“片段包含哪些实体”以及“哪些实体经常共同出现”。查询命中某个实体时，系统会把与该实体及其相邻实体相关的片段加入候选，再交给重排模型排序。
+> 这里不是完整的 GraphRAG 或 LightRAG 系统，而是一个 LightRAG-inspired 的结构化图关系增强层。索引阶段由真实 model provider 按 schema 抽取 canonical entities、entity types、descriptions 和 explicit relationships；查询阶段把问题拆成 local entity keywords 与 global relationship keywords，分别匹配实体和关系，再把图候选融合进 dense/BM25 结果，最后交给 reranker 排序。
 
 这里的“实体”可以是论文名、算法名、框架名或系统组件名。例如查询 `FedRolex` 时，图关系可能补充与“模型异质性”共同出现的其他片段。
 
 这部分不要夸大，但要会讲它解决什么：
 
-> 它用来补充短实体名、系统组件名和跨片段关系的召回，不是用来构建企业级知识图谱。
+> 它用来补充短实体名、系统组件名和跨片段关系的召回，不是用来构建企业级知识图谱。deterministic 抽取只作为测试、离线复现和非严格模式 fallback。
 
 外部搜索和来源阅读链路：
 

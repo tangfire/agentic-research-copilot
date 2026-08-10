@@ -12,6 +12,10 @@ from .schemas import (
     ClarificationContract,
     CorpusProfile,
     EvidenceItem,
+    KnowledgeGraphEntity,
+    KnowledgeGraphExtractionContract,
+    KnowledgeGraphQueryContract,
+    KnowledgeGraphRelationship,
     MemoryRecord,
     PlanItem,
     PlannerContract,
@@ -482,6 +486,56 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         )
         return contract, usage
 
+    def extract_knowledge_graph(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+        max_entities: int,
+        max_relationships: int,
+    ) -> tuple[KnowledgeGraphExtractionContract, ModelUsage]:
+        contract = _heuristic_knowledge_graph(
+            document_title=document_title,
+            source=source,
+            chunk_text=chunk_text,
+            max_entities=max_entities,
+            max_relationships=max_relationships,
+        )
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-knowledge-graph-test-double",
+            prompt_tokens=max(1, (len(document_excerpt) + len(chunk_text)) // 4),
+            completion_tokens=max(16, (len(contract.entities) + len(contract.relationships)) * 12),
+            latency_ms=1,
+        )
+        return contract, usage
+
+    def extract_graph_query(
+        self,
+        *,
+        query: str,
+        max_local_keywords: int,
+        max_global_keywords: int,
+    ) -> tuple[KnowledgeGraphQueryContract, ModelUsage]:
+        contract = _heuristic_graph_query(
+            query,
+            max_local_keywords=max_local_keywords,
+            max_global_keywords=max_global_keywords,
+        )
+        usage = ModelUsage(
+            provider=self.name,
+            model="heuristic-graph-query-test-double",
+            prompt_tokens=max(1, len(query) // 4),
+            completion_tokens=max(8, len(contract.local_keywords) + len(contract.global_keywords)),
+            latency_ms=1,
+        )
+        return contract, usage
+
     def embed_text(self, text: str) -> tuple[list[float], ModelUsage]:
         vector = _hashed_dense_vector(text, self.embedding_dimensions)
         usage = ModelUsage(provider=self.name, model="hashed-embedding", prompt_tokens=max(1, len(text) // 4), latency_ms=1)
@@ -699,6 +753,86 @@ def _heuristic_chunk_context(
         key_terms=terms[:12],
         provenance_hint="; ".join(location_bits),
         confidence=0.74,
+    )
+
+
+def _heuristic_knowledge_graph(
+    *,
+    document_title: str,
+    source: str,
+    chunk_text: str,
+    max_entities: int,
+    max_relationships: int,
+) -> KnowledgeGraphExtractionContract:
+    candidates: Counter[str] = Counter()
+    labels: dict[str, str] = {}
+    for phrase in re.findall(r"\b[A-Z][A-Za-z0-9+.#/-]*(?:\s+[A-Z][A-Za-z0-9+.#/-]*){0,3}\b", chunk_text):
+        label = _clean_text(phrase)
+        key = label.casefold()
+        if len(label) < 3:
+            continue
+        candidates[key] += 3
+        labels.setdefault(key, label)
+    for token in _context_key_terms(" ".join([document_title, source, chunk_text])):
+        key = token.casefold()
+        candidates[key] += 1
+        labels.setdefault(key, token)
+
+    entities = [
+        KnowledgeGraphEntity(
+            name=labels[key],
+            entity_type="test_term",
+            description=f"Deterministic test entity found in {document_title}.",
+            confidence=0.55,
+        )
+        for key, _count in candidates.most_common(max(1, max_entities))
+    ]
+    relationships: list[KnowledgeGraphRelationship] = []
+    for left, right in zip(entities, entities[1:]):
+        relationships.append(
+            KnowledgeGraphRelationship(
+                source=left.name,
+                target=right.name,
+                relation_type="co_occurs_with",
+                description=f"{left.name} and {right.name} occur in the same deterministic test chunk.",
+                keywords=["co-occurrence", "test relation"],
+                weight=0.25,
+                confidence=0.35,
+            )
+        )
+        if len(relationships) >= max(1, max_relationships):
+            break
+    return KnowledgeGraphExtractionContract(
+        entities=entities,
+        relationships=relationships,
+        summary="Deterministic graph extraction for tests and offline replay.",
+        confidence=0.5 if entities else 0.0,
+    )
+
+
+def _heuristic_graph_query(
+    query: str,
+    *,
+    max_local_keywords: int,
+    max_global_keywords: int,
+) -> KnowledgeGraphQueryContract:
+    phrases = [
+        _clean_text(value)
+        for value in re.findall(r"\b[A-Z][A-Za-z0-9+.#/-]*(?:\s+[A-Z][A-Za-z0-9+.#/-]*){0,3}\b", query)
+    ]
+    terms = _context_key_terms(query)
+    local_keywords = list(dict.fromkeys([*phrases, *terms]))[: max(1, max_local_keywords)]
+    global_keywords = [
+        term
+        for term in terms
+        if term.casefold() not in {value.casefold() for value in local_keywords[:3]}
+    ][: max(1, max_global_keywords)]
+    if not global_keywords:
+        global_keywords = terms[: max(1, max_global_keywords)]
+    return KnowledgeGraphQueryContract(
+        local_keywords=local_keywords,
+        global_keywords=global_keywords,
+        confidence=0.5 if local_keywords or global_keywords else 0.0,
     )
 
 

@@ -8,7 +8,13 @@ from agentic_research_copilot.retrieval import (
     DocumentStore,
     RerankerConfig,
 )
-from agentic_research_copilot.schemas import ChunkContextContract
+from agentic_research_copilot.schemas import (
+    ChunkContextContract,
+    KnowledgeGraphEntity,
+    KnowledgeGraphExtractionContract,
+    KnowledgeGraphQueryContract,
+    KnowledgeGraphRelationship,
+)
 
 
 class PreferSecondReranker(BaseReranker):
@@ -37,6 +43,55 @@ class StaticContextProvider(DeterministicResearchModelProvider):
                 confidence=0.91,
             ),
             ModelUsage(provider=self.name, model="static-contextualizer", prompt_tokens=24, completion_tokens=24),
+        )
+
+
+class StaticGraphProvider(StaticContextProvider):
+    name = "static_graph_provider"
+
+    def extract_knowledge_graph(self, **kwargs):
+        return (
+            KnowledgeGraphExtractionContract(
+                entities=[
+                    KnowledgeGraphEntity(
+                        name="Callback Repair Worker",
+                        entity_type="component",
+                        description="Repairs asynchronous payment callbacks after provider delivery gaps.",
+                        aliases=["CRW"],
+                        confidence=0.94,
+                    ),
+                    KnowledgeGraphEntity(
+                        name="Settlement Ledger",
+                        entity_type="data_store",
+                        description="Stores settlement state used for reconciliation and audit checks.",
+                        confidence=0.92,
+                    ),
+                ],
+                relationships=[
+                    KnowledgeGraphRelationship(
+                        source="Callback Repair Worker",
+                        target="Settlement Ledger",
+                        relation_type="audits",
+                        description="Callback Repair Worker audits settlement entries before repair completion.",
+                        keywords=["callback repair", "settlement audit"],
+                        weight=1.3,
+                        confidence=0.91,
+                    )
+                ],
+                summary="Static graph extraction used by retrieval tests.",
+                confidence=0.93,
+            ),
+            ModelUsage(provider=self.name, model="static-graph-extractor", prompt_tokens=32, completion_tokens=64),
+        )
+
+    def extract_graph_query(self, **kwargs):
+        return (
+            KnowledgeGraphQueryContract(
+                local_keywords=["Callback Repair Worker", "Settlement Ledger"],
+                global_keywords=["audits settlement ledger", "callback repair"],
+                confidence=0.9,
+            ),
+            ModelUsage(provider=self.name, model="static-graph-query", prompt_tokens=12, completion_tokens=12),
         )
 
 
@@ -118,6 +173,42 @@ def test_document_store_fuses_light_rag_inspired_graph_signal():
     assert any("Zeus" in hit.metadata.get("graph_query_entities", []) for hit in hits)
     assert any(hit.metadata.get("graph_score", 0) > 0 for hit in hits)
     assert all(hit.metadata.get("graph_augmented_retrieval") is True for hit in hits)
+
+
+def test_document_store_indexes_structured_entity_relationship_graph():
+    provider = StaticGraphProvider()
+    store = DocumentStore(
+        chunk_size=220,
+        chunk_overlap=0,
+        contextualizer_provider=provider,
+        graph_provider=provider,
+        graph_enabled=True,
+    )
+    store.add(
+        title="Payment Repair Design",
+        source="payment-repair.md",
+        content=(
+            "CRW validates provider payloads after asynchronous callbacks arrive. "
+            "The ledger check is abbreviated in this operational note."
+        ),
+    )
+
+    hits = store.search(
+        "How does the Callback Repair Worker audit the Settlement Ledger?",
+        limit=1,
+    )
+
+    assert hits
+    assert hits[0].metadata["graph_extractor_provider"] == "static_graph_provider"
+    assert hits[0].metadata["graph_extractor_model"] == "static-graph-extractor"
+    assert hits[0].metadata["graph_query_provider"] == "static_graph_provider"
+    assert hits[0].metadata["graph_query_model"] == "static-graph-query"
+    assert "Callback Repair Worker" in hits[0].metadata["graph_matched_entities"]
+    assert any("audits" in item for item in hits[0].metadata["graph_matched_relationships"])
+    assert hits[0].metadata["graph_query_local_keywords"] == [
+        "Callback Repair Worker",
+        "Settlement Ledger",
+    ]
 
 
 def test_document_store_uses_real_bm25_keyword_index_for_exact_terms():

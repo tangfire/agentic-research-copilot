@@ -597,8 +597,8 @@ DocumentStore.search(...)
 | `_search_qdrant` | Qdrant 语义向量检索 |
 | `_merge_keyword_candidates` | 合并 BM25 关键词检索结果 |
 | `_fuse_dense_keyword_score` | dense 和 BM25 分数融合 |
-| `_merge_graph_candidates` | 加入轻量图关系候选 |
-| `_search_graph` | 根据实体共现关系找候选 |
+| `_merge_graph_candidates` | 加入结构化实体/关系图候选 |
+| `_search_graph` | 根据 local entity 和 global relationship 查询图候选 |
 | `_rerank` | 调用重排器 |
 | `_parent_context_for_child` | 补回父段落和相邻片段 |
 
