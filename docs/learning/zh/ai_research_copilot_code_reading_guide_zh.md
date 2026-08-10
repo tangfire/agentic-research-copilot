@@ -563,6 +563,12 @@ RAG 是这个项目最值得学的部分。
 src\agentic_research_copilot\retrieval\store.py
 ```
 
+如果你想看逐函数拆解版，先打开这篇单独文档：
+
+```text
+D:\kn\projects\agentic-research-copilot\docs\learning\zh\ai_research_copilot_retrieval_store_py_guide_zh.md
+```
+
 重点函数：
 
 ```python
