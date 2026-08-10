@@ -6,7 +6,7 @@ import re
 from collections import Counter
 from typing import Any, Sequence
 
-from .provider_base import ModelUsage
+from .provider_base import ModelUsage, ResearchModelProvider
 from .schemas import (
     ChunkContextContract,
     ClarificationContract,
@@ -61,7 +61,7 @@ VAGUE_RESEARCH_TERMS = {
 }
 
 
-class DeterministicResearchModelProvider:
+class DeterministicResearchModelProvider(ResearchModelProvider):
     name = "deterministic"
 
     def __init__(self, embedding_dimensions: int = 256) -> None:

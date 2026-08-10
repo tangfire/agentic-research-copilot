@@ -63,7 +63,7 @@ VAGUE_RESEARCH_TERMS = {
 TContract = TypeVar("TContract")
 
 
-class OpenAICompatibleResearchModelProvider:
+class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
     name = "openai_compatible"
 
     def __init__(
