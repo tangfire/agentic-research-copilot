@@ -2,305 +2,144 @@
 
 ## Goal
 
-Build an AI research copilot that can supervise a run, plan, search, retrieve contextual evidence, recall memory, verify claims, evaluate RAG quality, and report with citations.
+AI Research Copilot is a single-node technical research and engineering-intelligence assistant. It plans an open-ended technical question, gathers evidence through web search, GitHub MCP, and local contextual retrieval, then produces a citation-backed report with trace and evaluation artifacts.
 
-The product is best described as **AI Research Copilot for complex questions**.
-The technical layer uses LangGraph + Agentic RAG: it avoids a plain
-`question -> top-k chunks -> answer` pipeline by making planning, tool selection,
-query rewrite, evidence sufficiency, citation checks, and revision explicit
-runtime states.
+The product is aimed at open-source project research, engineering decision research, and local technical-corpus grounding. It is not a private-data assistant, a GitHub-only analyzer, or an MCP wrapper around another deep-research system.
 
-One-line product statement:
+The current product path is:
 
-> AI Research Copilot for complex questions: planning, search, reading,
-> retrieval augmentation, memory recall, citation verification, and evaluation
-> replay produce traceable research reports.
+```text
+clarify -> plan -> supervise -> search/read/retrieve -> synthesize -> verify/evaluate -> replay
+```
 
-The main product path is **planning -> search/reading -> synthesis ->
-verification/evaluation -> replay**. RAG is a grounding and memory layer for
-contextual documents, already-read source excerpts, and prior run recall; it is
-not the only retrieval path and should not be described as the whole system.
-
-## Design Fit
-
-The architecture is intentionally shaped around complex research questions, not
-around a generic agent SDK or a private-knowledge-base chatbot. The selected
-technologies fit the product boundaries:
-
-- `LangGraph` is used because research runs have durable state, conditional
-  branches, bounded loops, revision paths, and replayable traces. The graph
-  nodes make clarification, planning, research delegation, verification,
-  evaluation, memory write, and finalization explicit.
-- `FastAPI` is used as a thin product API for jobs, documents, memory, runtime
-  readiness, and run artifacts. It keeps the AI workflow inspectable instead of
-  hiding it behind a single chat endpoint.
-- `Qdrant` is used for dense vector retrieval, but it is paired with SQLite
-  FTS5/BM25 and reranking because research evidence often depends on exact
-  terms, acronyms, dates, paper names, and component names.
-- The structured graph signal is an internal retrieval feature, not a full
-  GraphRAG platform. It improves candidate recall for entity-heavy documents
-  with model-extracted entities, explicit relationships, dual-level query
-  keywords, and graph-score fusion while keeping the ODR-style research
-  workflow unchanged.
-- `SQLite` is used for local persistence and single-node checkpointing. That is
-  appropriate for a reproducible interview/demo project and should not be
-  described as distributed durable execution.
-- `Celery` and `Redis` are used for single-node API/worker separation in strict
-  real-provider mode. They are not a claim of production-grade scheduling or
-  multi-tenant operations.
-- MCP is used as a configurable tool boundary. The local workbench MCP server
-  is useful because it exposes the running project's grounding corpus, memory,
-  historical runs, evaluations, and readiness checks to the researcher.
-- Provider `raw_content` reading is the external reader boundary for v1. It is a
-  practical source-reading layer, not browser automation.
-
-The design is therefore coherent: each heavier component supports a concrete
-research-copilot requirement. The project should still be presented as a
-single-node AI Research Copilot, not as an enterprise browser agent, generic
-agent framework, distributed platform, or document-intelligence product.
+The core does not include a project memory service. That module was removed because the current experimental assets are stronger around research orchestration and Agentic RAG than around long-term personalization.
 
 ## System Flow
 
 ```mermaid
 flowchart LR
-  UI["Web UI"] --> API["FastAPI"]
+  UI["Static Web Console"] --> API["FastAPI API"]
   API --> Graph["LangGraph StateGraph"]
-  Graph --> Supervisor["Supervisor"]
-  Supervisor --> Planner["Planner Agent"]
-  Supervisor --> Research["Researcher / Retriever"]
-  Planner --> Routes["Routing + Tool Selection"]
-  Routes --> ParallelResearch["Concurrent Research Workers"]
-  ParallelResearch --> Research
-  Research --> Reader["Source Reading / Evidence Extraction"]
-  Research --> MCP["Configured MCP Tools"]
-  Routes --> Retriever["Qdrant Grounding Layer"]
-  Reader --> Evidence["Evidence Store"]
+  Graph --> Clarify["Clarifier"]
+  Graph --> Planner["Planner"]
+  Planner --> Supervisor["ResearchSupervisor"]
+  Supervisor --> Researcher["Researcher Loop"]
+  Supervisor --> Retriever["Contextual Retriever"]
+  Researcher --> Web["Search Providers"]
+  Researcher --> Reader["Source Reader"]
+  Researcher --> MCP["External MCP Tools"]
+  Retriever --> Dense["Qdrant Dense Index"]
+  Retriever --> BM25["SQLite FTS5/BM25"]
+  Retriever --> KG["Entity/Relation Graph Signal"]
+  Dense --> Rerank["Reranker"]
+  BM25 --> Rerank
+  KG --> Rerank
+  Reader --> Evidence["Evidence Items"]
   MCP --> Evidence
-  Retriever --> Evidence
-  Evidence --> Verifier["Verifier Agent"]
-  Verifier --> Reporter["Report Generator"]
-  Reporter --> Storage["Run / Artifact Store"]
-  API --> Memory["Layered Memory Service"]
-  API --> Obs["Observability / Cost / Replay"]
-  Obs --> Storage
+  Rerank --> Evidence
+  Evidence --> Reporter["Reporter"]
+  Reporter --> Verifier["Verifier"]
+  Verifier --> Eval["RAG Evaluator"]
+  Eval --> Storage["SQLite Runs / Trace / Evaluation"]
 ```
 
-## Core Modules
+## Runtime Nodes
 
-### Product Surfaces
+The LangGraph runtime has one active orchestration path:
 
-- Portal: submit research questions, inspect the generated plan, routes, report, and citations.
-- Admin: inspect sources, memory, telemetry, checkpoints, and runtime config.
-- The first UI is a dependency-light static research workspace served by FastAPI so the AI core remains the center of the project.
-- The workspace surfaces provider readiness, job progress, report review, route inspection, memory governance, and trace timeline without adding a heavy frontend build step.
-- A heavier frontend can be added later when streaming jobs, authentication, collaborative editing, or richer report review becomes necessary.
+```text
+supervisor_start
+-> planner
+-> research_supervisor
+-> parallel_research
+-> reporter
+-> verifier_evaluator
+-> revision_prepare or finalize
+```
 
-### Orchestration Runtime
+`revision_prepare` loops back to `planner` when verification or evaluation detects quality gaps and revision budget remains.
 
-- The default runtime is a LangGraph `StateGraph`, matching the graph-first direction used by Open Deep Research.
-- The graph nodes are `supervisor_start`, `memory_recall`, `planner`, `research_supervisor`, `parallel_research`, `reporter`, `verifier_evaluator`, `revision_prepare`, `memory_write`, and `finalize`.
-- `research_supervisor` follows the ODR tool-loop boundary: it records `think_tool`, delegates concrete research units with `ConductResearch`, and carries `ResearchComplete` criteria into the trace/checkpoint artifacts.
-- Multi-agent execution follows ODR's practical rule: prefer the simplest single-researcher path unless the plan exposes independent research directions that can be explored concurrently.
-- The graph compiles with a single-node LangGraph SQLite checkpointer by default; it falls back to in-process `MemorySaver` only when strict provider mode is disabled.
-- LangGraph is the only orchestration runtime; the former duplicated custom workflow was removed to keep one inspectable execution path.
-- `ARC_STRICT_PROVIDERS=true` turns the local app into a real-provider demo: missing model/search/embedding/rerank/Qdrant/checkpointer configuration fails startup instead of silently downgrading.
-- This repo does not import Open Deep Research as a runtime dependency; it uses ODR as the primary learning/reference target and adapts the same graph-shaped design pattern with product-specific nodes and schemas.
+## Core Design Choices
 
-### Job Manager
+- `LangGraph` is used because the workflow has explicit state, branches, retries, revision loops, checkpoints, and finalization.
+- `FastAPI` is used as a thin local product API, not as a business CRUD backend.
+- `Qdrant` handles dense retrieval for uploaded/project documents.
+- `SQLite FTS5/BM25` provides exact lexical recall and keeps local demos reproducible.
+- The graph signal is LightRAG-inspired but intentionally bounded: entity and relationship hits are fused into retrieval candidates before reranking; this is not a full GraphRAG platform.
+- `Qwen/DashScope rerank` or another configured reranker orders fused retrieval candidates in real-provider mode.
+- `Celery/Redis` is optional single-node API/worker separation. It should not be described as a distributed scheduling system.
+- MCP is an optional external tool boundary. The removed local workbench MCP is not part of the current architecture.
 
-- Accepts research jobs separately from final run artifacts.
-- Tracks `queued`, `running`, `completed`, `failed`, and `cancelled` states.
-- Executes offline/test research jobs through a single-worker background queue.
-- Submits strict local demo jobs to Celery over Redis for a single-node API/worker split.
-- If `ARC_JOB_QUEUE_BACKEND=celery` is used in strict provider mode, enqueue failures fail the job instead of falling back to the in-process worker.
-- Celery mode requires `ARC_QDRANT_URL`; embedded Qdrant paths are single-process only and are not used for API/worker separation.
-- Persists job and run records in SQLite and refreshes status reads from SQLite, so a local API process can observe updates written by a separate worker process.
-- Records attempts, retry errors, cancellation requests, and timeout metadata.
-- Records handoffs, trace events, and failure states so a run can be inspected after completion.
-- This is intentionally not described as a production distributed scheduler; Celery/Redis is optional process separation for personal deployment, while multi-worker production scheduling remains out of scope.
+## Evidence Channels
 
-### Planner Agent
+- External evidence: search provider results plus provider raw content read by `source_reader.py`.
+- Internal evidence: uploaded documents parsed by `document_reader.py` and retrieved by `retrieval/store.py`.
+- MCP evidence: results from a configured external MCP server and explicit tool allowlist. For GitHub MCP, the researcher passes structured arguments such as `owner`, `repo`, `path`, `issue_number`, or `query`.
+- Run artifact evidence: synthetic evidence summarizing the run plan, routes, query rewrites, trace, and evaluation metadata.
 
-- Normalizes the user request.
-- Breaks it into sub-questions.
-- Decides whether clarification is needed.
-- Emits a schema-backed planning contract.
-- In strict real-provider mode, the plan is generated by the configured chat model through a structured contract. Offline tests can still use deterministic planning.
+All channels become `EvidenceItem` objects so the reporter, verifier, and evaluator can reason over one citation contract.
 
-### Research Agents
+## MCP Boundary
 
-- Run plan-item research concurrently with a configurable worker budget.
-- Execute the `ConductResearch` calls selected by the research supervisor; offline deterministic providers only fill the same schema for test/fallback runs.
-- Each delegated external research unit runs a bounded ODR-style `think_tool` / `web_search` / configured `mcp_tool` / `ResearchComplete` loop. The researcher selects the next action through the model provider, converts provider `raw_content` or MCP output into evidence, checks minimum evidence and source diversity, records a reflection, and either stops or runs another tool call until `ARC_RESEARCH_MAX_ITERATIONS` is reached.
-- Research notes and checkpoints preserve `research_iterations`, `completed_reason`, and follow-up queries so the run can explain why a researcher stopped instead of hiding the loop behind a final answer.
-- Use a pluggable search registry inspired by Open Deep Research: Tavily, Exa, Perplexity, arXiv, PubMed, Linkup, OpenAI native web search, Anthropic native web search, plus DuckDuckGo, Brave, and SerpAPI adapters.
-- Use an ODR-shaped MCP registry for external tool integration. ODR does not hard-code MCP server names; it loads a configured `mcp_config.url` and `mcp_config.tools` allowlist through `MultiServerMCPClient`. This repo mirrors that boundary with `ARC_MCP_SERVER_URL`, `ARC_MCP_TOOLS`, optional bearer auth, `ARC_MCP_PROMPT`, and trace-visible MCP evidence records.
-- For interview/demo runs, the repo ships a local streamable HTTP research-workbench MCP server with `search_grounding_corpus`, `recall_project_memory`, `inspect_research_runs`, and `check_demo_readiness` in the default allowlist. Optional inspection tools still expose local ODR/PraisonAI reference search, runtime config inspection, and demo-question recommendations.
-- For Tavily, request provider `raw_content` when enabled and pass it through the source reader before report synthesis.
-- The v1 source reader has three strategies: `extract` for deterministic query-relevant snippets, `model_compress` for an Open Deep Research-style structured `summary/key_excerpts/relevance/limitations` contract, and `chunk_rerank_compress` for Open Deep Research legacy-style split/rerank plus neighbor-window expansion before compression.
-- This external web path matches the practical v1 boundary of the inspected Open Deep Research reference: provider search returns `raw_content`, the researcher compresses it, and final synthesis keeps citations attached to source URLs. It is not presented as a full browser automation stack.
-- Summarize evidence with citations.
-- Return structured findings instead of raw text only.
+Current MCP support is client-side only:
 
-### External vs Internal Evidence
+```text
+Researcher -> mcp_tools.py -> configured external MCP server -> EvidenceItem(kind="mcp")
+```
 
-- External search is used for fresh web evidence, papers, and public references.
-- MCP tools are used as optional external tool channels when a concrete MCP server URL and tool allowlist are configured. The local workbench MCP server is intentionally scoped to real experiment support: search the ingested grounding corpus, recall layered memory, inspect run trace/evaluation artifacts, and check demo readiness.
-- Internal grounding is used for uploaded documents, project notes, and prior runs.
-- A corpus profile summarizes what uploaded/project sources exist so the research supervisor can decide whether internal grounding is actually available.
-- The research supervisor can route a task to one or both sources through `ConductResearch` arguments.
-- Each delegated route records selected tools, rewritten web/internal queries, minimum evidence thresholds, minimum source diversity, and sufficiency criteria.
-- Deterministic route hints are kept as offline/test scaffolding and as defensive fallback inputs. They are not the primary real-provider decision layer.
-- The verifier compares the evidence channels instead of assuming they say the same thing.
-- The reporter keeps source attribution separate so the final answer stays traceable.
-- Qdrant backs the internal embedding index, while the route contract stays stable.
+Recommended external MCPs:
 
-### Grounding Layer
+- GitHub MCP remote read-only endpoint for technical research about repositories, implementation details, issues, pull requests, releases, and code-level evidence.
+- Paper/search MCP only when the demo topic genuinely needs scholarly metadata outside the configured search provider.
 
-- Ingests local text, Markdown, HTML, and optional PyMuPDF-backed PDF files through a reader boundary before indexing.
-- Splits Markdown and HTML by headings into section segments with `section_heading`,
-  `section_level`, `section_path`, and section ordering metadata before chunking.
-- Splits PDFs into page segments with `page_number`, `page_count`, block count,
-  heading hints, table hints, page dimensions, and rotation metadata before
-  chunking so provenance and layout signals can survive retrieval.
-- Performs paragraph-aware child chunking with overlap, indexing-time contextual retrieval prefixing, LightRAG-inspired structured entity/relation graph indexing, Qdrant dense retrieval, SQLite FTS5/BM25 keyword retrieval, RRF/DBSF fusion, reranking, and parent/neighbor context expansion.
-- Preserves source attribution so each report section can be traced back.
-- Works as the internal evidence channel, distinct from web search.
+Avoid full "deep research assistant" MCPs as the default. They duplicate this project's planner/supervisor/reporter and blur the architecture.
 
-Parsing and chunking are intentionally separated. The local `DocumentReader`
-normalizes file content and emits document, section, or page segments with
-metadata. For PDFs, it prefers PyMuPDF block extraction to preserve reading order,
-falls back to plain page text when block extraction is unavailable, records
-layout metadata, and appends compact Markdown-like table text when PyMuPDF
-`find_tables()` can extract rows. The `DocumentStore` then builds child chunks
-that include title, source, chunk position, URL, selected scalar metadata, and a
-chunk-specific contextual retrieval prefix before embedding and BM25 indexing.
-The prefix is generated at ingestion time, cached by document/chunk hash and
-prompt version, and stored in evidence metadata as `context_prefix` so retrieval
-behavior is inspectable. Search retrieves precise child chunks, fuses a
-structured entity/relation graph signal into the candidate set, then returns a
-same-document parent context window around the matched child so report synthesis
-gets enough surrounding context. This avoids hiding parser decisions inside
-vector search and makes it clear which stage should be improved when retrieval
-quality is weak. The external web reader follows the same engineering principle:
-`chunk_rerank_compress` first retrieves child chunks for precision, then expands
-the selected chunks with a small neighbor window so report synthesis sees the
-premise, number, and conclusion even when provider `raw_content` crosses a chunk
-boundary.
+The model provider receives a compact MCP tool catalog. It chooses between `web_search` and `mcp_tool`; when it chooses MCP, it must set `mcp_tool_name` and `mcp_tool_args`. This keeps Tavily as the broad web channel, local RAG as the private/document channel, and GitHub MCP as a developer source-of-truth channel.
 
-### Why RAG fits this project
+Future option: expose this project as its own MCP Server. That should be implemented as a separate outward-facing facade, for example:
 
-- The product is evidence-driven, not a free-form creative generator.
-- Answers should be grounded in uploaded documents, prior runs, memory, and web evidence.
-- Retrieval is used as a grounding layer for the planner, researcher, and reporter.
-- Memory stores preferences and distilled conclusions; retrieval brings back supporting evidence.
-- Fine-tuning is a poor fit because the source set changes and provenance matters.
-- Plain keyword RAG is too weak here, so the repo uses contextual retrieval prefixing, parent-child retrieval, LightRAG-inspired structured entity/relation graph augmentation, Qdrant dense vectors, a real SQLite FTS5/BM25 keyword index, fusion, and reranking first.
-- Agentic RAG adds query rewrite, tool selection, multi-query retrieval, sufficiency scoring, and revision-triggering quality gates.
-- Full GraphRAG, RAPTOR, persistent graph storage, community summarization, and deep multihop graph reasoning remain out of scope for v1. The implemented graph layer is a LightRAG-inspired structured entity/relation signal: ingestion asks the model for canonical entities and explicit relationships, query time separates local entity keywords from global relation keywords, and both graph views are fused with dense/BM25 retrieval before reranking.
-- For larger corpora, the same contract can be swapped to pgvector or another hybrid retrieval backend without changing the orchestration flow.
-- The hybrid implementation uses Anthropic-style contextual retrieval prefixes, Qdrant dense vector search, and SQLite FTS5 `bm25()` keyword search, then fuses results with `RRF` or `DBSF` before applying a pluggable reranker.
-- It intentionally does not run Elasticsearch/OpenSearch in v1. The project is a single-node research copilot, so SQLite FTS5 gives a real BM25 lexical signal without adding dual-write consistency, analyzer configuration, or search-cluster operations. Elasticsearch remains a future scale-out option if the corpus grows or fielded search/highlighting becomes a product requirement.
-- The default reranker calls Qwen/DashScope `qwen3-rerank` when an API key is configured. Deterministic `rule_diversity_chunk_bonus` is reserved for offline runs and tests, and is disabled by `ARC_STRICT_PROVIDERS=true`.
-- For DashScope, the reranker accepts the generic `https://dashscope.aliyuncs.com/compatible-mode/v1` base URL and maps it to the rerank service endpoint internally, because the generic compatible-mode endpoint does not expose `/reranks` directly.
+- `run_research(topic, depth)`
+- `search_local_corpus(query)`
+- `inspect_research_run(run_id)`
 
-### Memory Service
+That future server should call the stable FastAPI/application services. It should not reintroduce the deleted local workbench that existed mainly for demos.
 
-- Stores session notes, canonical facts, and topic summaries.
-- Supports short-term context and long-term memory.
-- Uses explicit write and recall rules instead of a flat key/value store.
-- Ranks memory recall with lexical matching, embedding-assisted semantic similarity, confidence, memory layer, and governance status.
-- Adds governance metadata to canonical memory: conflicts are retained, marked `needs_review`, and exposed through a governance report instead of being overwritten silently.
-- This follows the useful subset of PraisonAI's memory direction without turning the project into a generic memory platform. PraisonAI also exposes broader short/long/entity/user memory, quality-aware search, session stores, and knowledge retrieval; this repo keeps only the product-specific pieces needed for deep research.
+## API Surface
 
-### Model Provider
+- Research: `clarify`, `runs`, `jobs`, `status`, `result`, `trace`, `evaluation`, `replay`.
+- Documents: add, ingest, search, delete, clear.
+- Runtime: config and provider readiness.
+- History: clear runs/jobs/telemetry.
 
-- Exposes an OpenAI-compatible chat and embeddings adapter.
-- Uses deterministic test doubles by default for CI and offline development.
-- Allows chat-only providers to use deterministic local embeddings in offline mode, or a separate OpenAI-compatible embedding endpoint for strict real-provider demos.
-- Keeps planner, verifier, and reporter outputs schema-backed.
-
-### Verifier Agent
-
-- Checks citation completeness.
-- Detects contradictions or missing evidence.
-- Flags weak claims before final report generation.
-
-### Report Generator
-
-- Writes the final answer or report.
-- Keeps source references attached to each section.
-- Follows the Open Deep Research final-report pattern: compressed findings are
-  synthesized by the report model, while `citation_indexes` are mapped back to
-  existing evidence so the model cannot invent source objects.
-
-### Observability Layer
-
-- Tracks token usage, tool calls, handoffs, and latency.
-- Stores traces, failures, and replay inputs.
-- Helps explain why a run succeeded or failed.
-- Persists run-level checkpoints in SQLite and supports a single-node LangGraph SQLite checkpointer for graph execution. Full distributed resume remains out of scope; the README/API calls the current behavior single-node checkpointing plus durable trace/replay.
-- Exposes `GET /v1/runtime/provider-check` so demos can verify real-provider readiness without exposing secret values.
-
-### RAG Evaluation Layer
-
-- Scores plan coverage, retrieval hit rate, contextual retrieval contribution, evidence sufficiency, tool-selection coverage, query-rewrite count, source quality, context precision, context recall, faithfulness proxy, citation precision, citation source coverage, source diversity, and unsupported sections.
-- Emits an `evaluation` trace event and a `rag.evaluated` checkpoint for each run.
-- Feeds weak citation or retrieval quality back into the supervisor revision loop.
-- The inspected Open Deep Research reference keeps source quality as an evaluator concern rather than a separate runtime source-filtering policy. This repo follows that choice and does not add a standalone source quality policy layer for v1.
-- `scripts/run_llm_judge_eval.py` provides an optional Open Deep Research-style
-  LLM-as-judge artifact for demo reports, scoring research depth, source quality,
-  analytical rigor, structure, groundedness, and completeness.
-- `scripts/run_ragas_eval.py` provides an optional Ragas artifact over saved demo
-  evidence when the `.[eval]` extra is installed.
-- Runtime RAG metrics remain lightweight local proxies. They are designed to make retrieval and citation failure modes visible without adding benchmark cost to every request.
-- Demo artifacts should be regenerated before important interviews. Search providers can return mixed blogs, videos, or tutorial sources; source quality is meant to be visible in evaluation instead of silently hidden by a runtime filter.
-
-## Interfaces
-
-- `POST /v1/research/jobs`: submit an asynchronous research job and receive a job envelope.
-- `GET /v1/research/jobs`: inspect submitted jobs.
-- `GET /v1/research/jobs/{job_id}/status`: inspect queued/running/completed/failed/cancelled state.
-- `GET /v1/research/jobs/{job_id}/result`: fetch the completed run artifact.
-- `POST /v1/research/jobs/{job_id}/cancel`: request cancellation for queued/running jobs.
-- `POST /v1/research/clarify`: run the ODR-style clarification gate before starting a full research run.
-- `POST /v1/research/runs`: synchronous run endpoint for tests and simple clients.
-- `GET /v1/research/runs/{run_id}/status`: inspect completed run timing and source count.
-- `GET /v1/research/runs/{run_id}/result`: inspect report, issues, evidence, routes, and checkpoints.
-- `GET /v1/research/runs/{run_id}/evaluation`: inspect RAG and citation quality gates.
-- `GET /v1/research/runs/{run_id}/trace`: inspect the handoff and tool trace for a run.
-- `DELETE /v1/research/history`: clear run/job/telemetry history, with optional `include_memory=true`.
-- `GET /v1/documents`: list indexed grounding documents.
-- `POST /v1/documents`: add a grounding document.
-- `POST /v1/documents/ingest`: parse a local file into one or more grounding documents.
-- `DELETE /v1/documents/{document_id}`: remove one document and its vector chunks.
-- `DELETE /v1/documents`: clear the document corpus and retrieval index.
-- `GET /v1/memory?layer=&topic=&run_id=&session_id=&tag=`: filter memory records.
-- `GET /v1/memory/governance`: inspect canonical memory conflicts and review-required records.
-- `GET /v1/runtime/config`: inspect agents, tools, routing, storage, and quality gates.
+There are no memory endpoints in the current API.
 
 ## Data Model
 
-- `research_session`
-- `research_job`
-- `research_task`
-- `evidence_item`
-- `memory_item`
-- `report_version`
-- `run_trace`
-- `run_ledger`
+Important schema objects:
 
-## Inspiration Split
+- `ResearchRequest`
+- `PlanItem`
+- `RetrievalRoute`
+- `SupervisorToolCall`
+- `ResearcherToolDecisionContract`
+- `EvidenceItem`
+- `ResearchNote`
+- `ReportSection`
+- `ResearchReport`
+- `RAGEvaluation`
+- `ResearchRun`
 
-- `open_deep_research` primary: LangGraph StateGraph orchestration, supervisor/researcher split, planning, parallel research, source compression, citations, report generation, and judge-style evaluation
-- `PraisonAI` secondary: memory, reader registry, handoff, observability, evaluation, workflow patterns
+## Honest Boundaries
 
-## MVP Sequence
+This project is credible as an interview-grade AI application because the research graph, retrieval stack, evaluation, and trace artifacts are real and test-covered.
 
-1. Search-only report generation.
-2. Add contextual document grounding.
-3. Add memory and user preferences.
-4. Add verification and replay.
-5. Add evaluation and scoring.
-6. Wire real search and model providers for demo runs.
-7. Harden the LangGraph runtime with richer interruption/resume and streaming trace support.
+Do not overclaim:
+
+- multi-tenant SaaS
+- distributed durable execution
+- browser automation
+- OCR/layout intelligence
+- enterprise personalization memory
+- generic agent platform
+
+The strongest claim is narrower and better: an inspectable single-node AI research runtime with ODR-style planning/supervision and a practical Agentic RAG evidence layer.

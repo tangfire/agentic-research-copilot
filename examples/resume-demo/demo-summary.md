@@ -17,12 +17,6 @@
 - Vector backend: `qdrant_dense`
 - Keyword backend: `sqlite_fts5_bm25`
 
-## Memory
-
-- Records: 3
-- Canonical records: 1
-- Needs review: 0
-
 ## MCP Readiness
 
 - Score: 1.0

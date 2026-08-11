@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 from ..deterministic_provider import DeterministicResearchModelProvider
 from ..provider_base import ResearchModelProvider
-from ..schemas import EvidenceItem, PlanItem
+from ..schemas import EvidenceItem, MCPToolDescriptor, PlanItem
 from ..source_reader import SourceReader, SourceReaderStrategy
 
 
@@ -25,7 +26,8 @@ class ResearchAgent:
         *,
         model_provider: ResearchModelProvider | None = None,
         embedding_provider: ResearchModelProvider | None = None,
-        mcp_tool: Callable[[str, str | None], list[dict[str, object]]] | None = None,
+        mcp_tool: Callable[..., list[dict[str, object]]] | None = None,
+        mcp_tool_catalog: list[MCPToolDescriptor] | tuple[MCPToolDescriptor, ...] = (),
         source_reader_enabled: bool = True,
         source_reader_strategy: SourceReaderStrategy = "extract",
         raw_content_max_chars: int = 50000,
@@ -35,6 +37,7 @@ class ResearchAgent:
     ) -> None:
         self.search_tool = search_tool
         self.mcp_tool = mcp_tool
+        self.mcp_tool_catalog = list(mcp_tool_catalog)
         self.model_provider = model_provider or DeterministicResearchModelProvider()
         self.source_reader_enabled = source_reader_enabled
         self.max_iterations = max(1, max_iterations)
@@ -99,17 +102,29 @@ class ResearchAgent:
         item: PlanItem,
         query: str | None = None,
         tool_name: str | None = None,
+        tool_args: dict[str, Any] | None = None,
     ) -> list[EvidenceItem]:
         resolved_query = query or item.search_query or item.question
         if self.mcp_tool is None:
             return []
 
-        results = self.mcp_tool(resolved_query, tool_name)
+        if tool_args:
+            results = self.mcp_tool(resolved_query, tool_name, tool_args)
+        else:
+            results = self.mcp_tool(resolved_query, tool_name)
         evidence: list[EvidenceItem] = []
         for result in results:
             metadata = result.get("metadata", {}) if isinstance(result.get("metadata"), dict) else {}
             content = result.get("content") if result.get("content") is None else str(result.get("content"))
             snippet = result.get("snippet") if result.get("snippet") is None else str(result.get("snippet"))
+            evidence_metadata = {
+                **metadata,
+                "plan_item_id": item.id,
+                "source_channel": "mcp",
+                "search_query": resolved_query,
+            }
+            if tool_args:
+                evidence_metadata["mcp_tool_args"] = tool_args
             evidence.append(
                 EvidenceItem(
                     title=str(result.get("title", item.question)),
@@ -119,12 +134,7 @@ class ResearchAgent:
                     snippet=snippet,
                     content=content,
                     score=float(result.get("score", 0.72)),
-                    metadata={
-                        **metadata,
-                        "plan_item_id": item.id,
-                        "source_channel": "mcp",
-                        "search_query": resolved_query,
-                    },
+                    metadata=evidence_metadata,
                 )
             )
         return evidence
@@ -165,6 +175,7 @@ class ResearchAgent:
                 gaps=gaps_before,
                 iteration=iteration_index + 1,
                 max_iterations=iteration_budget,
+                mcp_tools=self.mcp_tool_catalog,
             )
             if decision.action == "ResearchComplete":
                 completed_reason = decision.completion_reason or "research_complete"
@@ -244,10 +255,17 @@ class ResearchAgent:
                 )
             previous_queries.append(query)
             before_count = len(evidence)
+            tool_start = time.perf_counter()
             if decision.action == "mcp_tool":
-                query_evidence = self.collect_mcp(item, query=query, tool_name=decision.mcp_tool_name)
+                query_evidence = self.collect_mcp(
+                    item,
+                    query=query,
+                    tool_name=decision.mcp_tool_name,
+                    tool_args=decision.mcp_tool_args,
+                )
             else:
                 query_evidence = self.collect(item, query=query)
+            tool_latency_ms = int((time.perf_counter() - tool_start) * 1000)
             evidence = self._dedupe_evidence([*evidence, *query_evidence])
             new_count = len(evidence) - before_count
             gaps = self._sufficiency_gaps(evidence, min_evidence=min_evidence, min_sources=min_sources)
@@ -271,6 +289,10 @@ class ResearchAgent:
                     "query": query,
                     "tool": decision.action,
                     "mcp_tool_name": decision.mcp_tool_name,
+                    "mcp_tool_args": decision.mcp_tool_args,
+                    "source_channel": "mcp" if decision.action == "mcp_tool" else "external",
+                    "result_count": len(query_evidence),
+                    "tool_latency_ms": tool_latency_ms,
                     "new_evidence": new_count,
                     "total_evidence": len(evidence),
                     "source_count": self._source_count(evidence),
@@ -374,7 +396,6 @@ class ResearchAgent:
         sources = {
             item.url or f"{item.source}:{item.title}"
             for item in evidence
-            if item.kind != "memory" and item.source != "memory"
         }
         return len(sources)
 

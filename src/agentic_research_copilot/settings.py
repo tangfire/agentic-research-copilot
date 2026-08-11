@@ -9,6 +9,18 @@ from pydantic import BaseModel, Field
 
 
 DASHSCOPE_COMPATIBLE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+GITHUB_MCP_READONLY_URL = "https://api.githubcopilot.com/mcp/readonly"
+GITHUB_MCP_READONLY_TOOLS = [
+    "search_repositories",
+    "get_file_contents",
+    "search_code",
+    "list_issues",
+    "issue_read",
+    "search_issues",
+    "list_pull_requests",
+    "pull_request_read",
+    "get_latest_release",
+]
 
 
 class AppSettings(BaseModel):
@@ -36,7 +48,7 @@ class AppSettings(BaseModel):
     search_timeout_seconds: float = 8.0
     search_max_results: int = 5
     search_include_raw_content: bool = True
-    mcp_enabled: bool = True
+    mcp_enabled: bool = False
     mcp_server_url: str = ""
     mcp_tools: list[str] = Field(default_factory=list)
     mcp_auth_required: bool = False
@@ -112,7 +124,7 @@ def load_settings() -> AppSettings:
         search_timeout_seconds=float(os.getenv("ARC_SEARCH_TIMEOUT_SECONDS", "8")),
         search_max_results=int(os.getenv("ARC_SEARCH_MAX_RESULTS", "5")),
         search_include_raw_content=_env_bool("ARC_SEARCH_INCLUDE_RAW_CONTENT", True),
-        mcp_enabled=_env_bool("ARC_MCP_ENABLED", True),
+        mcp_enabled=_env_bool("ARC_MCP_ENABLED", False),
         mcp_server_url=os.getenv("ARC_MCP_SERVER_URL", "").rstrip("/"),
         mcp_tools=_env_list("ARC_MCP_TOOLS"),
         mcp_auth_required=_env_bool("ARC_MCP_AUTH_REQUIRED", False),

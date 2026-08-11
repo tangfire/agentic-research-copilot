@@ -17,7 +17,7 @@ from .schemas import (
     KnowledgeGraphExtractionContract,
     KnowledgeGraphQueryContract,
     KnowledgeGraphRelationship,
-    MemoryRecord,
+    MCPToolDescriptor,
     PlanItem,
     PlannerContract,
     ReporterContract,
@@ -93,12 +93,10 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         self,
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
     ) -> tuple[ClarificationContract, ModelUsage]:
         payload = {
             "request": request.model_dump(),
             "corpus_profile": corpus_profile.model_dump(),
-            "memory_records": [record.model_dump() for record in memory_records[:6]],
             "instructions": (
                 "Follow the Open Deep Research clarify_with_user phase. Decide whether the "
                 "user request is specific enough to start research. Ask at most one concise "
@@ -130,6 +128,7 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         gaps: Sequence[str],
         iteration: int,
         max_iterations: int,
+        mcp_tools: Sequence[MCPToolDescriptor] = (),
     ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
         payload = {
             "plan_item": item.model_dump(),
@@ -149,35 +148,49 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
             "gaps": list(gaps),
             "iteration": iteration,
             "max_iterations": max_iterations,
+            "mcp_tools": [tool.model_dump() for tool in mcp_tools],
+            "mcp_routing_hints": _mcp_routing_hints(item, mcp_tools),
             "instructions": (
                 "Follow the Open Deep Research researcher loop. Choose exactly one next action: "
                 "think_tool for reflection, web_search for a new external query, mcp_tool for a "
                 "configured MCP tool call, or ResearchComplete when enough evidence has been collected "
                 "or the iteration budget is exhausted. Use mcp_tool only when it is listed in "
-                "available_tools. When using mcp_tool, set mcp_tool_name when a known workspace tool "
-                "matches the need: search_grounding_corpus for ingested documents, recall_project_memory "
-                "for prior memory, inspect_research_runs for replay/evaluation, or check_demo_readiness "
-                "for runtime demo checks. Keep the query concrete and source-oriented."
+                "available_tools. When using mcp_tool, choose a tool from the provided MCP catalog, "
+                "set mcp_tool_name to that tool name, and provide structured JSON arguments in "
+                "mcp_tool_args whenever the tool needs owner/repo/path/issue_number/release/query style "
+                "fields. If mcp_routing_hints contains a github_repository target, prefer repository-aware "
+                "GitHub MCP tools such as get_file_contents, search_code, list_issues, "
+                "list_pull_requests, or get_latest_release with the extracted owner/repo. Keep the "
+                "query concrete and source-oriented, but do not cram structured arguments into the "
+                "query string."
             ),
         }
         contract, usage = self._chat_structured(
             system_prompt=(
                 "You are a focused researcher inside an AI Research Copilot. Return valid JSON "
                 "only that conforms to the supplied schema. Be decisive: search when evidence is "
-                "thin, use MCP tools when configured and useful, reflect when a pause is needed, "
+                "thin, use MCP tools when configured and useful, prefer GitHub MCP for repository, "
+                "issue, pull request, release, and code evidence, reflect when a pause is needed, "
                 "and complete when evidence is sufficient or the budget is exhausted."
             ),
             user_payload=payload,
             schema=ResearcherToolDecisionContract.model_json_schema(),
             response_model=ResearcherToolDecisionContract,
         )
-        return _normalize_researcher_action(contract, item, available_tools, previous_queries, evidence, gaps), usage
+        return _normalize_researcher_action(
+            contract,
+            item,
+            available_tools,
+            previous_queries,
+            evidence,
+            gaps,
+            mcp_tools,
+        ), usage
 
     def draft_plan(
         self,
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         *,
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
@@ -185,7 +198,6 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         payload = {
             "request": request.model_dump(),
             "corpus_profile": corpus_profile.model_dump(),
-            "memory_records": [record.model_dump() for record in memory_records[:8]],
             "revision_count": revision_count,
             "revision_notes": list(revision_notes)[:8],
         }
@@ -218,7 +230,6 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         plan: Sequence[PlanItem],
         retrieval_routes: Sequence[RetrievalRoute],
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         *,
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
@@ -229,7 +240,6 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
             "plan": [item.model_dump() for item in plan],
             "retrieval_routes": [route.model_dump() for route in retrieval_routes],
             "corpus_profile": corpus_profile.model_dump(),
-            "memory_records": [record.model_dump() for record in memory_records[:8]],
             "revision_count": revision_count,
             "revision_notes": list(revision_notes)[:8],
             "instructions": (
@@ -238,7 +248,7 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "research units. Use ResearchComplete only as the completion decision after "
                 "delegation and verification criteria are clear. Preserve the provided "
                 "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
-                "mode, selected_tools, web_queries/internal_queries, memory_query, min_evidence, "
+                "mode, selected_tools, web_queries/internal_queries, min_evidence, "
                 "min_sources, and sufficiency_criteria. Prefer primary or official sources "
                 "when they are available, keep source quality visible in evaluation, and "
                 "treat retrieval_routes as optional candidate hints, not as mandatory final routing decisions."
@@ -711,6 +721,7 @@ def _normalize_researcher_action(
     previous_queries: Sequence[str],
     evidence: Sequence[EvidenceItem],
     gaps: Sequence[str],
+    mcp_tools: Sequence[MCPToolDescriptor] = (),
 ) -> ResearcherToolDecisionContract:
     available = set(available_tools)
     action = contract.action
@@ -727,6 +738,13 @@ def _normalize_researcher_action(
     if action not in {"web_search", "mcp_tool"}:
         query = None
 
+    mcp_tool_name = None
+    if action == "mcp_tool":
+        mcp_tool_name = _trim_text(contract.mcp_tool_name or "", 120) or None
+    if action == "mcp_tool" and not mcp_tool_name and len(mcp_tools) == 1:
+        mcp_tool_name = _trim_text(mcp_tools[0].name, 120) or None
+    mcp_tool_args = _normalize_mcp_tool_args(contract.mcp_tool_args) if action == "mcp_tool" else None
+
     completion_reason = _trim_text(contract.completion_reason or "", 160) or None
     if action == "ResearchComplete" and completion_reason is None:
         completion_reason = "sufficiency_met" if not gaps and evidence else "research_complete"
@@ -735,13 +753,116 @@ def _normalize_researcher_action(
         update={
             "action": action,
             "query": query,
-            "mcp_tool_name": _trim_text(contract.mcp_tool_name or "", 120) or None,
+            "mcp_tool_name": mcp_tool_name,
+            "mcp_tool_args": mcp_tool_args,
             "rationale": _trim_text(contract.rationale, 500),
             "reflection": _trim_text(contract.reflection, 700),
             "completion_reason": completion_reason,
             "confidence": max(0.0, min(1.0, float(contract.confidence or 0.0))),
         }
     )
+
+
+def _mcp_routing_hints(item: PlanItem, mcp_tools: Sequence[MCPToolDescriptor]) -> dict[str, Any]:
+    if not mcp_tools:
+        return {}
+    github_target = _github_repository_hints(item)
+    if not github_target:
+        return {}
+    tool_names = {tool.name for tool in mcp_tools}
+    suggested_tools = [
+        tool_name
+        for tool_name in [
+            "get_file_contents",
+            "search_code",
+            "list_issues",
+            "search_issues",
+            "list_pull_requests",
+            "get_latest_release",
+        ]
+        if tool_name in tool_names
+    ]
+    return {
+        "github_repository": github_target,
+        "suggested_tools": suggested_tools,
+        "suggested_start": (
+            "Use get_file_contents with path='README.md' for repository overview when available, "
+            "then search_code/list_issues/list_pull_requests/get_latest_release for implementation, "
+            "risk, activity, and release evidence."
+        ),
+    }
+
+
+def _github_repository_hints(item: PlanItem) -> dict[str, str] | None:
+    text = " ".join(
+        part
+        for part in [
+            item.question,
+            item.purpose,
+            item.search_query or "",
+        ]
+        if part
+    )
+    if not text:
+        return None
+
+    url_match = re.search(
+        r"github\.com[:/](?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if url_match:
+        return _clean_github_repo_hint(url_match.group("owner"), url_match.group("repo"))
+
+    lower = text.lower()
+    if not any(signal in lower for signal in ("github", "repo", "repository", "仓库", "代码库", "开源项目")):
+        return None
+    slug_match = re.search(
+        r"(?<![A-Za-z0-9_.-])(?P<owner>[A-Za-z0-9][A-Za-z0-9_.-]{0,80})/(?P<repo>[A-Za-z0-9_.-]{1,120})(?![A-Za-z0-9_.-])",
+        text,
+    )
+    if slug_match:
+        return _clean_github_repo_hint(slug_match.group("owner"), slug_match.group("repo"))
+    return None
+
+
+def _clean_github_repo_hint(owner: str, repo: str) -> dict[str, str] | None:
+    cleaned_owner = owner.strip().strip("/")
+    cleaned_repo = repo.strip().strip("/").removesuffix(".git")
+    if not cleaned_owner or not cleaned_repo:
+        return None
+    return {"owner": cleaned_owner, "repo": cleaned_repo}
+
+
+def _normalize_mcp_tool_args(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict) or not value:
+        return None
+    normalized: dict[str, Any] = {}
+    for key, raw_value in value.items():
+        key_text = _trim_text(str(key), 80)
+        if not key_text:
+            continue
+        cleaned_value = _normalize_mcp_tool_arg_value(raw_value)
+        if cleaned_value is None:
+            continue
+        normalized[key_text] = cleaned_value
+    return normalized or None
+
+
+def _normalize_mcp_tool_arg_value(value: Any) -> Any:
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return cleaned or None
+    if isinstance(value, dict):
+        return _normalize_mcp_tool_args(value)
+    if isinstance(value, list):
+        normalized = [_normalize_mcp_tool_arg_value(item) for item in value]
+        normalized = [item for item in normalized if item is not None]
+        return normalized or None
+    if isinstance(value, (bool, int, float)) or value is None:
+        return value
+    cleaned = _trim_text(str(value), 240)
+    return cleaned or None
 
 
 def _normalize_chunk_context_contract(contract: ChunkContextContract) -> ChunkContextContract:

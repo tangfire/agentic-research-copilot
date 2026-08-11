@@ -4,7 +4,7 @@ import hashlib
 import sqlite3
 from pathlib import Path
 
-from .schemas import EvidenceItem, MemoryRecord, ResearchJob, ResearchRun
+from .schemas import EvidenceItem, ResearchJob, ResearchRun
 
 
 class SQLiteStore:
@@ -41,23 +41,6 @@ class SQLiteStore:
         with self._connect() as conn:
             cursor = conn.execute("DELETE FROM documents")
         return cursor.rowcount
-
-    def load_memory(self) -> list[MemoryRecord]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT payload FROM memory_records ORDER BY created_at").fetchall()
-        return [MemoryRecord.model_validate_json(row[0]) for row in rows]
-
-    def save_memory(self, record: MemoryRecord) -> None:
-        payload = record.model_dump_json()
-        identity = self._memory_identity(record)
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO memory_records(identity, payload, created_at)
-                VALUES (?, ?, ?)
-                """,
-                (identity, payload, record.created_at),
-            )
 
     def load_runs(self) -> list[ResearchRun]:
         with self._connect() as conn:
@@ -111,11 +94,6 @@ class SQLiteStore:
                 (run.run_id, payload, run.started_at or ""),
             )
 
-    def clear_memory(self) -> int:
-        with self._connect() as conn:
-            cursor = conn.execute("DELETE FROM memory_records")
-        return cursor.rowcount
-
     def clear_runs(self) -> int:
         with self._connect() as conn:
             cursor = conn.execute("DELETE FROM research_runs")
@@ -136,15 +114,6 @@ class SQLiteStore:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS documents (
-                  identity TEXT PRIMARY KEY,
-                  payload TEXT NOT NULL,
-                  created_at TEXT NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS memory_records (
                   identity TEXT PRIMARY KEY,
                   payload TEXT NOT NULL,
                   created_at TEXT NOT NULL
@@ -175,8 +144,4 @@ class SQLiteStore:
         if isinstance(metadata_id, str) and metadata_id:
             return metadata_id
         stable = document.url or f"{document.source}:{document.title}:{document.snippet or document.content or ''}"
-        return hashlib.sha256(stable.encode("utf-8")).hexdigest()
-
-    def _memory_identity(self, record: MemoryRecord) -> str:
-        stable = f"{record.key}:{record.created_at}:{record.value}"
         return hashlib.sha256(stable.encode("utf-8")).hexdigest()

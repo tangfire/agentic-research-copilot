@@ -55,67 +55,14 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
     client = TestClient(create_app())
 
-    memory_response = client.post(
-        "/v1/memory",
-        json={
-            "key": "topic:positioning",
-            "value": "Layered memory should distinguish session, summary, and canonical facts.",
-            "tags": ["memory", "summary"],
-            "layer": "summary",
-            "topic": "agentic research copilot",
-            "confidence": 0.8,
-        },
-    )
-    assert memory_response.status_code == 200
-
-    filtered_memory = client.get("/v1/memory?layer=summary")
-    assert filtered_memory.status_code == 200
-    assert filtered_memory.json()
-
-    memory_search_response = client.get("/v1/memory/search?q=layered%20memory")
-    assert memory_search_response.status_code == 200
-    memory_search_data = memory_search_response.json()
-    assert memory_search_data["result_count"] >= 1
-    assert "governance" in memory_search_data
-
-    canonical_response = client.post(
-        "/v1/memory",
-        json={
-            "key": "fact:positioning",
-            "value": "The product is an AI research copilot.",
-            "tags": ["canonical"],
-            "layer": "canonical",
-            "topic": "agentic research copilot",
-            "confidence": 0.8,
-        },
-    )
-    assert canonical_response.status_code == 200
-
-    conflicting_response = client.post(
-        "/v1/memory",
-        json={
-            "key": "fact:positioning",
-            "value": "The product is a generic agent platform.",
-            "tags": ["canonical"],
-            "layer": "canonical",
-            "topic": "agentic research copilot",
-            "confidence": 0.8,
-        },
-    )
-    assert conflicting_response.status_code == 200
-    assert conflicting_response.json()["metadata"]["governance_status"] == "needs_review"
-
-    governance_response = client.get("/v1/memory/governance")
-    assert governance_response.status_code == 200
-    governance_data = governance_response.json()
-    assert governance_data["needs_review_count"] >= 1
+    assert client.get("/v1/memory").status_code == 404
 
     document_response = client.post(
         "/v1/documents",
         json={
             "title": "Resume Notes",
             "source": "notes.md",
-            "snippet": "This project combines planning, retrieval, memory, and verification.",
+            "snippet": "This project combines planning, retrieval, evaluation, and verification.",
         },
     )
     assert document_response.status_code == 200
@@ -209,14 +156,13 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     assert clear_documents_response.status_code == 200
     assert client.get("/v1/documents").json() == []
 
-    clear_history_response = client.delete("/v1/research/history?include_memory=true")
+    clear_history_response = client.delete("/v1/research/history")
     assert clear_history_response.status_code == 200
     clear_history_data = clear_history_response.json()
     assert clear_history_data["runs_deleted"] >= 1
-    assert clear_history_data["memory_cleared"] is True
+    assert clear_history_data["memory_removed_from_core"] is True
     assert client.get("/v1/research/runs").json() == []
     assert client.get("/v1/research/jobs").json() == []
-    assert client.get("/v1/memory").json() == []
 
 
 def test_job_status_result_and_runtime_config(tmp_path: Path, monkeypatch):

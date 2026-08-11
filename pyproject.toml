@@ -53,8 +53,5 @@ dev = [
   "mypy>=1.11",
 ]
 
-[project.scripts]
-arc-research-mcp-server = "agentic_research_copilot.research_mcp_server:main"
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentic_research_copilot"]

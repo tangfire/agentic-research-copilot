@@ -28,7 +28,7 @@ class RAGEvaluator:
         total_plan_items = max(1, len(plan))
         covered_plan_items = sum(1 for item in plan if item.evidence_count > 0)
         plan_coverage = covered_plan_items / total_plan_items
-        retrieval_hit_rate = len([item for item in evidence if item.kind != "memory"]) / max(1, len(plan))
+        retrieval_hit_rate = len(evidence) / max(1, len(plan))
         private_retrieval_hit_rate = len(document_hits) / max(1, len(plan))
         route_lookup = {route.plan_item_id: route for route in retrieval_routes or []}
         sufficient_items = 0
@@ -134,7 +134,7 @@ def _source_set(items: Iterable[EvidenceItem]) -> set[str]:
     return {
         item.source
         for item in items
-        if item.source and item.source not in {"internal-note", "memory"}
+        if item.source and item.source != "internal-note"
     }
 
 

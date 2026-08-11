@@ -34,8 +34,6 @@ class ResearchGraphState(TypedDict, total=False):
     checkpoints: list[RunCheckpoint]
     trace: list[RunTraceEvent]
     handoffs: list[AgentHandoff]
-    memory_records: list[Any]
-    memory_hits: list[EvidenceItem]
     revision_notes: list[str]
     revision_count: int
     failure_reason: str | None
@@ -116,19 +114,16 @@ class LangGraphResearchRuntime:
     def _build_graph(self):
         builder = StateGraph(ResearchGraphState)
         builder.add_node("supervisor_start", self._supervisor_start)
-        builder.add_node("memory_recall", self._memory_recall)
         builder.add_node("planner", self._planner)
         builder.add_node("research_supervisor", self._research_supervisor)
         builder.add_node("parallel_research", self._parallel_research)
         builder.add_node("reporter", self._reporter)
         builder.add_node("verifier_evaluator", self._verifier_evaluator)
         builder.add_node("revision_prepare", self._revision_prepare)
-        builder.add_node("memory_write", self._memory_write)
         builder.add_node("finalize", self._finalize)
 
         builder.add_edge(START, "supervisor_start")
-        builder.add_edge("supervisor_start", "memory_recall")
-        builder.add_edge("memory_recall", "planner")
+        builder.add_edge("supervisor_start", "planner")
         builder.add_edge("planner", "research_supervisor")
         builder.add_edge("research_supervisor", "parallel_research")
         builder.add_edge("parallel_research", "reporter")
@@ -136,10 +131,9 @@ class LangGraphResearchRuntime:
         builder.add_conditional_edges(
             "verifier_evaluator",
             self._route_after_verification,
-            {"revise": "revision_prepare", "finish": "memory_write"},
+            {"revise": "revision_prepare", "finish": "finalize"},
         )
         builder.add_edge("revision_prepare", "planner")
-        builder.add_edge("memory_write", "finalize")
         builder.add_edge("finalize", END)
         return builder.compile(checkpointer=self.checkpointer)
 
@@ -193,13 +187,11 @@ class LangGraphResearchRuntime:
                 "checkpoint_path": self.checkpointer_path,
                 "graph": [
                     "supervisor_start",
-                    "memory_recall",
                     "planner",
                     "research_supervisor",
                     "parallel_research",
                     "reporter",
                     "verifier_evaluator",
-                    "memory_write",
                     "finalize",
                 ],
             },
@@ -223,27 +215,10 @@ class LangGraphResearchRuntime:
         )
         return state
 
-    def _memory_recall(self, state: ResearchGraphState) -> ResearchGraphState:
-        request = state["request"]
-        run_id = state["run_id"]
-        memory_records = self.copilot._recall_memory_context(request, run_id) if request.use_memory else []
-        memory_hits = self.copilot._memory_records_to_evidence(memory_records)
-        self._checkpoint(
-            state,
-            "memory.recalled",
-            {
-                "memory_hits": len(memory_hits),
-                "layers": sorted({record.layer for record in memory_records}),
-                "topic": request.topic,
-            },
-        )
-        return {"memory_records": memory_records, "memory_hits": memory_hits}
-
     def _planner(self, state: ResearchGraphState) -> ResearchGraphState:
         request = state["request"]
         revision_count = state["revision_count"]
         revision_notes = state.get("revision_notes", [])
-        memory_records = state.get("memory_records", [])
         corpus_profile = self.copilot.documents.profile()
         self._record_handoff(
             state,
@@ -256,7 +231,6 @@ class LangGraphResearchRuntime:
         planner_contract = self.copilot.planner.draft(
             request,
             corpus_profile=corpus_profile,
-            memory_records=memory_records,
             revision_count=revision_count,
             revision_notes=revision_notes,
         )
@@ -309,7 +283,6 @@ class LangGraphResearchRuntime:
         request = state["request"]
         revision_count = state["revision_count"]
         revision_notes = state.get("revision_notes", [])
-        memory_records = state.get("memory_records", [])
         research_brief = state["final_research_brief"] or request.topic
         corpus_profile = state["final_corpus_profile"] or CorpusProfile()
         plan = state["final_plan"]
@@ -329,7 +302,6 @@ class LangGraphResearchRuntime:
             plan=plan,
             retrieval_routes=route_hints,
             corpus_profile=corpus_profile,
-            memory_records=memory_records,
             revision_count=revision_count,
             revision_notes=revision_notes,
         )
@@ -479,7 +451,6 @@ class LangGraphResearchRuntime:
         corpus_profile = state["final_corpus_profile"] or CorpusProfile()
         research_brief = state["final_research_brief"] or request.topic
         revision_count = state["revision_count"]
-        memory_hits = state.get("memory_hits", [])
         supervisor_decision = state.get("final_supervisor_decision")
         route_lookup = {route.plan_item_id: route for route in retrieval_routes}
         supervisor_worker_limit = (
@@ -513,7 +484,7 @@ class LangGraphResearchRuntime:
         web_hits: list[EvidenceItem] = []
         document_hits: list[EvidenceItem] = []
         notes: list[ResearchNote] = []
-        evidence: list[EvidenceItem] = list(memory_hits)
+        evidence: list[EvidenceItem] = []
 
         for item in plan:
             route = route_lookup.get(item.id)
@@ -568,6 +539,26 @@ class LangGraphResearchRuntime:
             evidence.extend(item_evidence)
             note = result.note or self.copilot.workflow.compress_findings(item, item_evidence, route)
             notes.append(note)
+            for iteration in note.research_iterations:
+                if iteration.get("action") != "mcp_tool":
+                    continue
+                self._append_trace(
+                    state,
+                    kind="tool_call",
+                    actor="researcher",
+                    message=f"Called MCP tool {iteration.get('mcp_tool_name') or 'mcp_tool'}.",
+                    step=f"research.{item.id}.mcp.{iteration.get('iteration', 0)}",
+                    tool_name=iteration.get("mcp_tool_name") or "mcp_tool",
+                    provider="model_context_protocol",
+                    latency_ms=int(iteration.get("tool_latency_ms", 0) or 0),
+                    result_count=int(iteration.get("result_count", 0) or 0),
+                    query=iteration.get("query"),
+                    mcp_tool_name=iteration.get("mcp_tool_name"),
+                    mcp_tool_args=iteration.get("mcp_tool_args"),
+                    source_channel="mcp",
+                    plan_item_id=item.id,
+                    runtime="langgraph",
+                )
             self._append_trace(
                 state,
                 kind="step",
@@ -621,7 +612,6 @@ class LangGraphResearchRuntime:
             search_queries=state["final_search_queries"],
             retrieval_routes=retrieval_routes,
             web_hits=web_hits,
-            memory_hits=memory_hits,
             document_hits=document_hits,
             notes=notes,
             revision_count=revision_count,
@@ -641,7 +631,6 @@ class LangGraphResearchRuntime:
         retrieval_routes = state["final_retrieval_routes"]
         evidence = state["final_evidence"]
         web_hits = state["final_web_hits"]
-        memory_hits = state.get("memory_hits", [])
         document_hits = state["final_document_hits"]
         notes = state["final_notes"]
         search_queries = state["final_search_queries"]
@@ -654,12 +643,11 @@ class LangGraphResearchRuntime:
             retrieval_routes,
             evidence,
             web_hits,
-            memory_hits,
             document_hits,
             notes,
             search_queries,
         )
-        confidence = self.copilot._estimate_confidence(request, evidence, memory_hits, document_hits, plan)
+        confidence = self.copilot._estimate_confidence(request, evidence, document_hits, plan)
         self._record_handoff(
             state,
             "supervisor",
@@ -847,33 +835,6 @@ class LangGraphResearchRuntime:
         )
         return {"revision_count": new_revision_count, "needs_revision": False}
 
-    def _memory_write(self, state: ResearchGraphState) -> ResearchGraphState:
-        request = state["request"]
-        report = state.get("final_report")
-        if request.use_memory and report is not None:
-            memory_artifacts = self.copilot._build_memory_artifacts(
-                request=request,
-                run_id=state["run_id"],
-                report=report,
-                revision_count=state["revision_count"],
-                status=state["final_status"],
-            )
-            for record in memory_artifacts:
-                self.copilot.storage.save_memory(record)
-                self._append_trace(
-                    state,
-                    kind="memory_write",
-                    actor="memory_manager",
-                    message=f"Stored {record.layer} memory {record.key}.",
-                    step=f"memory.{record.layer}",
-                    layer=record.layer,
-                    memory_key=record.key,
-                    topic=request.topic,
-                    confidence=record.confidence,
-                    runtime="langgraph",
-                )
-        return {}
-
     def _finalize(self, state: ResearchGraphState) -> ResearchGraphState:
         end = datetime.now(timezone.utc)
         start = state["start"]
@@ -892,7 +853,6 @@ class LangGraphResearchRuntime:
             notes=state.get("final_notes", []),
             evidence=state.get("final_evidence", []),
             web_hits=state.get("final_web_hits", []),
-            memory_hits=state.get("memory_hits", []),
             document_hits=state.get("final_document_hits", []),
             checkpoints=state.get("checkpoints", []),
             trace=state.get("trace", []),

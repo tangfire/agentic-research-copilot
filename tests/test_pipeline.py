@@ -108,7 +108,7 @@ def test_pipeline_returns_report(tmp_path: Path):
             seed_reference_knowledge=True,
         )
     )
-    result = copilot.run(ResearchRequest(topic="multi-agent memory"))
+    result = copilot.run(ResearchRequest(topic="multi-agent research orchestration"))
 
     assert result.status == "completed"
     assert result.report is not None
@@ -122,7 +122,7 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(call.name == "think_tool" for call in result.supervisor_decision.tool_calls)
     assert any(call.name == "ConductResearch" for call in result.supervisor_decision.tool_calls)
     assert any(call.name == "ResearchComplete" for call in result.supervisor_decision.tool_calls)
-    assert any(query.tool in {"web_search", "vector_retrieval", "memory_recall"} for query in result.search_queries)
+    assert any(query.tool in {"web_search", "vector_retrieval"} for query in result.search_queries)
     assert all(route.selected_tools for route in result.retrieval_routes)
     assert any(len(route.internal_queries) >= 2 for route in result.retrieval_routes)
     assert result.corpus_profile is not None
@@ -165,7 +165,7 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert not any(section.heading in legacy_system_headings for section in result.report.sections)
     assert all(section.heading in plan_questions for section in result.report.sections)
     assert all(section.citations for section in result.report.sections)
-    assert any("multi-agent memory" in section.content.lower() for section in result.report.sections)
+    assert any("multi-agent research orchestration" in section.content.lower() for section in result.report.sections)
     assert result.web_hits is not None
     assert result.document_hits
     assert any(hit.kind == "document-chunk" for hit in result.document_hits)
@@ -176,7 +176,6 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(hit.metadata.get("keyword_backend") == "sqlite_fts5_bm25" for hit in result.document_hits)
     assert any(hit.metadata.get("contextual_retrieval") is True for hit in result.document_hits)
     assert any(hit.metadata.get("contextualizer_prompt_version") == "contextual-retrieval-v1" for hit in result.document_hits)
-    assert any(record.metadata.get("run_id") == result.run_id for record in copilot.memory.list())
     assert copilot.list_runs()
     assert copilot.get_run(result.run_id) is not None
 
@@ -229,7 +228,6 @@ def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):
         retrieval_routes=[route],
         evidence=evidence,
         web_hits=evidence,
-        memory_hits=[],
         document_hits=[],
         notes=[note],
         search_queries=[
@@ -262,10 +260,10 @@ def test_report_evidence_ranking_keeps_weak_sources_visible_but_not_primary(tmp_
                 score=0.95,
             ),
             EvidenceItem(
-                title="Prior memory",
-                source="memory",
-                kind="memory",
-                snippet="Memory note.",
+                title="Internal note",
+                source="internal-note",
+                kind="internal-note",
+                snippet="Internal note.",
                 score=1.0,
             ),
             EvidenceItem(
@@ -281,7 +279,7 @@ def test_report_evidence_ranking_keeps_weak_sources_visible_but_not_primary(tmp_
     )
 
     assert ranked[0].title == "Qdrant Hybrid Queries"
-    assert {item.title for item in ranked} == {"Community thread", "Prior memory", "Qdrant Hybrid Queries"}
+    assert {item.title for item in ranked} == {"Community thread", "Internal note", "Qdrant Hybrid Queries"}
 
 
 def test_research_agent_extracts_raw_content_into_read_evidence():
@@ -419,7 +417,7 @@ def test_research_agent_can_call_mcp_when_search_evidence_is_insufficient():
 
     assert search_calls == ["first query"]
     assert mcp_calls
-    assert mcp_calls[0][1] == "search_grounding_corpus"
+    assert mcp_calls[0][1] is None
     assert collection.completed_reason == "sufficiency_met"
     assert any(item.kind == "mcp" for item in collection.evidence)
     assert [iteration["action"] for iteration in collection.iterations] == ["web_search", "mcp_tool"]

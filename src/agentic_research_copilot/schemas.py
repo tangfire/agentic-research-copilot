@@ -14,14 +14,13 @@ def _none_to_empty_list(value: Any) -> Any:
     return [] if value is None else value
 
 
-ResearchToolName = Literal["web_search", "vector_retrieval", "memory_recall", "mcp_tool"]
+ResearchToolName = Literal["web_search", "vector_retrieval", "mcp_tool"]
 
 
 class ResearchRequest(BaseModel):
     topic: str = Field(min_length=3)
     depth: Literal["quick", "standard", "deep"] = "standard"
     include_private_docs: bool = True
-    use_memory: bool = True
     max_sections: int = 4
     max_revisions: int = 2
 
@@ -55,6 +54,14 @@ class EvidenceItem(BaseModel):
     content: str | None = None
     score: float = 0.0
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MCPToolDescriptor(BaseModel):
+    name: str
+    description: str = ""
+    required_args: list[str] = Field(default_factory=list)
+    optional_args: list[str] = Field(default_factory=list)
+    typical_scenarios: list[str] = Field(default_factory=list)
 
 
 class SourceCompressionContract(BaseModel):
@@ -144,7 +151,6 @@ class RetrievalRoute(BaseModel):
     selected_tools: list[ResearchToolName] = Field(default_factory=list)
     web_queries: list[str] = Field(default_factory=list)
     internal_queries: list[str] = Field(default_factory=list)
-    memory_query: str | None = None
     min_evidence: int = 1
     min_sources: int = 1
     sufficiency_criteria: list[str] = Field(default_factory=list)
@@ -163,19 +169,6 @@ class CorpusProfile(BaseModel):
     embedding_dimensions: int = 0
     collection_name: str | None = None
     last_updated: str = Field(default_factory=_utc_now)
-
-
-class MemoryRecord(BaseModel):
-    key: str
-    value: str
-    layer: Literal["session", "canonical", "summary"] = "session"
-    tags: list[str] = Field(default_factory=list)
-    run_id: str | None = None
-    session_id: str | None = None
-    topic: str | None = None
-    confidence: float = 0.0
-    created_at: str = Field(default_factory=_utc_now)
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ClarificationContract(BaseModel):
@@ -205,7 +198,6 @@ class SupervisorToolCall(BaseModel):
     selected_tools: list[ResearchToolName] = Field(default_factory=list)
     web_queries: list[str] = Field(default_factory=list)
     internal_queries: list[str] = Field(default_factory=list)
-    memory_query: str | None = None
     min_evidence: int | None = None
     min_sources: int | None = None
     sufficiency_criteria: list[str] = Field(default_factory=list)
@@ -240,6 +232,7 @@ class ResearcherToolDecisionContract(BaseModel):
     action: Literal["think_tool", "web_search", "mcp_tool", "ResearchComplete"] = "web_search"
     query: str | None = None
     mcp_tool_name: str | None = None
+    mcp_tool_args: dict[str, Any] | None = None
     rationale: str = ""
     reflection: str = ""
     completion_reason: str | None = None
@@ -281,7 +274,7 @@ class AgentHandoff(BaseModel):
 
 
 class RunTraceEvent(BaseModel):
-    kind: Literal["handoff", "tool_call", "step", "memory_write", "verification", "checkpoint", "failure", "evaluation"]
+    kind: Literal["handoff", "tool_call", "step", "verification", "checkpoint", "failure", "evaluation"]
     actor: str
     message: str
     step: str | None = None
@@ -376,7 +369,6 @@ class ResearchRun(BaseModel):
     notes: list[ResearchNote] = Field(default_factory=list)
     evidence: list[EvidenceItem] = Field(default_factory=list)
     web_hits: list[EvidenceItem] = Field(default_factory=list)
-    memory_hits: list[EvidenceItem] = Field(default_factory=list)
     document_hits: list[EvidenceItem] = Field(default_factory=list)
     checkpoints: list[RunCheckpoint] = Field(default_factory=list)
     trace: list[RunTraceEvent] = Field(default_factory=list)

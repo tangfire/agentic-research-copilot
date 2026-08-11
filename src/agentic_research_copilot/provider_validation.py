@@ -166,6 +166,29 @@ def validate_real_provider_config(settings: Any) -> list[ProviderValidationIssue
                 )
             )
 
+    if getattr(settings, "mcp_enabled", False):
+        if not getattr(settings, "mcp_server_url", ""):
+            issues.append(
+                ProviderValidationIssue(
+                    field="ARC_MCP_SERVER_URL",
+                    message="Set the external MCP server URL when ARC_MCP_ENABLED=true.",
+                )
+            )
+        if not getattr(settings, "mcp_tools", []):
+            issues.append(
+                ProviderValidationIssue(
+                    field="ARC_MCP_TOOLS",
+                    message="Set an explicit MCP tool allowlist when ARC_MCP_ENABLED=true.",
+                )
+            )
+        if getattr(settings, "mcp_auth_required", False) and not getattr(settings, "mcp_auth_token", ""):
+            issues.append(
+                ProviderValidationIssue(
+                    field="ARC_MCP_AUTH_TOKEN",
+                    message="Set ARC_MCP_AUTH_TOKEN when the external MCP server requires authentication.",
+                )
+            )
+
     if getattr(settings, "langgraph_checkpointer", "memory") != "sqlite":
         issues.append(
             ProviderValidationIssue(

@@ -16,7 +16,7 @@ from .schemas import (
     KnowledgeGraphExtractionContract,
     KnowledgeGraphQueryContract,
     KnowledgeGraphRelationship,
-    MemoryRecord,
+    MCPToolDescriptor,
     PlanItem,
     PlannerContract,
     ReporterContract,
@@ -75,7 +75,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         self,
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
     ) -> tuple[ClarificationContract, ModelUsage]:
         topic = request.topic.strip()
         missing_dimensions = _clarification_missing_dimensions(topic)
@@ -101,8 +100,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
                 context_bits.append(
                     f"I will also consider {corpus_profile.document_count} uploaded document segment(s) when they are relevant."
                 )
-            if memory_records and request.use_memory:
-                context_bits.append(f"I will reuse {len(memory_records)} memory item(s) only as supporting context.")
             contract = ClarificationContract(
                 need_clarification=False,
                 question="",
@@ -129,6 +126,7 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         gaps: Sequence[str],
         iteration: int,
         max_iterations: int,
+        mcp_tools: Sequence[MCPToolDescriptor] = (),
     ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
         if not gaps and evidence:
             action = ResearcherToolDecisionContract(
@@ -141,11 +139,14 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         elif iteration > 1 and "mcp_tool" in available_tools and not any(
             item.metadata.get("source_channel") == "mcp" for item in evidence
         ):
+            query = _researcher_follow_up_query(item, previous_queries, evidence, gaps)
+            mcp_tool_name, mcp_tool_args = _select_mcp_query_tool(query, mcp_tools)
             action = ResearcherToolDecisionContract(
                 action="mcp_tool",
-                query=_researcher_follow_up_query(item, previous_queries, evidence, gaps),
-                mcp_tool_name="search_grounding_corpus",
-                rationale="Use the configured MCP workspace tools as an additional grounding channel.",
+                query=query,
+                mcp_tool_name=mcp_tool_name,
+                mcp_tool_args=mcp_tool_args,
+                rationale="Use the configured external MCP tools as an additional grounding channel.",
                 reflection="ODR-style researcher loop can call MCP tools when search evidence is still insufficient.",
                 confidence=0.72,
             )
@@ -178,13 +179,11 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         self,
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         *,
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
     ) -> tuple[PlannerContract, ModelUsage]:
         topic = request.topic.strip()
-        memory_context = _summarize_memory(memory_records)
         focus = _focus_for_topic(topic)
         brief_bits = [
             f"Research the topic '{topic}'.",
@@ -196,8 +195,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
             brief_bits.append(
                 f"Ground the answer with {corpus_profile.document_count} uploaded context documents from {corpus_profile.source_count} sources."
             )
-        if memory_context:
-            brief_bits.append(f"Reuse memory where it is relevant: {memory_context}.")
         if revision_count > 0 and revision_notes:
             brief_bits.append("Repair the previously flagged gaps: " + "; ".join(revision_notes[:3]))
 
@@ -208,8 +205,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         ]
         if corpus_profile.has_private_docs:
             assumptions.append("Internal grounding is available and should be preferred for project-specific facts.")
-        if memory_records:
-            assumptions.append("Session and canonical memory can shorten the evidence search.")
 
         success_criteria = [
             "Every substantive section has citations.",
@@ -243,7 +238,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         plan: Sequence[PlanItem],
         retrieval_routes: Sequence[RetrievalRoute],
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         *,
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
@@ -257,10 +251,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         if corpus_profile.has_private_docs:
             reflection_bits.append(
                 f"Internal grounding is available from {corpus_profile.document_count} document(s), so hybrid/internal routes should be delegated when relevant."
-            )
-        if memory_records:
-            reflection_bits.append(
-                f"Memory recall returned {len(memory_records)} item(s); reuse it as context but keep final claims citation-backed."
             )
         if revision_notes:
             reflection_bits.append("Revision notes must be repaired: " + "; ".join(revision_notes[:3]))
@@ -288,7 +278,6 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
                     selected_tools=selected_tools,
                     web_queries=route.web_queries if route else [item.search_query or item.question],
                     internal_queries=route.internal_queries if route else [],
-                    memory_query=route.memory_query if route else f"{request.topic} {item.purpose}",
                     min_evidence=route.min_evidence if route else 1,
                     min_sources=route.min_sources if route else 1,
                     sufficiency_criteria=route.sufficiency_criteria
@@ -358,7 +347,7 @@ class DeterministicResearchModelProvider(ResearchModelProvider):
         unique_sources = {
             item.source
             for item in evidence
-            if item.source and item.source not in {"internal-note", "memory"}
+            if item.source and item.source != "internal-note"
         }
         if evidence and len(unique_sources) < 2:
             issues.append("Evidence sources are not diverse enough.")
@@ -568,7 +557,7 @@ def _build_plan_items(request: ResearchRequest, topic: str, *, revision_count: i
         ),
         (
             "data",
-            f"What evidence, memory, or retrieval sources support {base}?",
+            f"What evidence, retrieval sources, or tool results support {base}?",
             "Explain the knowledge layer and context reuse.",
         ),
         (
@@ -617,7 +606,7 @@ def _build_plan_items(request: ResearchRequest, topic: str, *, revision_count: i
 def _focus_for_topic(topic: str) -> str:
     lower = topic.lower()
     if any(word in lower for word in ("agent", "copilot", "workflow")):
-        return "agent orchestration, memory, verification, and observability"
+        return "agent orchestration, verification, and observability"
     if any(word in lower for word in ("rag", "retrieval", "knowledge")):
         return "retrieval quality, grounding, and context management"
     if any(word in lower for word in ("e-commerce", "order", "payment", "marketing")):
@@ -669,13 +658,30 @@ def _researcher_follow_up_query(
     return _clean_text(f"{base} follow up evidence")
 
 
-def _summarize_memory(records: Sequence[MemoryRecord]) -> str:
-    if not records:
-        return ""
-    summary_bits: list[str] = []
-    for record in records[:3]:
-        summary_bits.append(f"{record.key}: {record.value[:72].rstrip()}")
-    return "; ".join(summary_bits)
+def _select_mcp_query_tool(
+    query: str,
+    mcp_tools: Sequence[MCPToolDescriptor],
+) -> tuple[str | None, dict[str, object] | None]:
+    query_capable = [
+        tool
+        for tool in mcp_tools
+        if "query" in {*tool.required_args, *tool.optional_args} or tool.name.startswith("search")
+    ]
+    if not query_capable:
+        return (mcp_tools[0].name, None) if len(mcp_tools) == 1 else (None, None)
+
+    lower = query.lower()
+    keyword_priority = [
+        ("search_issues", ("issue", "bug", "failure", "risk")),
+        ("search_code", ("code", "source", "implementation", "file", "readme", "architecture")),
+        ("search_repositories", ("repo", "repository", "github", "project")),
+    ]
+    tool_lookup = {tool.name: tool for tool in query_capable}
+    for tool_name, keywords in keyword_priority:
+        if tool_name in tool_lookup and any(keyword in lower for keyword in keywords):
+            return tool_name, {"query": query}
+
+    return query_capable[0].name, {"query": query}
 
 
 def _heuristic_source_compression(

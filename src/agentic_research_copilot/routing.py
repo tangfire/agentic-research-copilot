@@ -22,7 +22,6 @@ class RetrievalCoordinator:
         "pdf",
         "wiki",
         "artifact",
-        "memory",
         "history",
         "grounding",
     )
@@ -121,7 +120,7 @@ class RetrievalCoordinator:
         if not reason_bits:
             reason_bits.append("defaulting to public web evidence")
 
-        selected_tools = self._selected_tools(mode, request.use_memory)
+        selected_tools = self._selected_tools(mode)
         rewrite_count = self._rewrite_count_for_depth(request.depth)
         web_queries = (
             self._dedupe_queries(
@@ -151,7 +150,7 @@ class RetrievalCoordinator:
         min_sources = 1 if mode == "internal" else min(self.min_source_diversity, min_evidence)
         sufficiency_criteria = [
             f"collect at least {min_evidence} evidence items for this plan item",
-            f"use at least {min_sources} non-memory source group(s) when available",
+            f"use at least {min_sources} source group(s) when available",
             "preserve citations for report assembly",
         ]
         if mode == "hybrid":
@@ -166,7 +165,6 @@ class RetrievalCoordinator:
             selected_tools=selected_tools,
             web_queries=web_queries,
             internal_queries=internal_queries,
-            memory_query=f"{request.topic} {item.purpose}" if request.use_memory else None,
             min_evidence=min_evidence,
             min_sources=min_sources,
             sufficiency_criteria=sufficiency_criteria,
@@ -178,15 +176,12 @@ class RetrievalCoordinator:
     def _selected_tools(
         self,
         mode: str,
-        use_memory: bool,
     ) -> list[str]:
         tools: list[str] = []
         if mode in {"external", "hybrid"}:
             tools.append("web_search")
         if mode in {"internal", "hybrid"}:
             tools.append("vector_retrieval")
-        if use_memory:
-            tools.append("memory_recall")
         if self.mcp_enabled:
             tools.append("mcp_tool")
         return tools

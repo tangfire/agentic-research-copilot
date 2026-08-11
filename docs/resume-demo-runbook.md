@@ -1,218 +1,123 @@
 # Resume Demo Runbook
 
-This runbook records the July 2026 resume demo experiment for AI Research
-Copilot. It is intentionally written as an interview artifact: what was missing,
-what failed under real providers, what was fixed, and what can now be shown.
-
 ## Goal
 
-The project previously had a strong architecture but weak demo assets: the
-strict-provider stack was configured, while the grounding corpus, memory, traces,
-and evaluation artifacts were too empty to make the project feel real. The goal
-of this experiment was to create stable assets that exercise agent planning,
-RAG, memory, MCP, citation verification, evaluation, and replay.
+Prepare repeatable assets that show the product as a technical research copilot, not as a generic chatbot or CRUD backend. A good demo should answer an engineering question by combining web search, GitHub MCP developer evidence, local RAG grounding, trace replay, and evaluation metrics.
 
-## Runtime Profile
+Capture:
 
-The completed run used:
+- grounded document corpus
+- strict-provider run
+- final report
+- source index
+- trace timeline
+- retrieval routes
+- evaluation metrics
 
-- API: `http://127.0.0.1:8010`
-- Orchestration: `langgraph`
-- Queue: `celery`
-- Vector backend: `qdrant_dense`
-- Keyword backend: `sqlite_fts5_bm25`
-- Reranker: `dashscope_qwen3_rerank`
-- MCP workbench: loaded
-- Strict provider readiness: passed
+Recommended demo shape:
 
-For an isolated demo run, use a separate storage file and Qdrant collection so
-old experiments do not change startup time or retrieval results:
+> Analyze the architecture, implementation choices, issue risks, PR activity, and release changes of an open-source AI agent or RAG project.
+
+## Preflight
+
+Use strict providers when preparing real demo artifacts:
 
 ```powershell
-$env:ARC_STORAGE_PATH = ".arc/resume_demo_run.db"
-$env:ARC_QDRANT_COLLECTION = "arc_resume_demo_20260727"
-$env:ARC_LANGGRAPH_CHECKPOINT_PATH = ".arc/langgraph_resume_demo.sqlite"
-$env:ARC_RESEARCH_MAX_ITERATIONS = "2"
-$env:ARC_RAG_MAX_QUERY_REWRITES = "1"
-$env:ARC_JOB_TIMEOUT_SECONDS = "240"
-.\scripts\start_real.ps1 -Port 8010 -NoInfra
+$env:ARC_STRICT_PROVIDERS="true"
+$env:ARC_MODEL_PROVIDER="openai_compatible"
+$env:ARC_SEARCH_PROVIDER="tavily"
+$env:ARC_QDRANT_URL="http://127.0.0.1:6333"
+$env:ARC_RERANK_PROVIDER="dashscope"
 ```
 
-Then prepare the corpus, memory, and run artifacts:
+Run:
 
 ```powershell
-python scripts\prepare_resume_demo_assets.py --source-dir "<local-reference-paper-folder>"
+pytest
 ```
 
-Use `--skip-runs` when you only want to seed corpus and memory.
+Then start the API:
 
-## Demo Assets
+```powershell
+uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+```
 
-The reproducible script is `scripts/prepare_resume_demo_assets.py`. Pass the
-paper folder through `--source-dir` or `ARC_RESUME_DEMO_SOURCE_DIR`; committed
-artifacts keep only stable `resume-demo-papers/<file>` source ids instead of a
-machine-local absolute path. The script seeds controlled excerpts from five
-federated learning papers:
+## Corpus
 
-- FedAvg: `mcmahan17a.pdf`
-- pFedMe: personalized federated learning with Moreau envelopes
-- FedRolex: model-heterogeneous FL with rolling sub-model extraction
-- Personalized FL via heterogeneous model reassembly
-- FedAUX: unlabeled auxiliary data for FL
+Use a small corpus that you can explain:
 
-It also seeds three memory records:
+- 2-5 papers or technical docs
+- stable URLs or local PDFs
+- one topic around agentic research or RAG
+- one topic around system architecture or evaluation
 
-- `resume_demo:positioning`
-- `resume_demo:corpus_scope`
-- `resume_demo:demo_goal`
+The corpus should make retrieval visible. Do not rely only on live web search.
 
-Final readiness:
+## Run
 
-- Corpus: 5 documents from 5 sources
-- Memory: 3 records, including 1 canonical record
-- MCP readiness: 10/10 checks passed
-- Completed run artifacts: 2
+Submit a research run:
 
-Generated assets live under `examples/resume-demo/`:
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/v1/research/runs `
+  -ContentType "application/json" `
+  -Body '{"topic":"Compare Open Deep Research style agentic research with hybrid RAG grounding","depth":"standard"}'
+```
 
-- `demo-summary.json`
-- `demo-summary.md`
-- `fl-heterogeneity-comparison.*`
-- `fl-personalization-design-memo.*`
+Save the returned `run_id`.
 
-Each completed run has a saved `run.json`, `trace.json`, `evaluation.json`, and
-human-readable `report.md`.
+Inspect:
 
-## Completed Runs
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/v1/research/runs/<run_id>/trace
+Invoke-RestMethod http://127.0.0.1:8000/v1/research/runs/<run_id>/evaluation
+Invoke-RestMethod http://127.0.0.1:8000/v1/research/runs/<run_id>/result
+```
 
-| Slug | Status | Sources | Trace events | Checkpoints | Evaluation |
-| --- | --- | ---: | ---: | ---: | --- |
-| `fl-heterogeneity-comparison` | completed | 6 | 44 | 12 | passed |
-| `fl-personalization-design-memo` | completed | 6 | 53 | 14 | passed |
+## Optional GitHub MCP
 
-These runs demonstrate:
+For interview demos, prefer GitHub MCP as the external MCP. It gives concrete developer evidence that Tavily does not expose as precisely: repository files, code search, issues, pull requests, and releases.
 
-- LangGraph planning and checkpointed execution
-- Supervisor and researcher tool decisions
-- Web search/source reading through Tavily
-- Local corpus retrieval through Qdrant + SQLite FTS5/BM25
-- Qwen/DashScope reranking
-- Memory recall/write behavior
-- Citation-locked report generation
-- Evaluation and replay artifacts
-- MCP readiness and workbench inspection
+Use an explicit repository target when demonstrating this path:
 
-## Problems And Fixes
+```text
+Analyze https://github.com/langchain-ai/open_deep_research:
+explain its research workflow, inspect relevant implementation files,
+summarize issue risks, review recent pull request activity, and report release changes.
+Use Tavily for ecosystem context and GitHub MCP for repository-level evidence.
+```
 
-### Full PDF Ingestion Was Too Slow
+The provider extracts the repository target as structured `owner` and `repo` hints. The researcher can then select direct repository tools instead of treating the entire request as a generic web query. For a broad topic without a named repository, it may first use `search_repositories` or `search_code` to discover candidates.
 
-Problem: Full synchronous PDF ingestion through `/v1/documents/ingest` was too
-slow in strict provider mode. A single full paper could take several minutes
-because page parsing, contextualization, embeddings, and Qdrant writes all used
-real providers.
+```powershell
+$env:ARC_MCP_ENABLED="true"
+$env:ARC_MCP_SERVER_URL="https://api.githubcopilot.com/mcp/readonly"
+$env:ARC_MCP_TOOLS="search_repositories,get_file_contents,search_code,list_issues,issue_read,search_issues,list_pull_requests,pull_request_read,get_latest_release"
+$env:ARC_MCP_AUTH_REQUIRED="true"
+$env:ARC_MCP_AUTH_TOKEN="<github-token>"
+```
 
-Fix: The demo script seeds bounded excerpts through `/v1/documents`. This still
-exercises real embedding, BM25, Qdrant, structured entity/relation graph signals, and reranking, but avoids
-making interview prep depend on full-PDF indexing latency. Full ingestion remains
-available; the demo path is intentionally bounded and reproducible.
+Use this for topics like: "Analyze the architecture, issue risks, PR activity, and release changes of an open-source AI agent or RAG project."
 
-Interview framing: this is a classic production trade-off. Keep the full
-pipeline, but create a deterministic demo seed path so experiments are reliable.
+## What To Capture
 
-### BOM-Prefixed `.env` Hid Strict Mode
+For each demo run, be ready to show:
 
-Problem: The local `.env` file started with a UTF-8 BOM. `python-dotenv` treated
-the first key as `\ufeffARC_STRICT_PROVIDERS`, so direct `load_settings()` calls
-could miss `ARC_STRICT_PROVIDERS=true`.
+- the original topic
+- generated plan items
+- `ConductResearch` tool calls
+- selected tools per route
+- web/internal/MCP evidence counts
+- one retrieved document chunk with parent/neighbor context metadata
+- final report citations
+- evaluator notes and pass/fail metrics
+- trace events showing handoffs and tool calls
 
-Fix: `settings.py` now reads dotenv files with `encoding="utf-8-sig"`, and
-`tests/test_settings.py` covers BOM-prefixed dotenv files.
+## Interview Talking Points
 
-Interview framing: provider readiness cannot depend on editor-specific encoding
-behavior. Config parsing was made explicit and tested.
-
-### Celery Jobs Stayed `queued` During Worker Warmup
-
-Problem: A Celery worker constructs `ResearchCopilot` before executing a job.
-Restoring and indexing an existing corpus can take minutes in strict mode, so
-the API showed the job as `queued` even though the worker had already received
-the task and was doing real model/embedding/Qdrant work.
-
-Fix: `celery_app.py` now performs a lightweight SQLite status update as soon as
-the task is received, then reuses a worker-level `ResearchCopilot` instance. The
-worker refreshes state before each task so newly added documents/memory are
-picked up incrementally instead of rebuilding the full corpus every time.
-
-Interview framing: queue state and worker warmup are separate concerns. The fix
-improves observability first, then reduces repeated cold-start cost.
-
-### LLM Structured Output Used `null` For List Fields
-
-Problem: Real model output returned `null` for supervisor list fields such as
-`selected_tools`, `web_queries`, `internal_queries`, and
-`sufficiency_criteria`. The strict Pydantic contract expected arrays, causing
-valid research jobs to fail before route fallback logic could run.
-
-Fix: `schemas.py` now normalizes `null` list fields to empty lists for
-`SupervisorToolCall` and `SupervisorDecisionContract`, with coverage in
-`tests/test_schemas.py`.
-
-Interview framing: real model structured output is messy. Contracts should stay
-strict about shape, but tolerate common provider serialization quirks when safe.
-
-### Quality Gates Rejected A Weak Architecture Demo
-
-Problem: An early architecture-focused demo question failed with:
-`Plan coverage is weak` and `Evidence sufficiency is weak`. The system did
-produce a run artifact, but the evaluator correctly marked it failed because the
-available FL paper corpus was not enough evidence for every architecture claim.
-
-Fix: Keep the failed run as a useful evaluation story, but change the stable
-resume demo to corpus-grounded FL questions. Architecture claims are documented
-from runtime config and source code, while research reports stay grounded in the
-paper corpus.
-
-Interview framing: this is a strength, not an embarrassment. The evaluator
-blocked a report when evidence did not match the question.
-
-### Real Providers Expose Latency And Query Noise
-
-Problem: Strict runs surfaced real-world latency and a few Tavily `400` responses
-for generated queries. Later generated queries succeeded, and completed runs
-still produced sufficient evidence.
-
-Fix: The demo profile reduces iterations and query rewrites for stability:
-`ARC_RESEARCH_MAX_ITERATIONS=2` and `ARC_RAG_MAX_QUERY_REWRITES=1`. Future work
-should add stronger search-query validation and a cold-start index cache.
-
-Interview framing: this shows why traces matter. Provider errors, retries,
-latency, and evaluator outcomes are visible instead of hidden.
-
-## Resume Talking Points
-
-Use this project as an AI Research Copilot rather than a private-data product.
-The core story is:
-
-- Designed a LangGraph agentic research workflow with planning, supervisor
-  delegation, source reading, retrieval, reporting, verification, evaluation,
-  memory writes, and replay.
-- Built an Agentic RAG grounding layer with Qdrant dense vectors, SQLite
-  FTS5/BM25, parent/neighbor context expansion, LightRAG-inspired structured
-  entity/relation graph signals, and Qwen/DashScope reranking.
-- Added real-provider strict mode over OpenAI-compatible chat, Qwen/DashScope
-  embeddings/rerank, Tavily search, Qdrant, Celery/Redis, and MCP tools.
-- Produced reproducible demo artifacts: 5-paper corpus, 3 memory records, 2
-  completed runs, trace/evaluation/report files, and MCP readiness 10/10.
-- Found and fixed real integration issues: BOM dotenv parsing, Celery state
-  visibility during worker warmup, repeated worker reindexing, and `null` list
-  fields in structured LLM output.
-
-## Remaining Boundaries
-
-Keep these boundaries honest:
-
-- Single-node Celery/Redis/SQLite/Qdrant, not a distributed platform.
-- Controlled excerpts for stable demo, not a large production corpus.
-- Proxy evaluation and saved artifacts, not a public benchmark.
-- PyMuPDF text extraction, not OCR or enterprise document intelligence.
-- Local MCP workbench, not an enterprise MCP gateway.
+- The project is not plain RAG; RAG is one evidence channel inside a research graph.
+- The supervisor decides what to delegate and what evidence tools to use.
+- The retriever searches precise child chunks but returns expanded surrounding context for synthesis.
+- The report is generated from existing evidence, then verified and evaluated.
+- Memory and the local workbench MCP were removed to keep the project honest and less toy-like.

@@ -32,18 +32,6 @@ class DocumentIngestInput(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
-class MemoryInput(BaseModel):
-    key: str = Field(min_length=2)
-    value: str = Field(min_length=1)
-    tags: list[str] = Field(default_factory=list)
-    metadata: dict[str, object] = Field(default_factory=dict)
-    layer: str = "session"
-    run_id: str | None = None
-    session_id: str | None = None
-    topic: str | None = None
-    confidence: float = 0.0
-
-
 def create_app() -> FastAPI:
     copilot = ResearchCopilot()
 
@@ -99,10 +87,6 @@ def create_app() -> FastAPI:
                 <li><code>DELETE /v1/documents/{document_id}</code></li>
                 <li><code>DELETE /v1/documents</code></li>
                 <li><code>DELETE /v1/research/history</code></li>
-                <li><code>GET /v1/memory/search</code></li>
-                <li><code>GET /v1/memory</code></li>
-                <li><code>GET /v1/memory/governance</code></li>
-                <li><code>POST /v1/memory</code></li>
                 <li><code>GET /v1/telemetry</code></li>
                 <li><code>GET /v1/runtime/provider-check</code></li>
               </ul>
@@ -326,68 +310,8 @@ def create_app() -> FastAPI:
         return copilot.clear_documents()
 
     @app.delete("/v1/research/history")
-    def clear_research_history(include_memory: bool = Query(default=False)):
-        return copilot.clear_history(include_memory=include_memory)
-
-    @app.get("/v1/memory/search")
-    def search_memory(
-        q: str = Query(min_length=1),
-        layer: str | None = None,
-        topic: str | None = None,
-        run_id: str | None = None,
-        session_id: str | None = None,
-        limit: int = Query(default=5, ge=1, le=20),
-    ):
-        results = copilot.memory.recall(
-            q,
-            layer=layer,
-            topic=topic,
-            run_id=run_id,
-            session_id=session_id,
-            limit=limit,
-        )
-        return {
-            "query": q,
-            "result_count": len(results),
-            "results": results,
-            "governance": copilot.memory.governance_report(),
-        }
-
-    @app.get("/v1/memory")
-    def list_memory(
-        layer: str | None = None,
-        topic: str | None = None,
-        run_id: str | None = None,
-        session_id: str | None = None,
-        tag: str | None = None,
-        limit: int = Query(default=100, ge=1, le=500),
-    ):
-        return copilot.memory.list(
-            layer=layer,
-            topic=topic,
-            run_id=run_id,
-            session_id=session_id,
-            tag=tag,
-            limit=limit,
-        )
-
-    @app.get("/v1/memory/governance")
-    def memory_governance():
-        return copilot.memory.governance_report()
-
-    @app.post("/v1/memory")
-    def add_memory(payload: MemoryInput):
-        return copilot.add_memory(
-            key=payload.key,
-            value=payload.value,
-            tags=payload.tags,
-            metadata=payload.metadata,
-            layer=payload.layer,
-            run_id=payload.run_id,
-            session_id=payload.session_id,
-            topic=payload.topic,
-            confidence=payload.confidence,
-        )
+    def clear_research_history():
+        return copilot.clear_history()
 
     @app.get("/v1/telemetry")
     def list_telemetry(

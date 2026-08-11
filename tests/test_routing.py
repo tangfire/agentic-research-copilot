@@ -29,7 +29,7 @@ def test_router_uses_hybrid_when_public_and_private_evidence_are_both_relevant()
     assert routes[0].web_query
     assert routes[0].internal_query
     assert "contextual grounding" in routes[0].reason
-    assert routes[0].selected_tools == ["web_search", "vector_retrieval", "memory_recall", "mcp_tool"]
+    assert routes[0].selected_tools == ["web_search", "vector_retrieval", "mcp_tool"]
     assert len(routes[0].web_queries) >= 2
     assert len(routes[0].internal_queries) >= 2
     assert routes[0].min_evidence >= 2
@@ -52,4 +52,4 @@ def test_router_falls_back_to_external_when_private_corpus_is_unavailable():
     assert routes[0].mode == "external"
     assert routes[0].web_query == "research copilot benchmarks"
     assert routes[0].internal_query is None
-    assert routes[0].selected_tools == ["web_search", "memory_recall", "mcp_tool"]
+    assert routes[0].selected_tools == ["web_search", "mcp_tool"]

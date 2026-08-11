@@ -36,20 +36,6 @@
       "status": "skipped_existing"
     }
   ],
-  "memory_assets": [
-    {
-      "key": "resume_demo:positioning",
-      "status": "skipped_existing"
-    },
-    {
-      "key": "resume_demo:corpus_scope",
-      "status": "skipped_existing"
-    },
-    {
-      "key": "resume_demo:demo_goal",
-      "status": "skipped_existing"
-    }
-  ],
   "runtime": {
     "strict_ready": true,
     "runtime": "langgraph",
@@ -96,34 +82,6 @@
     "embedding_dimensions": 256,
     "collection_name": "arc_resume_demo_20260727",
     "last_updated": "2026-07-27T05:18:11.461221+00:00"
-  },
-  "final_memory_governance": {
-    "total_records": 3,
-    "by_layer": {
-      "summary": 2,
-      "canonical": 1
-    },
-    "canonical_count": 1,
-    "embedding_enabled": true,
-    "embedding_provider": "openai_compatible",
-    "embedding_dimensions": 256,
-    "indexed_memory_count": 3,
-    "needs_review_count": 0,
-    "conflict_record_count": 0,
-    "conflict_count": 0,
-    "review_required": [],
-    "write_rules": [
-      "session memory captures run-scoped notes",
-      "summary memory captures topic-level takeaways",
-      "canonical memory is active only when confidence is sufficient and no conflict is detected",
-      "conflicting canonical facts are retained but marked needs_review instead of overwritten"
-    ],
-    "recall_strategy": [
-      "lexical token matching",
-      "embedding-assisted semantic similarity when an embedding provider is configured",
-      "confidence and layer weighting",
-      "governance penalty for needs_review canonical records"
-    ]
   },
   "run_assets": [
     {

@@ -46,17 +46,6 @@ class ResearchWorkflow:
                             revision=revision_count,
                         )
                     )
-                if route.memory_query:
-                    queries.append(
-                        SearchQuery(
-                            query=route.memory_query,
-                            intent=f"Memory recall for: {item.purpose}",
-                            plan_item_id=item.id,
-                            tool="memory_recall",
-                            rewrite_index=0,
-                            revision=revision_count,
-                        )
-                    )
                 continue
             queries.append(
                 SearchQuery(
@@ -126,20 +115,20 @@ class ResearchWorkflow:
         if route is None:
             return (1.0 if evidence else 0.0), ([] if evidence else ["no evidence returned"])
 
-        non_memory_sources = {
+        evidence_sources = {
             item.source
             for item in evidence
-            if item.source and item.kind != "memory" and item.source != "memory"
+            if item.source
         }
         evidence_ratio = min(1.0, len(evidence) / max(1, route.min_evidence))
-        source_ratio = min(1.0, len(non_memory_sources) / max(1, route.min_sources))
+        source_ratio = min(1.0, len(evidence_sources) / max(1, route.min_sources))
         score = round(evidence_ratio * 0.7 + source_ratio * 0.3, 4)
 
         gaps: list[str] = []
         if len(evidence) < route.min_evidence:
             gaps.append(f"needs {route.min_evidence - len(evidence)} more evidence item(s)")
-        if len(non_memory_sources) < route.min_sources:
-            gaps.append(f"needs {route.min_sources - len(non_memory_sources)} more source group(s)")
+        if len(evidence_sources) < route.min_sources:
+            gaps.append(f"needs {route.min_sources - len(evidence_sources)} more source group(s)")
         if route.mode == "hybrid":
             kinds = {item.kind for item in evidence}
             if "web" not in kinds:

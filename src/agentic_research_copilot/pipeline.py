@@ -14,7 +14,6 @@ from .ledger import JobLedger, RunLedger
 from .mcp_tools import build_mcp_tool
 from .providers import build_embedding_provider, build_model_provider
 from .provider_validation import provider_runtime_report, require_real_provider_config
-from .memory import MemoryStore
 from .retrieval import DocumentStore, RerankerConfig, build_reranker
 from .schemas import (
     ClarificationContract,
@@ -62,7 +61,9 @@ class ResearchCopilot:
             require_real_provider_config(self.settings)
         self.model_provider = build_model_provider(self.settings)
         self.embedding_provider = build_embedding_provider(self.settings, self.model_provider)
-        self.mcp_tool = build_mcp_tool(self.settings)
+        self.mcp_registry = build_mcp_tool(self.settings)
+        self.mcp_tool = self.mcp_registry.search if self.mcp_registry is not None else None
+        self.mcp_tool_catalog = self.mcp_registry.describe_tools() if self.mcp_registry is not None else []
         self.reranker = build_reranker(
             RerankerConfig(
                 provider=self.settings.rerank_provider,
@@ -74,7 +75,6 @@ class ResearchCopilot:
                 allow_fallback=not self.settings.strict_providers,
             )
         )
-        self.memory = MemoryStore(self.embedding_provider)
         self.documents = DocumentStore(
             self.embedding_provider,
             collection_name=self.settings.qdrant_collection,
@@ -107,7 +107,7 @@ class ResearchCopilot:
             max_query_rewrites=self.settings.rag_max_query_rewrites,
             min_evidence_per_item=self.settings.rag_min_evidence_per_item,
             min_source_diversity=self.settings.rag_min_source_diversity,
-            mcp_enabled=self.settings.mcp_enabled,
+            mcp_enabled=self.mcp_tool is not None,
         )
         self.planner = PlannerAgent(self.model_provider, self.settings)
         self.researcher = ResearchAgent(
@@ -115,6 +115,7 @@ class ResearchCopilot:
             model_provider=self.model_provider,
             embedding_provider=self.embedding_provider,
             mcp_tool=self.mcp_tool,
+            mcp_tool_catalog=self.mcp_tool_catalog,
             source_reader_enabled=self.settings.source_reader_enabled,
             source_reader_strategy=self.settings.source_reader_strategy,
             raw_content_max_chars=self.settings.source_reader_max_chars,
@@ -190,32 +191,25 @@ class ResearchCopilot:
             "documents_deleted": max(storage_deleted, indexed_deleted),
         }
 
-    def clear_history(self, *, include_memory: bool = False) -> dict[str, object]:
+    def clear_history(self) -> dict[str, object]:
         storage_runs_deleted = self.storage.clear_runs()
         storage_jobs_deleted = self.storage.clear_jobs()
         runs_deleted = max(storage_runs_deleted, self.ledger.clear())
         jobs_deleted = max(storage_jobs_deleted, self.jobs.clear())
         telemetry_deleted = self.telemetry.clear()
-        memory_deleted = 0
-        if include_memory:
-            storage_memory_deleted = self.storage.clear_memory()
-            memory_deleted = max(storage_memory_deleted, self.memory.clear())
         return {
             "deleted": True,
             "runs_deleted": runs_deleted,
             "jobs_deleted": jobs_deleted,
             "telemetry_deleted": telemetry_deleted,
-            "memory_deleted": memory_deleted,
-            "memory_cleared": include_memory,
+            "memory_removed_from_core": True,
         }
 
     def clarify(self, request: ResearchRequest) -> ClarificationContract:
         corpus_profile = self.documents.profile()
-        memory_records = self._recall_memory_context(request, "clarification") if request.use_memory else []
         contract, usage = self.model_provider.clarify_request(
             request,
             corpus_profile,
-            memory_records=memory_records,
         )
         self.telemetry.emit(
             "clarification.checked",
@@ -231,55 +225,6 @@ class ResearchCopilot:
             missing_dimensions=contract.missing_dimensions,
         )
         return contract
-
-    def add_memory(
-        self,
-        key: str,
-        value: str,
-        tags: list[str] | None = None,
-        metadata: dict[str, object] | None = None,
-        *,
-        layer: str = "session",
-        run_id: str | None = None,
-        session_id: str | None = None,
-        topic: str | None = None,
-        confidence: float = 0.0,
-    ):
-        if layer == "summary":
-            record = self.memory.add_summary(
-                key=key,
-                value=value,
-                tags=tags,
-                metadata=metadata,
-                run_id=run_id,
-                session_id=session_id,
-                topic=topic,
-                confidence=confidence,
-            )
-        elif layer == "canonical":
-            record = self.memory.add_fact(
-                key=key,
-                value=value,
-                tags=tags,
-                metadata=metadata,
-                run_id=run_id,
-                session_id=session_id,
-                topic=topic,
-                confidence=confidence,
-            )
-        else:
-            record = self.memory.add_session_note(
-                key=key,
-                value=value,
-                tags=tags,
-                metadata=metadata,
-                run_id=run_id,
-                session_id=session_id,
-                topic=topic,
-                confidence=confidence,
-            )
-        self.storage.save_memory(record)
-        return record
 
     def list_runs(self) -> list[ResearchRun]:
         self.ledger.extend(self.storage.load_runs())
@@ -380,7 +325,7 @@ class ResearchCopilot:
             "orchestration": {
                 "runtime": self.settings.orchestration_runtime,
                 "strict_providers": self.settings.strict_providers,
-                "active_graph": "supervisor -> memory -> planner -> research_supervisor -> parallel_research -> reporter -> verifier/evaluator -> memory_write",
+                "active_graph": "supervisor -> planner -> research_supervisor -> parallel_research -> reporter -> verifier/evaluator -> finalize",
                 "checkpointer": self.settings.langgraph_checkpointer,
                 "checkpoint_path": self.settings.langgraph_checkpoint_path,
                 "durability_boundary": "Single-node LangGraph sqlite checkpointing is the default graph durability layer; SQLite run traces/replay are always persisted by the app, with MemorySaver used only as a defensive fallback.",
@@ -437,7 +382,7 @@ class ResearchCopilot:
                     "name": "PraisonAI",
                     "learning_priority": "secondary",
                     "used_for": [
-                        "memory and persistence concepts",
+                        "persistence and replay concepts",
                         "reader registry and document ingestion extension shape",
                         "agent handoff vocabulary",
                         "observability, replay, and run-ledger patterns",
@@ -448,7 +393,7 @@ class ResearchCopilot:
             "open_deep_research_alignment": {
                 "positioning": (
                     "Complex-question AI Research Copilot: plan, search/read, retrieve, "
-                    "recall memory, synthesize, verify citations, evaluate, and replay."
+                    "synthesize, verify citations, evaluate, and replay."
                 ),
                 "matched_boundaries": [
                     "ODR-style clarify_with_user front door before research starts",
@@ -479,14 +424,13 @@ class ResearchCopilot:
                 },
                 {
                     "name": "route_materializer",
-                    "role": "turns ConductResearch tool-call arguments into executable web/vector/memory route contracts",
+                    "role": "turns ConductResearch tool-call arguments into executable web/vector/MCP route contracts",
                 },
                 {"name": "researcher", "role": "collects web evidence through the configured search tool"},
                 {
                     "name": "grounding_layer",
                     "role": "retrieves precise child chunks, expands parent/neighbor context, then applies dense/BM25 fusion and reranking",
                 },
-                {"name": "memory_manager", "role": "recalls and writes structured topic memory"},
                 {"name": "supervisor", "role": "coordinates handoffs, retries, and failure states"},
                 {
                     "name": "reporter",
@@ -525,17 +469,20 @@ class ResearchCopilot:
                 {
                     "name": "mcp_tool",
                     "provider": "model_context_protocol",
-                    "enabled": self.settings.mcp_enabled,
+                    "enabled": self.mcp_tool is not None,
+                    "configured_enabled": self.settings.mcp_enabled,
                     "server_url_configured": bool(self.settings.mcp_server_url),
                     "loaded": self.mcp_tool is not None,
                     "tools": self.settings.mcp_tools,
                     "tools_configured": bool(self.settings.mcp_tools),
+                    "tool_catalog": [tool.model_dump() for tool in self.mcp_tool_catalog],
+                    "tool_catalog_count": len(self.mcp_tool_catalog),
                     "auth_required": self.settings.mcp_auth_required,
                     "auth_token_configured": bool(self.settings.mcp_auth_token),
                     "mcp_prompt_configured": bool(self.settings.mcp_prompt),
                     "transport": self.settings.mcp_transport,
                     "timeout_seconds": self.settings.mcp_timeout_seconds,
-                    "reference_shape": "Open Deep Research loads configured MCP tools from mcp_config.url + mcp_config.tools into the researcher toolkit; this repo exposes the same configured tools as citation-backed evidence.",
+                    "reference_shape": "Open Deep Research loads configured MCP tools from mcp_config.url + mcp_config.tools into the researcher toolkit; this repo treats MCP as an external tool boundary rather than a local workbench server.",
                 },
                 {
                     "name": "model_provider",
@@ -579,7 +526,6 @@ class ResearchCopilot:
                     "parent_child_strategy": "retrieval scores child chunks and returns same-document parent/neighbor context for synthesis",
                     "graph_strategy": "LightRAG-inspired structured entity/relation graph; graph hits are fused before rerank",
                 },
-                {"name": "memory_search", "provider": "layered_structured_memory", "enabled": True},
                 {"name": "run_ledger", "provider": "sqlite", "enabled": True},
                 {"name": "job_queue", "provider": self.settings.job_queue_backend, "enabled": True},
                 {"name": "telemetry", "provider": "in_process_event_log", "enabled": True},
@@ -608,7 +554,7 @@ class ResearchCopilot:
                 "agentic_rag": {
                     "query_rewrite": True,
                     "max_query_rewrites": self.settings.rag_max_query_rewrites,
-                    "tool_selection": ["web_search", "vector_retrieval", "memory_recall", "mcp_tool"],
+                    "tool_selection": ["web_search", "vector_retrieval", "mcp_tool"],
                     "min_evidence_per_item": self.settings.rag_min_evidence_per_item,
                     "min_source_diversity": self.settings.rag_min_source_diversity,
                     "sufficiency_check": "route-level evidence thresholds feed the verifier/evaluator revision loop",
@@ -620,23 +566,12 @@ class ResearchCopilot:
                 "production_upgrade": "swap the model adapter or vector backend without changing the route contract",
                 "corpus_profile": corpus_profile.model_dump(),
             },
-            "memory": {
-                "layers": ["session", "canonical", "summary"],
-                "recall_strategy": "lexical + embedding semantic similarity + confidence/layer/governance weighting",
-                "write_policy": [
-                    "session notes capture the run summary",
-                    "summary memory stores topic-level takeaways",
-                    "canonical memory stores verified facts from successful runs",
-                ],
-                "governance": self.memory.governance_report(),
-            },
             "observability": {
                 "trace_fields": [
                     "handoff",
                     "tool_call",
                     "step",
                     "checkpoint",
-                    "memory_write",
                     "verification",
                     "evaluation",
                 ],
@@ -673,7 +608,7 @@ class ResearchCopilot:
             "storage": {
                 "backend": "sqlite",
                 "path": str(self.storage.path),
-                "persisted_objects": ["documents", "memory_records", "research_jobs", "research_runs"],
+                "persisted_objects": ["documents", "research_jobs", "research_runs"],
             },
         }
 
@@ -853,7 +788,6 @@ class ResearchCopilot:
 
     def _restore_state(self) -> None:
         self.documents.extend(self.storage.load_documents())
-        self.memory.extend(self.storage.load_memory())
         restored_jobs: list[ResearchJob] = []
         for job in self.storage.load_jobs():
             if job.cancel_requested and job.status in {"queued", "running"}:
@@ -894,7 +828,7 @@ class ResearchCopilot:
             content=(
                 "The product uses LangGraph + Agentic RAG to plan sub-questions, run an ODR-style "
                 "research supervisor, emit ConductResearch calls with selected tools and query rewrites, "
-                "route between external search, vector_retrieval, memory_recall, and hybrid evidence, "
+                "route between external search, vector_retrieval, configured MCP tools, and hybrid evidence, "
                 "verify citations, evaluate RAG quality, persist trace and replay artifacts, and support "
                 "OpenAI-compatible chat providers, Qwen embeddings, Tavily search, and deterministic test doubles."
             ),
@@ -903,10 +837,10 @@ class ResearchCopilot:
         self._ensure_seed_document(
             title="Architecture overview",
             source="docs/architecture.md",
-            snippet="Build an AI Research Copilot that can plan, search, ground, remember, verify, evaluate, and report.",
+            snippet="Build an AI Research Copilot that can plan, search, ground, verify, evaluate, and report.",
             content=(
-                "The architecture centers on a LangGraph StateGraph supervisor, layered memory, "
-                "planner, ODR-style research_supervisor, concurrent researcher/retriever workers, Qdrant dense "
+                "The architecture centers on a LangGraph StateGraph supervisor, planner, "
+                "ODR-style research_supervisor, concurrent researcher/retriever workers, Qdrant dense "
                 "vectors, indexing-time contextual retrieval prefixes, SQLite FTS5 BM25 keyword retrieval, "
                 "RRF/DBSF hybrid fusion, Qwen/DashScope reranking with deterministic fallback, "
                 "reporter, Verifier, Evaluator, SQLite checkpoints, trace replay, source quality, "
@@ -920,10 +854,10 @@ class ResearchCopilot:
             source="docs/source-map.md",
             snippet=(
                 "open_deep_research contributes planning, parallel research, citations, and report generation; "
-                "PraisonAI contributes memory, handoff, observability, and workflow ideas."
+                "PraisonAI contributes handoff, observability, and workflow ideas."
             ),
             content=(
-                "The source map explains which upstream ideas are reused for planning, memory, "
+                "The source map explains which upstream ideas are reused for planning, "
                 "contextual grounding, observability, and original API glue."
             ),
             metadata={"kind": "source_map"},
@@ -946,17 +880,6 @@ class ResearchCopilot:
             ),
             metadata={"kind": "hardening_roadmap"},
         )
-        if not any(record.key == "project:positioning" for record in self.memory.list()):
-            self.memory.add_fact(
-                key="project:positioning",
-                value=(
-                    "This is a clean-room scaffold inspired by open source references, intended "
-                    "for learning multi-agent research, contextual grounding, memory, and observability."
-                ),
-                tags=["project", "positioning", "resume"],
-                metadata={"kind": "project_note"},
-            )
-
     def run(self, request: ResearchRequest, *, job_id: str | None = None) -> ResearchRun:
         from .graph_runtime import LangGraphResearchRuntime
 
@@ -1127,75 +1050,6 @@ class ResearchCopilot:
             document_latency_ms=document_latency_ms,
         )
 
-    def _recall_memory_context(self, request: ResearchRequest, run_id: str) -> list:
-        topic = request.topic.strip()
-        records: list = []
-        records.extend(self.memory.recall(topic, layer="summary", topic=topic, limit=3))
-        records.extend(self.memory.recall(topic, layer="canonical", topic=topic, limit=4))
-        records.extend(self.memory.recall(topic, layer="session", run_id=run_id, limit=3))
-        records.extend(self.memory.recall(topic, topic=topic, limit=2))
-        return self._dedupe_memory_records(records)
-
-    def _build_memory_artifacts(
-        self,
-        *,
-        request: ResearchRequest,
-        run_id: str,
-        report,
-        revision_count: int,
-        status: str,
-    ) -> list:
-        records = [
-            self.memory.add_session_note(
-                key=f"session:{run_id}:summary",
-                value=report.summary,
-                tags=["session", request.depth, status],
-                run_id=run_id,
-                topic=request.topic,
-                confidence=report.confidence,
-                metadata={
-                    "run_id": run_id,
-                    "source_count": report.source_count,
-                    "revision_count": revision_count,
-                    "status": status,
-                },
-            ),
-            self.memory.add_summary(
-                key=f"summary:{request.topic}",
-                value=report.summary,
-                tags=["topic", request.depth, "summary"],
-                run_id=run_id,
-                topic=request.topic,
-                confidence=report.confidence,
-                metadata={
-                    "run_id": run_id,
-                    "source_count": report.source_count,
-                    "revision_count": revision_count,
-                    "status": status,
-                },
-            ),
-        ]
-        if status == "completed" and report.confidence >= 0.6 and report.citations:
-            records.append(
-                self.memory.add_fact(
-                    key=f"fact:{request.topic}",
-                    value=self._canonical_fact_from_report(report),
-                    tags=["canonical", "fact", request.depth],
-                    run_id=run_id,
-                    topic=request.topic,
-                    confidence=report.confidence,
-                    metadata={
-                        "run_id": run_id,
-                        "source_count": report.source_count,
-                        "revision_count": revision_count,
-                        "source_index": report.source_index[:5],
-                        "write_policy": "completed citation-backed run with confidence >= 0.6",
-                        "supporting_source_count": report.source_count,
-                    },
-                )
-            )
-        return records
-
     def _routes_from_supervisor_decision(
         self,
         *,
@@ -1271,8 +1125,6 @@ class ResearchCopilot:
             )
         if not selected_tools:
             selected_tools = ["web_search"]
-            if request.use_memory:
-                selected_tools.append("memory_recall")
         if "web_search" not in selected_tools and "vector_retrieval" not in selected_tools:
             selected_tools.insert(0, "web_search")
 
@@ -1311,12 +1163,6 @@ class ResearchCopilot:
         if mode == "internal":
             web_queries = []
 
-        memory_query = getattr(call, "memory_query", None) if call is not None else None
-        if request.use_memory and not memory_query:
-            memory_query = route_hint.memory_query if route_hint is not None else f"{request.topic} {item.purpose}"
-        if not request.use_memory:
-            memory_query = None
-
         min_evidence = getattr(call, "min_evidence", None) if call is not None else None
         min_sources = getattr(call, "min_sources", None) if call is not None else None
         sufficiency_criteria = list(getattr(call, "sufficiency_criteria", []) if call is not None else [])
@@ -1329,7 +1175,7 @@ class ResearchCopilot:
         if not sufficiency_criteria:
             sufficiency_criteria = [
                 f"collect at least {min_evidence} evidence items for this delegated research unit",
-                f"use at least {min_sources} non-memory source group(s) when available",
+                f"use at least {min_sources} source group(s) when available",
                 "preserve citations for report assembly",
             ]
 
@@ -1345,7 +1191,6 @@ class ResearchCopilot:
             selected_tools=selected_tools,
             web_queries=web_queries,
             internal_queries=internal_queries,
-            memory_query=memory_query,
             min_evidence=min_evidence,
             min_sources=min_sources,
             sufficiency_criteria=sufficiency_criteria,
@@ -1358,12 +1203,10 @@ class ResearchCopilot:
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
     ) -> list[str]:
-        valid = {"web_search", "vector_retrieval", "memory_recall", "mcp_tool"}
+        valid = {"web_search", "vector_retrieval", "mcp_tool"}
         normalized: list[str] = []
         for tool in tools or []:
             if tool not in valid or tool in normalized:
-                continue
-            if tool == "memory_recall" and not request.use_memory:
                 continue
             if tool == "vector_retrieval" and (not request.include_private_docs or not corpus_profile.has_private_docs):
                 continue
@@ -1408,7 +1251,6 @@ class ResearchCopilot:
         search_queries: list[SearchQuery],
         retrieval_routes,
         web_hits: list[EvidenceItem],
-        memory_hits: list[EvidenceItem],
         document_hits: list[EvidenceItem],
         notes: list[ResearchNote],
         revision_count: int,
@@ -1428,7 +1270,7 @@ class ResearchCopilot:
         )
         content = (
             f"Run {run_id} generated {len(plan)} plan items, {len(search_queries)} search queries, "
-            f"{len(retrieval_routes)} retrieval routes, {len(web_hits)} web hits, {len(memory_hits)} memory hits, "
+            f"{len(retrieval_routes)} retrieval routes, {len(web_hits)} web hits, "
             f"{len(document_hits)} contextual grounding hits, and {len(notes)} compressed research notes. "
             f"Route mix: external={route_counts['external']}, internal={route_counts['internal']}, "
             f"hybrid={route_counts['hybrid']}. Tool selections={tool_counts}. "
@@ -1447,7 +1289,6 @@ class ResearchCopilot:
                 "search_query_count": len(search_queries),
                 "route_count": len(retrieval_routes),
                 "web_hit_count": len(web_hits),
-                "memory_hit_count": len(memory_hits),
                 "document_hit_count": len(document_hits),
                 "note_count": len(notes),
                 "revision_count": revision_count,
@@ -1457,24 +1298,6 @@ class ResearchCopilot:
             },
         )
 
-    def _canonical_fact_from_report(self, report) -> str:
-        if report.highlights:
-            return report.highlights[0]
-        if report.summary:
-            return report.summary
-        return report.title
-
-    def _dedupe_memory_records(self, records) -> list:
-        deduped = []
-        seen: set[tuple[str, str | None, str | None, str | None, str | None]] = set()
-        for record in records:
-            identity = (record.key, record.run_id, record.session_id, record.topic, record.layer)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            deduped.append(record)
-        return deduped
-
     def _build_sections(
         self,
         request: ResearchRequest,
@@ -1483,7 +1306,6 @@ class ResearchCopilot:
         retrieval_routes,
         evidence: list[EvidenceItem],
         web_hits: list[EvidenceItem],
-        memory_hits: list[EvidenceItem],
         document_hits: list[EvidenceItem],
         notes: list[ResearchNote],
         search_queries: list[SearchQuery],
@@ -1631,19 +1453,17 @@ class ResearchCopilot:
         self,
         request: ResearchRequest,
         evidence: list[EvidenceItem],
-        memory_hits: list[EvidenceItem],
         document_hits: list[EvidenceItem],
         plan: list,
     ) -> float:
         non_internal_sources = {
             item.source
             for item in evidence
-            if item.source not in {"internal-note", "memory"}
+            if item.source != "internal-note"
         }
         score = 0.3
         score += min(0.35, len(evidence) * 0.04)
         score += min(0.12, len(document_hits) * 0.02)
-        score += min(0.08, len(memory_hits) * 0.02)
         score += min(0.08, len(non_internal_sources) * 0.03)
         score += min(0.07, len(plan) * 0.01)
         if request.depth == "deep":
@@ -1651,31 +1471,6 @@ class ResearchCopilot:
         if not non_internal_sources:
             score -= 0.08
         return max(0.2, min(score, 0.95))
-
-    def _memory_records_to_evidence(self, records) -> list[EvidenceItem]:
-        evidence: list[EvidenceItem] = []
-        for index, record in enumerate(records):
-            evidence.append(
-                EvidenceItem(
-                    title=record.key,
-                    source="memory",
-                    kind="memory",
-                    snippet=record.value,
-                    content=record.value,
-                    score=max(0.4, 1.0 - index * 0.1),
-                    metadata={
-                        "tags": record.tags,
-                        "layer": record.layer,
-                        "run_id": record.run_id,
-                        "session_id": record.session_id,
-                        "topic": record.topic,
-                        "confidence": record.confidence,
-                        "created_at": record.created_at,
-                        **record.metadata,
-                    },
-                )
-            )
-        return evidence
 
     def _ensure_seed_document(
         self,
@@ -1737,8 +1532,6 @@ class ResearchCopilot:
             score += 1.5
         if item.url:
             score += 0.5
-        if item.kind == "memory" or source == "memory":
-            score -= 1.5
         if any(domain in source or domain in url for domain in ("youtube.com", "youtu.be", "reddit.com")):
             score -= 1.0
         return score

@@ -10,7 +10,7 @@ from .schemas import (
     EvidenceItem,
     KnowledgeGraphExtractionContract,
     KnowledgeGraphQueryContract,
-    MemoryRecord,
+    MCPToolDescriptor,
     PlanItem,
     PlannerContract,
     ReporterContract,
@@ -47,7 +47,6 @@ class ResearchModelProvider(Protocol):
         self,
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
     ) -> tuple[ClarificationContract, ModelUsage]: ...
 
     def decide_researcher_action(
@@ -60,13 +59,13 @@ class ResearchModelProvider(Protocol):
         gaps: Sequence[str],
         iteration: int,
         max_iterations: int,
+        mcp_tools: Sequence[MCPToolDescriptor] = (),
     ) -> tuple[ResearcherToolDecisionContract, ModelUsage]: ...
 
     def draft_plan(
         self,
         request: ResearchRequest,
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         *,
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
@@ -79,7 +78,6 @@ class ResearchModelProvider(Protocol):
         plan: Sequence[PlanItem],
         retrieval_routes: Sequence[RetrievalRoute],
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         *,
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),

@@ -6,7 +6,6 @@ from ..provider_base import ModelUsage, ResearchModelProvider
 from ..providers import build_model_provider
 from ..schemas import (
     CorpusProfile,
-    MemoryRecord,
     PlanItem,
     ResearchRequest,
     RetrievalRoute,
@@ -34,7 +33,6 @@ class SupervisorAgent:
         plan: Sequence[PlanItem],
         retrieval_routes: Sequence[RetrievalRoute],
         corpus_profile: CorpusProfile,
-        memory_records: Sequence[MemoryRecord] = (),
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
     ) -> SupervisorDecisionContract:
@@ -44,7 +42,6 @@ class SupervisorAgent:
             plan,
             retrieval_routes,
             corpus_profile,
-            memory_records,
             revision_count=revision_count,
             revision_notes=revision_notes,
         )
@@ -191,7 +188,6 @@ class SupervisorAgent:
                 "selected_tools": selected_tools,
                 "web_queries": web_queries,
                 "internal_queries": internal_queries,
-                "memory_query": call.memory_query or fallback_fields["memory_query"],
                 "min_evidence": call.min_evidence or fallback_fields["min_evidence"],
                 "min_sources": call.min_sources or fallback_fields["min_sources"],
                 "sufficiency_criteria": call.sufficiency_criteria or fallback_fields["sufficiency_criteria"],
@@ -207,14 +203,11 @@ class SupervisorAgent:
     ) -> dict[str, object]:
         if route is None:
             selected_tools = ["web_search"]
-            if request.use_memory:
-                selected_tools.append("memory_recall")
             return {
                 "mode": "external",
                 "selected_tools": selected_tools,
                 "web_queries": [],
                 "internal_queries": [],
-                "memory_query": request.topic if request.use_memory else None,
                 "min_evidence": 1,
                 "min_sources": 1,
                 "sufficiency_criteria": ["preserve citations for report assembly"],
@@ -229,14 +222,13 @@ class SupervisorAgent:
             "selected_tools": selected_tools,
             "web_queries": list(route.web_queries),
             "internal_queries": list(route.internal_queries),
-            "memory_query": route.memory_query,
             "min_evidence": route.min_evidence,
             "min_sources": route.min_sources,
             "sufficiency_criteria": list(route.sufficiency_criteria),
         }
 
     def _valid_tools(self, tools: Sequence[str]) -> list[str]:
-        valid = {"web_search", "vector_retrieval", "memory_recall", "mcp_tool"}
+        valid = {"web_search", "vector_retrieval", "mcp_tool"}
         deduped: list[str] = []
         for tool in tools:
             if tool in valid and tool not in deduped:

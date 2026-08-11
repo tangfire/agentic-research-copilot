@@ -21,14 +21,12 @@ class PlannerAgent:
         request: ResearchRequest,
         *,
         corpus_profile: CorpusProfile | None = None,
-        memory_records=(),
         revision_count: int = 0,
         revision_notes=(),
     ) -> PlannerContract:
         contract, usage = self.model_provider.draft_plan(
             request,
             corpus_profile or CorpusProfile(),
-            memory_records,
             revision_count=revision_count,
             revision_notes=revision_notes,
         )
@@ -40,14 +38,12 @@ class PlannerAgent:
         request: ResearchRequest,
         *,
         corpus_profile: CorpusProfile | None = None,
-        memory_records=(),
         revision_count: int = 0,
         revision_notes=(),
     ) -> str:
         return self.draft(
             request,
             corpus_profile=corpus_profile,
-            memory_records=memory_records,
             revision_count=revision_count,
             revision_notes=revision_notes,
         ).research_brief
@@ -57,14 +53,12 @@ class PlannerAgent:
         request: ResearchRequest,
         *,
         corpus_profile: CorpusProfile | None = None,
-        memory_records=(),
         revision_count: int = 0,
         revision_notes=(),
     ):
         return self.draft(
             request,
             corpus_profile=corpus_profile,
-            memory_records=memory_records,
             revision_count=revision_count,
             revision_notes=revision_notes,
         ).plan
