@@ -2,11 +2,13 @@
 
 ## Goal
 
-AI Research Copilot is a single-node technical research and engineering-intelligence assistant. It plans an open-ended technical question, gathers evidence through web search, GitHub MCP, and local contextual retrieval, then produces a citation-backed report with trace and evaluation artifacts.
+AI Research Copilot is implemented as a single-node **Agentic Research Runtime**. It plans an open-ended technical question, gathers evidence through web search, GitHub MCP, and local contextual retrieval, then produces a citation-backed report with trace and evaluation artifacts.
 
-The product is aimed at open-source project research, engineering decision research, and local technical-corpus grounding. It is not a private-data assistant, a GitHub-only analyzer, or an MCP wrapper around another deep-research system.
+The repo should be treated as an AI engineering experiment and interview project, not as a claim that a small student-built assistant can outperform Codex or Deep Research. The useful learning target is the runtime mechanism: stateful planning, structured tool calls, bounded researcher loops, evidence contracts, Agentic RAG, verification, evaluation, and replay.
 
-The current product path is:
+The runtime is aimed at open-source project research, engineering decision research, and local technical-corpus grounding. It is not a private-data assistant, a GitHub-only analyzer, or an MCP wrapper around another deep-research system.
+
+The current runtime path is:
 
 ```text
 clarify -> plan -> supervise -> search/read/retrieve -> synthesize -> verify/evaluate -> replay
@@ -62,7 +64,7 @@ supervisor_start
 ## Core Design Choices
 
 - `LangGraph` is used because the workflow has explicit state, branches, retries, revision loops, checkpoints, and finalization.
-- `FastAPI` is used as a thin local product API, not as a business CRUD backend.
+- `FastAPI` is used as a thin local API, not as a business CRUD backend.
 - `Qdrant` handles dense retrieval for uploaded/project documents.
 - `SQLite FTS5/BM25` provides exact lexical recall and keeps local demos reproducible.
 - The graph signal is LightRAG-inspired but intentionally bounded: entity and relationship hits are fused into retrieval candidates before reranking; this is not a full GraphRAG platform.
@@ -131,7 +133,7 @@ Important schema objects:
 
 ## Honest Boundaries
 
-This project is credible as an interview-grade AI application because the research graph, retrieval stack, evaluation, and trace artifacts are real and test-covered.
+This project is credible as an interview-grade AI application because the research graph, retrieval stack, evaluation, and trace artifacts are real and test-covered. It is most convincing when presented as a learning-by-building implementation of research-agent runtime mechanics.
 
 Do not overclaim:
 

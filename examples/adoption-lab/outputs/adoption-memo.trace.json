@@ -1,0 +1,1392 @@
+[
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "langgraph.runtime",
+    "step": "langgraph.runtime",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "runtime": "langgraph",
+      "checkpointer": "sqlite",
+      "checkpoint_path": "D:\\kn\\projects\\agentic-research-copilot\\.arc\\langgraph_adoption_memo_lab.sqlite",
+      "graph": [
+        "supervisor_start",
+        "planner",
+        "research_supervisor",
+        "parallel_research",
+        "reporter",
+        "verifier_evaluator",
+        "finalize"
+      ]
+    },
+    "created_at": "2026-08-12T02:54:04.979540+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "supervisor.start",
+    "step": "supervisor.start",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "topic": "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.",
+      "depth": "standard",
+      "max_revisions": 1
+    },
+    "created_at": "2026-08-12T02:54:04.979540+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "supervisor",
+    "message": "Started the LangGraph research workflow.",
+    "step": "langgraph.start",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.979540+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "supervisor",
+    "message": "Build the plan and research brief.",
+    "step": "planning",
+    "status": "completed",
+    "from_agent": "supervisor",
+    "to_agent": "planner",
+    "handoff": {
+      "from_agent": "supervisor",
+      "to_agent": "planner",
+      "step": "planning",
+      "reason": "Build the plan and research brief.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.981199+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.981199+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "planner",
+    "message": "Generated the research plan.",
+    "step": "planning",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": "deterministic",
+    "model": "heuristic-planner",
+    "tokens_in": 324,
+    "tokens_out": 176,
+    "cost_usd": 0.0,
+    "latency_ms": 3,
+    "metadata": {
+      "plan_count": 3,
+      "revision_count": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.981199+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "plan.generated",
+    "step": "plan.generated",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "research_brief": "Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources.",
+      "plan_count": 3,
+      "candidate_route_count": 3,
+      "document_count": 3,
+      "model_provider": "deterministic",
+      "model_name": "heuristic-planner",
+      "revision_count": 0
+    },
+    "created_at": "2026-08-12T02:54:04.981199+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "planner",
+    "message": "Decide which research units to delegate and which evidence tools each unit should use.",
+    "step": "supervisor.decision",
+    "status": "completed",
+    "from_agent": "planner",
+    "to_agent": "research_supervisor",
+    "handoff": {
+      "from_agent": "planner",
+      "to_agent": "research_supervisor",
+      "step": "supervisor.decision",
+      "reason": "Decide which research units to delegate and which evidence tools each unit should use.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982293+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982293+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "research_supervisor",
+    "message": "Issued ODR-style supervisor tool calls.",
+    "step": "supervisor.decision",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": "deterministic",
+    "model": "heuristic-supervisor",
+    "tokens_in": 172,
+    "tokens_out": 186,
+    "cost_usd": 0.0,
+    "latency_ms": 3,
+    "metadata": {
+      "tool_calls": [
+        {
+          "name": "think_tool",
+          "rationale": "Reflect before delegating research units.",
+          "plan_item_ids": [],
+          "research_topic": null,
+          "reflection": "Use an Open Deep Research-style supervisor loop: think, delegate focused research, then complete only after verification. The plan has 3 research unit(s). Prefer official, primary, or original sources when available, and keep source quality visible in the evaluator instead of hard-filtering it at runtime. Internal grounding is available from 3 document(s), so hybrid/internal routes should be delegated when relevant.",
+          "mode": null,
+          "selected_tools": [],
+          "web_queries": [],
+          "internal_queries": [],
+          "min_evidence": null,
+          "min_sources": null,
+          "sufficiency_criteria": []
+        },
+        {
+          "name": "ConductResearch",
+          "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+          "plan_item_ids": [
+            "659c98-problem"
+          ],
+          "research_topic": "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Purpose: Frame the motivation and scope.",
+          "reflection": null,
+          "mode": "hybrid",
+          "selected_tools": [
+            "web_search",
+            "vector_retrieval"
+          ],
+          "web_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. problem Frame the motivation and scope.",
+            "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Frame the motivation and scope."
+          ],
+          "internal_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Frame the motivation and scope. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+            "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Frame the motivation and scope. the and team should evidence for"
+          ],
+          "min_evidence": 2,
+          "min_sources": 1,
+          "sufficiency_criteria": [
+            "collect at least 2 evidence items for this plan item",
+            "use at least 1 source group(s) when available",
+            "preserve citations for report assembly",
+            "prefer evidence from both external search and contextual retrieval"
+          ]
+        },
+        {
+          "name": "ConductResearch",
+          "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+          "plan_item_ids": [
+            "659c98-workflow"
+          ],
+          "research_topic": "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Purpose: Map the execution path and orchestration.",
+          "reflection": null,
+          "mode": "hybrid",
+          "selected_tools": [
+            "web_search",
+            "vector_retrieval"
+          ],
+          "web_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. workflow Map the execution path and orchestration.",
+            "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Map the execution path and orchestration."
+          ],
+          "internal_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Map the execution path and orchestration. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+            "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Map the execution path and orchestration. the and team should evidence for"
+          ],
+          "min_evidence": 2,
+          "min_sources": 1,
+          "sufficiency_criteria": [
+            "collect at least 2 evidence items for this plan item",
+            "use at least 1 source group(s) when available",
+            "preserve citations for report assembly",
+            "prefer evidence from both external search and contextual retrieval"
+          ]
+        },
+        {
+          "name": "ConductResearch",
+          "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+          "plan_item_ids": [
+            "659c98-data"
+          ],
+          "research_topic": "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Purpose: Explain the knowledge layer and context reuse.",
+          "reflection": null,
+          "mode": "hybrid",
+          "selected_tools": [
+            "web_search",
+            "vector_retrieval"
+          ],
+          "web_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. data Explain the knowledge layer and context reuse.",
+            "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Explain the knowledge layer and context reuse."
+          ],
+          "internal_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Explain the knowledge layer and context reuse. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+            "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Explain the knowledge layer and context reuse. the and team should evidence for"
+          ],
+          "min_evidence": 2,
+          "min_sources": 1,
+          "sufficiency_criteria": [
+            "collect at least 2 evidence items for this plan item",
+            "use at least 1 source group(s) when available",
+            "preserve citations for report assembly",
+            "prefer evidence from both external search and contextual retrieval"
+          ]
+        },
+        {
+          "name": "ResearchComplete",
+          "rationale": "Complete only after delegated research returns enough citation-backed evidence and verifier/evaluator checks pass.",
+          "plan_item_ids": [],
+          "research_topic": null,
+          "reflection": "Completion is gated by citation coverage, evidence sufficiency, source diversity, and revision budget.",
+          "mode": null,
+          "selected_tools": [],
+          "web_queries": [],
+          "internal_queries": [],
+          "min_evidence": null,
+          "min_sources": null,
+          "sufficiency_criteria": []
+        }
+      ],
+      "completion_criteria": [
+        "Each required plan item has enough evidence for its route.",
+        "Final report citations map only to existing evidence.",
+        "Verifier and evaluator either pass the run or trigger a revision loop."
+      ],
+      "max_concurrent_research_units": 3,
+      "query_count": 6,
+      "revision_count": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "supervisor.decision",
+    "step": "supervisor.decision",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "reflection": "Use an Open Deep Research-style supervisor loop: think, delegate focused research, then complete only after verification. The plan has 3 research unit(s). Prefer official, primary, or original sources when available, and keep source quality visible in the evaluator instead of hard-filtering it at runtime. Internal grounding is available from 3 document(s), so hybrid/internal routes should be delegated when relevant.",
+      "tool_calls": [
+        {
+          "name": "think_tool",
+          "rationale": "Reflect before delegating research units.",
+          "plan_item_ids": [],
+          "research_topic": null,
+          "reflection": "Use an Open Deep Research-style supervisor loop: think, delegate focused research, then complete only after verification. The plan has 3 research unit(s). Prefer official, primary, or original sources when available, and keep source quality visible in the evaluator instead of hard-filtering it at runtime. Internal grounding is available from 3 document(s), so hybrid/internal routes should be delegated when relevant.",
+          "mode": null,
+          "selected_tools": [],
+          "web_queries": [],
+          "internal_queries": [],
+          "min_evidence": null,
+          "min_sources": null,
+          "sufficiency_criteria": []
+        },
+        {
+          "name": "ConductResearch",
+          "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+          "plan_item_ids": [
+            "659c98-problem"
+          ],
+          "research_topic": "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Purpose: Frame the motivation and scope.",
+          "reflection": null,
+          "mode": "hybrid",
+          "selected_tools": [
+            "web_search",
+            "vector_retrieval"
+          ],
+          "web_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. problem Frame the motivation and scope.",
+            "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Frame the motivation and scope."
+          ],
+          "internal_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Frame the motivation and scope. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+            "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Frame the motivation and scope. the and team should evidence for"
+          ],
+          "min_evidence": 2,
+          "min_sources": 1,
+          "sufficiency_criteria": [
+            "collect at least 2 evidence items for this plan item",
+            "use at least 1 source group(s) when available",
+            "preserve citations for report assembly",
+            "prefer evidence from both external search and contextual retrieval"
+          ]
+        },
+        {
+          "name": "ConductResearch",
+          "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+          "plan_item_ids": [
+            "659c98-workflow"
+          ],
+          "research_topic": "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Purpose: Map the execution path and orchestration.",
+          "reflection": null,
+          "mode": "hybrid",
+          "selected_tools": [
+            "web_search",
+            "vector_retrieval"
+          ],
+          "web_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. workflow Map the execution path and orchestration.",
+            "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Map the execution path and orchestration."
+          ],
+          "internal_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Map the execution path and orchestration. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+            "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Map the execution path and orchestration. the and team should evidence for"
+          ],
+          "min_evidence": 2,
+          "min_sources": 1,
+          "sufficiency_criteria": [
+            "collect at least 2 evidence items for this plan item",
+            "use at least 1 source group(s) when available",
+            "preserve citations for report assembly",
+            "prefer evidence from both external search and contextual retrieval"
+          ]
+        },
+        {
+          "name": "ConductResearch",
+          "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+          "plan_item_ids": [
+            "659c98-data"
+          ],
+          "research_topic": "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Purpose: Explain the knowledge layer and context reuse.",
+          "reflection": null,
+          "mode": "hybrid",
+          "selected_tools": [
+            "web_search",
+            "vector_retrieval"
+          ],
+          "web_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. data Explain the knowledge layer and context reuse.",
+            "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Explain the knowledge layer and context reuse."
+          ],
+          "internal_queries": [
+            "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Explain the knowledge layer and context reuse. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+            "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Explain the knowledge layer and context reuse. the and team should evidence for"
+          ],
+          "min_evidence": 2,
+          "min_sources": 1,
+          "sufficiency_criteria": [
+            "collect at least 2 evidence items for this plan item",
+            "use at least 1 source group(s) when available",
+            "preserve citations for report assembly",
+            "prefer evidence from both external search and contextual retrieval"
+          ]
+        },
+        {
+          "name": "ResearchComplete",
+          "rationale": "Complete only after delegated research returns enough citation-backed evidence and verifier/evaluator checks pass.",
+          "plan_item_ids": [],
+          "research_topic": null,
+          "reflection": "Completion is gated by citation coverage, evidence sufficiency, source diversity, and revision budget.",
+          "mode": null,
+          "selected_tools": [],
+          "web_queries": [],
+          "internal_queries": [],
+          "min_evidence": null,
+          "min_sources": null,
+          "sufficiency_criteria": []
+        }
+      ],
+      "completion_criteria": [
+        "Each required plan item has enough evidence for its route.",
+        "Final report citations map only to existing evidence.",
+        "Verifier and evaluator either pass the run or trigger a revision loop."
+      ],
+      "max_concurrent_research_units": 3,
+      "model_provider": "deterministic",
+      "model_name": "heuristic-supervisor",
+      "revision_count": 0
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "routing.generated",
+    "step": "routing.generated",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "route_count": 3,
+      "external_routes": 0,
+      "internal_routes": 3,
+      "hybrid_routes": 0,
+      "tool_selections": {
+        "659c98-problem": [
+          "vector_retrieval"
+        ],
+        "659c98-workflow": [
+          "vector_retrieval"
+        ],
+        "659c98-data": [
+          "vector_retrieval"
+        ]
+      },
+      "query_rewrite_count": 6,
+      "corpus_profile": {
+        "document_count": 3,
+        "source_count": 3,
+        "source_names": [
+          "examples/adoption-lab/team-context/agent-workflow-decision-context.md",
+          "examples/adoption-lab/team-context/open-source-adoption-checklist.md",
+          "examples/adoption-lab/team-context/platform-team-constraints.md"
+        ],
+        "document_kinds": {
+          "document": 3
+        },
+        "keyword_signals": [
+          "the",
+          "and",
+          "team",
+          "should",
+          "evidence",
+          "for",
+          "constraints",
+          "not",
+          "memo",
+          "repository",
+          "workflow",
+          "pilot"
+        ],
+        "has_private_docs": true,
+        "has_reference_docs": false,
+        "vector_backend": "qdrant_dense",
+        "keyword_backend": "sqlite_fts5_bm25",
+        "embedding_dimensions": 256,
+        "collection_name": "arc_adoption_memo_lab",
+        "last_updated": "2026-08-12T02:54:04.981199+00:00"
+      }
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "research_supervisor",
+    "message": "Use an Open Deep Research-style supervisor loop: think, delegate focused research, then complete only after verification. The plan has 3 research unit(s). Prefer official, primary, or original sources when available, and keep source quality visible in the evaluator instead of hard-filtering it at runtime. Internal grounding is available from 3 document(s), so hybrid/internal routes should be delegated when relevant.",
+    "step": "supervisor.think",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "think_tool",
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "rationale": "Reflect before delegating research units.",
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "research_supervisor",
+    "message": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+    "step": "research.659c98-problem",
+    "status": "completed",
+    "from_agent": "research_supervisor",
+    "to_agent": "researcher",
+    "handoff": {
+      "from_agent": "research_supervisor",
+      "to_agent": "researcher",
+      "step": "research.659c98-problem",
+      "reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982810+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "research_supervisor",
+    "message": "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Purpose: Frame the motivation and scope.",
+    "step": "supervisor.conduct.659c98-problem",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "ConductResearch",
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "plan_item_id": "659c98-problem",
+      "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "retrieval_mode": "internal",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "web_queries": [],
+      "internal_queries": [
+        "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Frame the motivation and scope. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+        "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Frame the motivation and scope. the and team should evidence for"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "researcher",
+    "message": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+    "step": "retrieve.659c98-problem",
+    "status": "completed",
+    "from_agent": "researcher",
+    "to_agent": "retriever",
+    "handoff": {
+      "from_agent": "researcher",
+      "to_agent": "retriever",
+      "step": "retrieve.659c98-problem",
+      "reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982810+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "research_supervisor",
+    "message": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+    "step": "research.659c98-workflow",
+    "status": "completed",
+    "from_agent": "research_supervisor",
+    "to_agent": "researcher",
+    "handoff": {
+      "from_agent": "research_supervisor",
+      "to_agent": "researcher",
+      "step": "research.659c98-workflow",
+      "reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982810+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "research_supervisor",
+    "message": "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Purpose: Map the execution path and orchestration.",
+    "step": "supervisor.conduct.659c98-workflow",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "ConductResearch",
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "plan_item_id": "659c98-workflow",
+      "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "retrieval_mode": "internal",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "web_queries": [],
+      "internal_queries": [
+        "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Map the execution path and orchestration. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+        "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Map the execution path and orchestration. the and team should evidence for"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "researcher",
+    "message": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+    "step": "retrieve.659c98-workflow",
+    "status": "completed",
+    "from_agent": "researcher",
+    "to_agent": "retriever",
+    "handoff": {
+      "from_agent": "researcher",
+      "to_agent": "retriever",
+      "step": "retrieve.659c98-workflow",
+      "reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982810+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "research_supervisor",
+    "message": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+    "step": "research.659c98-data",
+    "status": "completed",
+    "from_agent": "research_supervisor",
+    "to_agent": "researcher",
+    "handoff": {
+      "from_agent": "research_supervisor",
+      "to_agent": "researcher",
+      "step": "research.659c98-data",
+      "reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982810+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "research_supervisor",
+    "message": "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Purpose: Explain the knowledge layer and context reuse.",
+    "step": "supervisor.conduct.659c98-data",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "ConductResearch",
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "plan_item_id": "659c98-data",
+      "rationale": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "retrieval_mode": "internal",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "web_queries": [],
+      "internal_queries": [
+        "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Explain the knowledge layer and context reuse. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+        "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Explain the knowledge layer and context reuse. the and team should evidence for"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "researcher",
+    "message": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+    "step": "retrieve.659c98-data",
+    "status": "completed",
+    "from_agent": "researcher",
+    "to_agent": "retriever",
+    "handoff": {
+      "from_agent": "researcher",
+      "to_agent": "retriever",
+      "step": "retrieve.659c98-data",
+      "reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:04.982810+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "research_supervisor",
+    "message": "Completion is gated by citation coverage, evidence sufficiency, source diversity, and revision budget.",
+    "step": "supervisor.complete.criteria",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "ResearchComplete",
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "completion_criteria": [
+        "Each required plan item has enough evidence for its route.",
+        "Final report citations map only to existing evidence.",
+        "Verifier and evaluator either pass the run or trigger a revision loop."
+      ],
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.982810+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "research.parallel.started",
+    "step": "research.parallel.started",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "worker_count": 1,
+      "plan_count": 3,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:04.983897+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "retriever",
+    "message": "Retrieved 3 contextual evidence items.",
+    "step": "retrieve.659c98-problem",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "qdrant_retrieval",
+    "provider": "qdrant_dense",
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 23,
+    "metadata": {
+      "result_count": 3,
+      "query": "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Frame the motivation and scope. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+      "queries": [
+        "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Frame the motivation and scope. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+        "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Frame the motivation and scope. the and team should evidence for"
+      ],
+      "backend": "qdrant_dense",
+      "parallel": true,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "researcher",
+    "message": "Completed What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.?",
+    "step": "research.659c98-problem",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "evidence_count": 3,
+      "note_confidence": 0.69,
+      "sufficiency_score": 1.0,
+      "sufficiency_gaps": [],
+      "follow_up_queries": [],
+      "research_iteration_count": 0,
+      "research_iterations": [],
+      "completed_reason": null,
+      "retrieval_mode": "internal",
+      "route_reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "research.659c98-problem",
+    "step": "research.659c98-problem",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "question": "What is the core problem behind Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.?",
+      "evidence_count": 3,
+      "note_confidence": 0.69,
+      "sufficiency_score": 1.0,
+      "sufficiency_gaps": [],
+      "follow_up_queries": [],
+      "research_iteration_count": 0,
+      "research_iterations": [],
+      "completed_reason": null,
+      "retrieval_mode": "internal",
+      "route_reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "web_evidence_count": 0,
+      "document_evidence_count": 3,
+      "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+      "parallel": true
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "retriever",
+    "message": "Retrieved 4 contextual evidence items.",
+    "step": "retrieve.659c98-workflow",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "qdrant_retrieval",
+    "provider": "qdrant_dense",
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 20,
+    "metadata": {
+      "result_count": 4,
+      "query": "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Map the execution path and orchestration. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+      "queries": [
+        "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Map the execution path and orchestration. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+        "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate? Map the execution path and orchestration. the and team should evidence for"
+      ],
+      "backend": "qdrant_dense",
+      "parallel": true,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "researcher",
+    "message": "Completed How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate?",
+    "step": "research.659c98-workflow",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "evidence_count": 4,
+      "note_confidence": 0.77,
+      "sufficiency_score": 1.0,
+      "sufficiency_gaps": [],
+      "follow_up_queries": [],
+      "research_iteration_count": 0,
+      "research_iterations": [],
+      "completed_reason": null,
+      "retrieval_mode": "internal",
+      "route_reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "research.659c98-workflow",
+    "step": "research.659c98-workflow",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "question": "How does the end-to-end workflow for Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. operate?",
+      "evidence_count": 4,
+      "note_confidence": 0.77,
+      "sufficiency_score": 1.0,
+      "sufficiency_gaps": [],
+      "follow_up_queries": [],
+      "research_iteration_count": 0,
+      "research_iterations": [],
+      "completed_reason": null,
+      "retrieval_mode": "internal",
+      "route_reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "web_evidence_count": 0,
+      "document_evidence_count": 4,
+      "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+      "parallel": true
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "tool_call",
+    "actor": "retriever",
+    "message": "Retrieved 3 contextual evidence items.",
+    "step": "retrieve.659c98-data",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": "qdrant_retrieval",
+    "provider": "qdrant_dense",
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 24,
+    "metadata": {
+      "result_count": 3,
+      "query": "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Explain the knowledge layer and context reuse. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+      "queries": [
+        "Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan. Research the topic 'Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.'. Prioritize citation-backed evidence, explicit handoffs, and a verifiable source index. Prefer official docs, primary papers, or original system sources when they are available. Focus on agent orchestration, verification, and observability. Ground the answer with 3 uploaded context documents from 3 sources. Explain the knowledge layer and context reuse. internal sources: examples/adoption-lab/team-context/agent-workflow-decision-context.md, examples/adoption-lab/team-context/open-source-adoption-checklist.md, examples/adoption-lab/team-context/platform-team-constraints.md",
+        "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.? Explain the knowledge layer and context reuse. the and team should evidence for"
+      ],
+      "backend": "qdrant_dense",
+      "parallel": true,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "researcher",
+    "message": "Completed What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.?",
+    "step": "research.659c98-data",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "evidence_count": 3,
+      "note_confidence": 0.69,
+      "sufficiency_score": 1.0,
+      "sufficiency_gaps": [],
+      "follow_up_queries": [],
+      "research_iteration_count": 0,
+      "research_iterations": [],
+      "completed_reason": null,
+      "retrieval_mode": "internal",
+      "route_reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "research.659c98-data",
+    "step": "research.659c98-data",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "question": "What evidence, retrieval sources, or tool results support Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, and evaluate whether the GitHub repository langchain-ai/langgraph should be piloted as the workflow runtime for an internal open-source adoption memo and technical decision research desk. Combine local team constraints, public documentation or GitHub/Web evidence, whether graph structure is actually necessary, risks, a pilot plan, and a rollback plan.?",
+      "evidence_count": 3,
+      "note_confidence": 0.69,
+      "sufficiency_score": 1.0,
+      "sufficiency_gaps": [],
+      "follow_up_queries": [],
+      "research_iteration_count": 0,
+      "research_iterations": [],
+      "completed_reason": null,
+      "retrieval_mode": "internal",
+      "route_reason": "Delegate the plan item so a focused researcher can gather evidence. Route mode: hybrid. Tools: web_search, vector_retrieval.",
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "min_evidence": 2,
+      "min_sources": 1,
+      "web_evidence_count": 0,
+      "document_evidence_count": 3,
+      "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+      "parallel": true
+    },
+    "created_at": "2026-08-12T02:54:05.052356+00:00"
+  },
+  {
+    "kind": "handoff",
+    "actor": "supervisor",
+    "message": "Assemble the citation-backed answer.",
+    "step": "reporting",
+    "status": "completed",
+    "from_agent": "supervisor",
+    "to_agent": "reporter",
+    "handoff": {
+      "from_agent": "supervisor",
+      "to_agent": "reporter",
+      "step": "reporting",
+      "reason": "Assemble the citation-backed answer.",
+      "revision": 0,
+      "created_at": "2026-08-12T02:54:05.053417+00:00"
+    },
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "revision": 0,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.053417+00:00"
+  },
+  {
+    "kind": "step",
+    "actor": "reporter",
+    "message": "Assembled the citation-backed report.",
+    "step": "reporting",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": "deterministic",
+    "model": "heuristic-reporter",
+    "tokens_in": 100,
+    "tokens_out": 112,
+    "cost_usd": 0.0,
+    "latency_ms": 2,
+    "metadata": {
+      "section_count": 3,
+      "source_count": 3,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.053417+00:00"
+  },
+  {
+    "kind": "verification",
+    "actor": "verifier",
+    "message": "Verified the report.",
+    "step": "verification",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": "deterministic",
+    "model": "heuristic-verifier",
+    "tokens_in": 120,
+    "tokens_out": 64,
+    "cost_usd": 0.0,
+    "latency_ms": 2,
+    "metadata": {
+      "issue_count": 0,
+      "critical_issue_count": 0,
+      "coverage_score": 1.0,
+      "should_revise": false,
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.055017+00:00"
+  },
+  {
+    "kind": "evaluation",
+    "actor": "evaluator",
+    "message": "Evaluated RAG and citation quality.",
+    "step": "evaluation",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "plan_coverage": 1.0,
+      "retrieval_hit_rate": 1.0,
+      "private_retrieval_hit_rate": 1.0,
+      "evidence_sufficiency": 1.0,
+      "tool_selection_coverage": 1.0,
+      "query_rewrite_count": 6,
+      "source_quality_score": 0.67,
+      "context_precision": 0.6348,
+      "context_recall": 1.0,
+      "faithfulness_proxy": 0.8722,
+      "citation_precision": 1.0,
+      "citation_source_coverage": 1.0,
+      "source_diversity": 3,
+      "insufficient_plan_items": [],
+      "passed": true,
+      "notes": [],
+      "runtime": "langgraph"
+    },
+    "created_at": "2026-08-12T02:54:05.055017+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "report.verified",
+    "step": "report.verified",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "confidence": 0.73,
+      "issue_count": 0,
+      "critical_issue_count": 0,
+      "source_count": 3,
+      "coverage_score": 1.0,
+      "should_revise": false
+    },
+    "created_at": "2026-08-12T02:54:05.055017+00:00"
+  },
+  {
+    "kind": "checkpoint",
+    "actor": "supervisor",
+    "message": "rag.evaluated",
+    "step": "rag.evaluated",
+    "status": "completed",
+    "from_agent": null,
+    "to_agent": null,
+    "handoff": null,
+    "tool_name": null,
+    "provider": null,
+    "model": null,
+    "tokens_in": 0,
+    "tokens_out": 0,
+    "cost_usd": 0.0,
+    "latency_ms": 0,
+    "metadata": {
+      "plan_coverage": 1.0,
+      "retrieval_hit_rate": 1.0,
+      "private_retrieval_hit_rate": 1.0,
+      "evidence_sufficiency": 1.0,
+      "tool_selection_coverage": 1.0,
+      "query_rewrite_count": 6,
+      "source_quality_score": 0.67,
+      "context_precision": 0.6348,
+      "context_recall": 1.0,
+      "faithfulness_proxy": 0.8722,
+      "citation_precision": 1.0,
+      "citation_source_coverage": 1.0,
+      "source_diversity": 3,
+      "insufficient_plan_items": [],
+      "passed": true,
+      "notes": []
+    },
+    "created_at": "2026-08-12T02:54:05.055544+00:00"
+  }
+]

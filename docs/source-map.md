@@ -14,7 +14,7 @@ The main architectural reference is Open Deep Research. The repo adapts these id
 - Evaluation of source quality, groundedness, usefulness, and trajectory outside the hot path.
 - MCP as a configurable external tool allowlist with tool catalogs and structured tool arguments.
 
-This repo does not import Open Deep Research at runtime. It uses ODR as a learning target and adapts the shape into local product modules.
+This repo does not import Open Deep Research at runtime. It uses ODR as a learning target and adapts the shape into local runtime modules.
 
 ## Secondary Reference: PraisonAI
 
@@ -69,7 +69,7 @@ Removed from the current core:
 
 ## Study Order
 
-1. Read `docs/product-positioning.md` to understand the product boundary.
+1. Read `docs/product-positioning.md` to understand the runtime boundary.
 2. Read `schemas.py` to understand the data contracts.
 3. Read `providers.py` to see where real LLM calls happen.
 4. Read `graph_runtime.py` to understand the runtime graph.
@@ -77,7 +77,7 @@ Removed from the current core:
 6. Read `agents/` to understand which code is thin orchestration and which decisions are delegated to the provider.
 7. Read `retrieval/store.py` for the Agentic RAG implementation.
 8. Read `evaluation.py`, `storage.py`, and `telemetry.py` for replay and quality evidence.
-9. Read `mcp_tools.py` only after the main chain is clear; GitHub MCP is a developer evidence channel, not the whole product.
+9. Read `mcp_tools.py` only after the main chain is clear; GitHub MCP is a developer evidence channel, not the whole runtime.
 
 ## Interview Checkpoint
 
@@ -91,3 +91,4 @@ You should be able to explain:
 - how `mcp_tool_name` and `mcp_tool_args` flow from provider decision to MCP evidence and trace
 - why memory was removed from the core
 - what would be required to expose this project as a clean MCP Server later
+- why this project should be discussed as an inspectable runtime experiment rather than a commercial Codex replacement

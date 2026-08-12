@@ -1124,9 +1124,15 @@ class ResearchCopilot:
                 corpus_profile=corpus_profile,
             )
         if not selected_tools:
-            selected_tools = ["web_search"]
+            if request.include_private_docs and corpus_profile.has_private_docs:
+                selected_tools = ["vector_retrieval"]
+            elif self.researcher.search_tool is not None:
+                selected_tools = ["web_search"]
         if "web_search" not in selected_tools and "vector_retrieval" not in selected_tools:
-            selected_tools.insert(0, "web_search")
+            if request.include_private_docs and corpus_profile.has_private_docs:
+                selected_tools.insert(0, "vector_retrieval")
+            elif self.researcher.search_tool is not None:
+                selected_tools.insert(0, "web_search")
 
         mode = self._mode_from_tools(selected_tools)
         requested_mode = getattr(call, "mode", None) if call is not None else None
@@ -1208,7 +1214,11 @@ class ResearchCopilot:
         for tool in tools or []:
             if tool not in valid or tool in normalized:
                 continue
+            if tool == "web_search" and self.researcher.search_tool is None:
+                continue
             if tool == "vector_retrieval" and (not request.include_private_docs or not corpus_profile.has_private_docs):
+                continue
+            if tool == "mcp_tool" and self.mcp_tool is None:
                 continue
             normalized.append(tool)
         return normalized

@@ -1,12 +1,14 @@
-# AI Research Copilot 学习总览
+# Agentic Research Runtime 学习总览
 
 这份文档按“第一次看代码”的节奏写。你不用先懂所有文件，先抓住主链路。
 
+如果你想系统学习，而不是只快速扫一遍，先读同目录下的 `agentic_research_runtime_deep_learning_guide_zh.md`。那份文档会按学习路线、代码路径、动手实验和面试追问把项目完整讲一遍。
+
 ## 这个项目到底是什么
 
-它不是普通聊天机器人，也不是后台 CRUD。它现在更准确的定位是“技术调研型 AI Research Copilot”：用户给一个开放式技术问题，系统先规划，再选择 Web Search、GitHub MCP、本地 RAG 等证据源，收集证据，写报告，最后验证报告有没有引用和质量问题。
+它不是普通聊天机器人，也不是后台 CRUD。它现在更准确的定位是“Agentic Research Runtime 实验项目”：用户给一个开放式技术问题，系统先规划，再选择 Web Search、GitHub MCP、本地 RAG 等证据源，收集证据，写报告，最后验证报告有没有引用和质量问题。
 
-你可以把它理解成面向开源项目调研、工程技术选型、架构风险分析和本地技术语料 grounding 的多证据源研究系统。它不是私人资料助手，也不是只分析 GitHub 项目的工具。
+你可以把它理解成一个自己学习 Deep Research / Codex 类系统工程机制的实验系统。它面向开源项目调研、工程技术选型、架构风险分析和本地技术语料 grounding，但不应该被包装成要替代成熟产品的商业 Copilot。它不是私人资料助手，也不是只分析 GitHub 项目的工具。
 
 核心链路：
 

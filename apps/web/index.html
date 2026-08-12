@@ -1315,7 +1315,6 @@
         <button class="tab-button active" type="button" data-tab="portal">工作台</button>
         <button class="tab-button" type="button" data-tab="runs">任务记录</button>
         <button class="tab-button" type="button" data-tab="sources">资料库</button>
-        <button class="tab-button" type="button" data-tab="memory">记忆</button>
         <button class="tab-button" type="button" data-tab="traces">轨迹</button>
         <button class="tab-button" type="button" data-tab="config">配置</button>
       </nav>
@@ -1476,7 +1475,7 @@
               <label>
                 内容
                 <textarea
-                  id="doc-content">项目结合 Open Deep Research 风格的 LangGraph 编排和证据收集，以及 PraisonAI 启发的记忆、持久化、可观测和 replay 设计。核心价值是围绕复杂问题生成带引用、可追溯、可评估的研究报告。</textarea>
+                  id="doc-content">项目结合 Open Deep Research 风格的 LangGraph 编排和证据收集，以及 PraisonAI 启发的持久化、可观测和 replay 设计。核心价值是围绕复杂问题生成带引用、可追溯、可评估的研究报告。</textarea>
               </label>
               <button class="primary" type="submit">添加资料</button>
             </form>
@@ -1486,38 +1485,6 @@
                 <button id="clear-documents-button" class="ghost danger mini" type="button">清空资料库</button>
               </div>
               <div id="document-list"></div>
-            </section>
-          </div>
-        </section>
-
-        <section id="memory" class="tab-panel">
-          <div class="two-col">
-            <form id="memory-form" class="surface form-grid">
-              <div class="section-title">
-                <h2>添加记忆</h2>
-                <span class="pill">POST /v1/memory</span>
-              </div>
-              <label>
-                Key
-                <input id="memory-key" required minlength="2" value="user:interview_goal" />
-              </label>
-              <label>
-                内容
-                <textarea id="memory-value" required>这个项目要帮助我讲清楚 Agent、RAG、记忆、规划、验证和可观测的实战经验。</textarea>
-              </label>
-              <label>
-                标签
-                <input id="memory-tags" value="user, interview, positioning" />
-              </label>
-              <button class="primary" type="submit">添加记忆</button>
-            </form>
-            <section class="surface">
-              <div class="section-title">
-                <h2>记忆库</h2>
-                <span class="pill">GET /v1/memory</span>
-              </div>
-              <div id="memory-governance" class="status-line" style="margin-bottom: 12px;"></div>
-              <div id="memory-list"></div>
             </section>
           </div>
         </section>
@@ -1559,8 +1526,6 @@
       jobs: [],
       runs: [],
       documents: [],
-      memory: [],
-      memoryGovernance: null,
       telemetry: [],
       config: null,
       activeJob: null,
@@ -1600,13 +1565,15 @@
     const toolText = {
       web_search: "外部搜索",
       vector_retrieval: "向量检索",
-      memory_recall: "记忆召回",
+      mcp_tool: "MCP 工具",
     };
 
     const kindText = {
       web: "网页",
       document: "资料",
-      memory: "记忆",
+      "document-chunk": "资料片段",
+      mcp: "MCP 证据",
+      "run-artifact": "运行证据",
       run: "运行",
       evidence: "证据",
     };
@@ -1615,7 +1582,6 @@
       handoff: "交接",
       tool_call: "工具调用",
       step: "步骤",
-      memory_write: "写入记忆",
       verification: "验证",
       checkpoint: "检查点",
       failure: "失败",
@@ -1663,20 +1629,16 @@
 
     async function loadAll() {
       await checkHealth();
-      const [jobs, runs, documents, memory, memoryGovernance, telemetry, config] = await Promise.all([
+      const [jobs, runs, documents, telemetry, config] = await Promise.all([
         api("/v1/research/jobs"),
         api("/v1/research/runs"),
         api("/v1/documents"),
-        api("/v1/memory"),
-        api("/v1/memory/governance"),
         api("/v1/telemetry"),
         api("/v1/runtime/config"),
       ]);
       state.jobs = jobs;
       state.runs = runs;
       state.documents = documents;
-      state.memory = memory;
-      state.memoryGovernance = memoryGovernance;
       state.telemetry = telemetry;
       state.config = config;
       if (state.activeJob) {
@@ -1714,7 +1676,6 @@
       renderRuns();
       renderPlan();
       renderDocuments();
-      renderMemory();
       renderTelemetry();
       renderCheckpoints();
       renderConfig();
@@ -1795,7 +1756,6 @@
       const evidenceCount = run?.evidence?.length || 0;
       const hasReport = Boolean(run?.report);
       const hasEvaluation = Boolean(run?.evaluation);
-      const hasMemoryWrite = Boolean((run?.trace || []).some((event) => event.kind === "memory_write"));
       const activeAfter = (condition) => (isFailed ? "failed" : condition ? "done" : isActive ? "running" : "pending");
       return [
         {
@@ -1814,7 +1774,7 @@
           title: "检索证据",
           label: "Researcher",
           status: activeAfter(evidenceCount > 0),
-          detail: evidenceCount ? `已收集 ${evidenceCount} 条证据。` : "等待搜索、向量检索和记忆召回。",
+          detail: evidenceCount ? `已收集 ${evidenceCount} 条证据。` : "等待搜索、向量检索和 MCP 工具证据。",
         },
         {
           title: "整理发现",
@@ -1835,10 +1795,10 @@
           detail: hasEvaluation ? (run.evaluation?.passed ? "引用和证据评估通过。" : "有指标需要复查。") : "等待引用和质量评估。",
         },
         {
-          title: "写入记忆",
-          label: "Memory",
-          status: run?.request?.use_memory === false ? "done" : activeAfter(hasMemoryWrite),
-          detail: run?.request?.use_memory === false ? "本次运行未启用记忆。" : hasMemoryWrite ? "已沉淀运行记忆。" : "等待写入 session / summary / canonical 记忆。",
+          title: "沉淀运行证据",
+          label: "Run Artifact",
+          status: activeAfter(Boolean((run?.evidence || []).some((item) => item.kind === "run-artifact"))),
+          detail: (run?.evidence || []).some((item) => item.kind === "run-artifact") ? "已保存计划、路由、证据和评估摘要。" : "等待生成可复盘运行证据。",
         },
       ];
     }
@@ -2114,7 +2074,7 @@
         ]
         : [];
       const traceItems = (run?.trace || [])
-        .filter((event) => ["handoff", "tool_call", "step", "verification", "evaluation", "memory_write"].includes(event.kind))
+        .filter((event) => ["handoff", "tool_call", "step", "verification", "evaluation"].includes(event.kind))
         .slice(-8)
         .map((event) => ({
           label: event.kind === "tool_call" ? "工具" : event.actor || event.kind,
@@ -2169,7 +2129,6 @@
             const queries = [
               ...(route.web_queries || []).map((query) => `<div><span class="pill">外部搜索</span> ${escapeHtml(query)}</div>`),
               ...(route.internal_queries || []).map((query) => `<div><span class="pill">向量检索</span> ${escapeHtml(query)}</div>`),
-              route.memory_query ? `<div><span class="pill">记忆召回</span> ${escapeHtml(route.memory_query)}</div>` : "",
             ].filter(Boolean).join("");
             const criteria = (route.sufficiency_criteria || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
             return `
@@ -2340,54 +2299,6 @@
           await deleteDocument(button.dataset.documentId);
         });
       });
-    }
-
-    function renderMemory() {
-      const target = $("#memory-list");
-      const governanceTarget = $("#memory-governance");
-      const governance = state.memoryGovernance || {};
-      governanceTarget.innerHTML = [
-        `<span class="pill">总数 ${escapeHtml(governance.total_records || 0)}</span>`,
-        `<span class="pill">事实记忆 ${escapeHtml(governance.canonical_count || 0)}</span>`,
-        `<span class="${governance.needs_review_count ? "pill warn" : "pill good"}">待复查 ${escapeHtml(governance.needs_review_count || 0)}</span>`,
-        `<span class="${governance.conflict_count ? "pill warn" : "pill good"}">冲突 ${escapeHtml(governance.conflict_count || 0)}</span>`,
-      ].join("");
-      if (!state.memory.length) {
-        target.innerHTML = empty("还没有写入记忆。完成研究后，系统会沉淀 session / summary / canonical 记忆。");
-        return;
-      }
-      target.innerHTML = state.memory
-        .map(
-          (record) => {
-            const metadata = record.metadata || {};
-            const status = metadata.governance_status;
-            const conflictCount = metadata.conflict_count || 0;
-            const governancePill = record.layer === "canonical"
-              ? `<span class="${status === "needs_review" ? "pill warn" : "pill good"}">${escapeHtml(status === "needs_review" ? "待复查" : "有效")}</span>`
-              : "";
-            const conflictPill = conflictCount
-              ? `<span class="pill warn">${escapeHtml(conflictCount)} 个冲突</span>`
-              : "";
-            return `
-              <article class="item">
-                <header>
-                  <strong>${escapeHtml(record.key)}</strong>
-                    <span class="status-line">
-                      <span class="pill">${escapeHtml(record.layer || "session")}</span>
-                    ${governancePill}
-                    ${conflictPill}
-                  </span>
-                </header>
-                <p>${escapeHtml(record.value)}</p>
-                <p class="muted" style="margin-top: 6px;">
-                  ${escapeHtml([record.topic, record.run_id, record.session_id, (record.tags || []).join(", ")].filter(Boolean).join(" / "))}
-                </p>
-                <p class="muted" style="margin-top: 6px;">${escapeHtml(formatTime(record.created_at))}</p>
-              </article>
-            `;
-          },
-        )
-        .join("");
     }
 
     function renderTelemetry() {
@@ -2663,20 +2574,6 @@
       await loadAll();
     }
 
-    async function addMemory(event) {
-      event.preventDefault();
-      await api("/v1/memory", {
-        method: "POST",
-        body: JSON.stringify({
-          key: $("#memory-key").value.trim(),
-          value: $("#memory-value").value.trim(),
-          tags: $("#memory-tags").value.split(",").map((tag) => tag.trim()).filter(Boolean),
-          metadata: { added_from: "web_console" },
-        }),
-      });
-      await loadAll();
-    }
-
     $$(".tab-button").forEach((button) => {
       button.addEventListener("click", () => switchTab(button.dataset.tab));
     });
@@ -2694,7 +2591,6 @@
     $("#document-form").addEventListener("submit", addDocument);
     $("#clear-documents-button").addEventListener("click", clearDocuments);
     $("#clear-history-button").addEventListener("click", clearHistory);
-    $("#memory-form").addEventListener("submit", addMemory);
     $("#refresh-button").addEventListener("click", loadAll);
 
     loadAll().catch((error) => {

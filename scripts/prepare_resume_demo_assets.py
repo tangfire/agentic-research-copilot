@@ -46,44 +46,6 @@ PAPER_SPECS = [
     },
 ]
 
-MEMORY_RECORDS = [
-    {
-        "key": "resume_demo:positioning",
-        "value": (
-            "Position AI Research Copilot as a LangGraph-based agentic research workflow: "
-            "planning, source reading, contextual retrieval, memory, MCP tools, citation "
-            "verification, evaluation, and replay."
-        ),
-        "layer": "summary",
-        "topic": "resume demo positioning",
-        "tags": ["resume_demo", "positioning"],
-        "confidence": 0.92,
-    },
-    {
-        "key": "resume_demo:corpus_scope",
-        "value": (
-            "The resume demo corpus focuses on federated learning, personalized FL, model "
-            "heterogeneity, and federated distillation/knowledge transfer. It is designed "
-            "to make internal grounding and technical comparison questions meaningful."
-        ),
-        "layer": "canonical",
-        "topic": "resume demo corpus",
-        "tags": ["resume_demo", "corpus", "federated_learning"],
-        "confidence": 0.88,
-    },
-    {
-        "key": "resume_demo:demo_goal",
-        "value": (
-            "A strong interview run should leave concrete artifacts: source-indexed report, "
-            "trace, evaluation metrics, memory writes, MCP evidence, and retrieval metadata."
-        ),
-        "layer": "summary",
-        "topic": "resume demo evaluation",
-        "tags": ["resume_demo", "trace", "evaluation"],
-        "confidence": 0.9,
-    },
-]
-
 DEMO_REQUESTS = [
     {
         "slug": "fl-heterogeneity-comparison",
@@ -123,12 +85,10 @@ def main() -> None:
     with httpx.Client(timeout=900) as client:
         _assert_api_ready(client, args.api_base)
         corpus_assets = _seed_corpus(client, args.api_base, args.source_dir)
-        memory_assets = _seed_memory(client, args.api_base)
         runtime_config = _get_json(client, f"{args.api_base}/v1/runtime/config")
         run_assets = [] if args.skip_runs else _run_demo_requests(client, args.api_base, args.output_dir)
-        mcp_readiness = _check_mcp_readiness()
+        mcp_readiness = _mcp_readiness(runtime_config)
         final_profile = _get_json(client, f"{args.api_base}/v1/runtime/config")["retrieval"]["corpus_profile"]
-        final_memory = _get_json(client, f"{args.api_base}/v1/memory/governance")
 
     summary = {
         "api_base": args.api_base,
@@ -136,7 +96,6 @@ def main() -> None:
         "source_files": [spec["file"] for spec in PAPER_SPECS],
         "output_dir": str(args.output_dir),
         "corpus_assets": corpus_assets,
-        "memory_assets": memory_assets,
         "runtime": {
             "strict_ready": runtime_config["provider_readiness"]["ready"],
             "runtime": runtime_config["orchestration"]["runtime"],
@@ -148,7 +107,6 @@ def main() -> None:
         },
         "mcp_readiness": mcp_readiness,
         "final_corpus_profile": final_profile,
-        "final_memory_governance": final_memory,
         "run_assets": run_assets,
         "demo_boundary": (
             "This script seeds controlled excerpts from PDFs for a reliable resume demo. "
@@ -215,23 +173,6 @@ def _seed_corpus(client: httpx.Client, api_base: str, source_dir: Path) -> list[
     return assets
 
 
-def _seed_memory(client: httpx.Client, api_base: str) -> list[dict[str, Any]]:
-    existing = {
-        item.get("key")
-        for item in _get_json(client, f"{api_base}/v1/memory", params={"limit": 500})
-        if isinstance(item, dict)
-    }
-    assets: list[dict[str, Any]] = []
-    for record in MEMORY_RECORDS:
-        if record["key"] in existing:
-            assets.append({"key": record["key"], "status": "skipped_existing"})
-            continue
-        response = client.post(f"{api_base}/v1/memory", json=record)
-        response.raise_for_status()
-        assets.append({"key": record["key"], "status": "added", "layer": record["layer"]})
-    return assets
-
-
 def _run_demo_requests(client: httpx.Client, api_base: str, output_dir: Path) -> list[dict[str, Any]]:
     assets: list[dict[str, Any]] = []
     for spec in DEMO_REQUESTS:
@@ -245,7 +186,6 @@ def _run_demo_requests(client: httpx.Client, api_base: str, output_dir: Path) ->
                 "topic": spec["topic"],
                 "depth": spec["depth"],
                 "include_private_docs": True,
-                "use_memory": True,
                 "max_sections": spec["max_sections"],
                 "max_revisions": spec["max_revisions"],
             },
@@ -321,18 +261,22 @@ def _poll_job(client: httpx.Client, api_base: str, job_id: str) -> dict[str, Any
     raise TimeoutError(f"Timed out waiting for job {job_id}")
 
 
-def _check_mcp_readiness() -> dict[str, Any]:
-    try:
-        from agentic_research_copilot.research_mcp_server import check_demo_readiness
-    except Exception as exc:
-        return {"available": False, "error": str(exc)}
-    result = check_demo_readiness("resume demo readiness")
+def _mcp_readiness(runtime_config: dict[str, Any]) -> dict[str, Any]:
+    for tool in runtime_config.get("tool_registry", []):
+        if tool.get("name") == "mcp_tool":
+            return {
+                "configured_enabled": bool(tool.get("configured_enabled")),
+                "loaded": bool(tool.get("loaded")),
+                "server_url_configured": bool(tool.get("server_url_configured")),
+                "tool_catalog_count": int(tool.get("tool_catalog_count") or 0),
+                "tools": tool.get("tools") or [],
+            }
     return {
-        "available": result.get("available", False),
-        "score": result.get("score", 0),
-        "passed": result.get("passed", 0),
-        "total": result.get("total", 0),
-        "failed": [item["name"] for item in result.get("checks", []) if not item.get("passed")],
+        "configured_enabled": False,
+        "loaded": False,
+        "server_url_configured": False,
+        "tool_catalog_count": 0,
+        "tools": [],
     }
 
 
@@ -431,17 +375,12 @@ def _write_markdown_summary(path: Path, summary: dict[str, Any]) -> None:
         f"- Vector backend: `{summary['final_corpus_profile']['vector_backend']}`",
         f"- Keyword backend: `{summary['final_corpus_profile']['keyword_backend']}`",
         "",
-        "## Memory",
-        "",
-        f"- Records: {summary['final_memory_governance']['total_records']}",
-        f"- Canonical records: {summary['final_memory_governance']['canonical_count']}",
-        f"- Needs review: {summary['final_memory_governance']['needs_review_count']}",
-        "",
         "## MCP Readiness",
         "",
-        f"- Score: {summary['mcp_readiness']['score']}",
-        f"- Passed: {summary['mcp_readiness']['passed']} / {summary['mcp_readiness']['total']}",
-        f"- Failed checks: {', '.join(summary['mcp_readiness']['failed']) or 'none'}",
+        f"- Configured enabled: `{summary['mcp_readiness']['configured_enabled']}`",
+        f"- Loaded: `{summary['mcp_readiness']['loaded']}`",
+        f"- Server URL configured: `{summary['mcp_readiness']['server_url_configured']}`",
+        f"- Tool catalog count: {summary['mcp_readiness']['tool_catalog_count']}",
         "",
         "## Runs",
         "",

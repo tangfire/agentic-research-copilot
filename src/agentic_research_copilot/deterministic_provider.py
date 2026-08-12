@@ -63,6 +63,27 @@ VAGUE_RESEARCH_TERMS = {
     "research",
     "system",
 }
+GRAPH_ENTITY_STOPWORDS = {
+    "A",
+    "An",
+    "And",
+    "For",
+    "Input",
+    "Output",
+    "Pilot Candidate",
+    "The",
+    "This",
+    "Use",
+    "When",
+    "What",
+    "Which",
+    "Who",
+    "Why",
+    "How",
+    "Should",
+    "Could",
+    "Would",
+}
 
 
 class DeterministicResearchModelProvider(ResearchModelProvider):
@@ -775,7 +796,7 @@ def _heuristic_knowledge_graph(
     for phrase in re.findall(r"\b[A-Z][A-Za-z0-9+.#/-]*(?:\s+[A-Z][A-Za-z0-9+.#/-]*){0,3}\b", chunk_text):
         label = _clean_text(phrase)
         key = label.casefold()
-        if len(label) < 3:
+        if len(label) < 3 or _is_low_value_graph_entity(label):
             continue
         candidates[key] += 3
         labels.setdefault(key, label)
@@ -874,6 +895,14 @@ def _context_key_terms(text: str) -> list[str]:
         }
     )
     return [token for token, _count in counts.most_common(16)]
+
+
+def _is_low_value_graph_entity(label: str) -> bool:
+    normalized = _clean_text(label).strip(" .,:;!?")
+    if normalized in GRAPH_ENTITY_STOPWORDS:
+        return True
+    words = normalized.split()
+    return bool(words) and all(word in GRAPH_ENTITY_STOPWORDS for word in words)
 
 
 def _limit_words(text: str, *, max_words: int) -> str:

@@ -2,9 +2,47 @@
 
 ## 一句话
 
-这是一个参考 Open Deep Research 思路实现的技术调研型 AI Research Copilot：它把开放式技术问题拆成研究计划，由监督者分派研究单元，自动选择 Web Search、GitHub MCP 和本地 RAG 等证据源，最后生成带引用、可验证、可复盘的技术调研报告。
+这是一个参考 Open Deep Research / Deep Research 类系统自己实现的 **Agentic Research Runtime 实验项目**。它把开放式技术问题拆成研究计划，由 supervisor 分派研究单元，自动选择 Web Search、GitHub MCP 和本地 Agentic RAG 等证据源，最后生成带引用、可验证、可复盘的技术调研报告。
 
-它的核心定位不是私人资料助手，也不是 GitHub-only analyzer，而是面向开源项目调研、工程技术选型、架构风险分析和本地技术语料 grounding 的多证据源研究系统。
+更诚实的说法是：
+
+> 我不是在做一个要打败 Codex 的商业 Copilot，而是在学习并复现复杂研究 Agent 背后的工程机制：LangGraph 状态流、结构化 tool call、多证据路由、RAG grounding、citation synthesis、verifier/evaluator 和 trace replay。
+
+## 面试官问“用 Codex 不就好了？”
+
+可以这样回答：
+
+> 对，作为最终用户工具，Codex / Deep Research 当然更强。我这个项目不是想替代它，而是把这类系统背后的 agent runtime 拆出来自己实现了一遍。重点在工程机制：怎么把问题拆成计划，怎么让 supervisor 做结构化工具决策，怎么把 Web、GitHub MCP、本地 RAG 都统一成证据，怎么约束引用，怎么评估 groundedness，怎么保存 trace 并 replay 一次运行。
+
+这比说“我做了一个更好的研究助手”稳得多。
+
+## 现在还需要补什么
+
+不要继续堆“看起来像 Agent 的功能”。现在最应该补的是面试可展示的硬证据：
+
+1. **2-3 个稳定 demo topic**
+   - 开源项目尽调：输入 GitHub repo，分析架构、核心代码、issue 风险、PR 活跃度、release 变化。
+   - 技术选型 memo：比较 LangGraph / AutoGen、Qdrant / Milvus、不同 RAG 设计。
+   - 本地语料研究：上传论文/架构文档，展示 child chunk、parent context、BM25、graph signal、rerank。
+
+2. **真实 demo 资产**
+   - 每个 topic 保存 report、trace、evaluation、source index、route metadata。
+   - 不要只现场跑，网络和模型 provider 很容易出意外。
+
+3. **更小但更准的 eval set**
+   - 给每个样例标 expected sources、expected evidence types、expected terms。
+   - 重点测 citation coverage、evidence sufficiency、context precision、unsupported sections。
+
+4. **GitHub MCP smoke demo**
+   - 明确需要哪些工具：`get_file_contents`、`search_code`、`list_issues`、`list_pull_requests`、`get_latest_release`。
+   - 明确如果 auth/network 失败，就展示已保存的 run bundle。
+
+5. **一键导出 run bundle**
+   - 面试前最好能导出一个目录：request、report markdown、trace JSON、evaluation JSON、source index、runtime config summary。
+
+6. **前端只围绕证据和复盘打磨**
+   - 重点是 plan、evidence、citations、quality gates、trace。
+   - 不要现在重做成大而全产品 UI。
 
 ## 现在的边界
 
@@ -40,8 +78,8 @@ clarify
 
 ## 技术选型怎么讲
 
-- LangGraph：因为研究流程有状态、分支、验证、返工和 trace，不适合写成一条简单 chain。
-- FastAPI：只是本地产品 API，用来暴露 run、job、document、trace、evaluation。
+- LangGraph：研究流程有状态、分支、验证、返工和 trace，不适合写成一条简单 chain。
+- FastAPI：只是本地 API，用来暴露 run、job、document、trace、evaluation。
 - Qdrant：负责向量检索。
 - SQLite FTS5/BM25：负责关键词精确匹配，补 dense retrieval 的短板。
 - graph signal：参考 LightRAG，只作为检索增强信号，不包装成完整 GraphRAG 平台。
@@ -88,11 +126,17 @@ clarify
 - 通用 agent SDK。
 - 长期个性化 memory 系统。
 
+最好的定位是：**自己学习复杂 LLM Agent 工程机制的实验项目**。它的价值不是“市场必须买单”，而是你能讲清楚一个 research agent runtime 怎么设计、怎么观测、怎么评估、怎么失败、怎么迭代。
+
 ## 可以怎么写简历
 
-可以写：
+推荐标题：
 
-> 基于 LangGraph、OpenAI-compatible Provider、Qdrant、SQLite FTS5/BM25、Reranker 和 FastAPI 实现 AI Research Copilot，支持复杂问题规划、ODR-style supervisor tool call、并发研究单元、外部搜索/可选 MCP 工具、本地文档 Agentic RAG、引用报告生成、验证评估与 trace replay。
+> Agentic Research Runtime：面向复杂技术调研的多证据 Agent 实验系统
+
+推荐 bullet：
+
+> 基于 LangGraph、OpenAI-compatible Provider、Qdrant、SQLite FTS5/BM25、Reranker 和 FastAPI 实现 Agentic Research Runtime，支持复杂问题规划、ODR-style supervisor tool call、并发研究单元、Web/GitHub MCP/本地文档多证据路由、引用报告生成、验证评估与 trace replay。
 
 可以强调：
 

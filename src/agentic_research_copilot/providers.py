@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any, Sequence, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 import httpx
 
@@ -592,7 +592,7 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
 
 def build_model_provider(settings: Any) -> ResearchModelProvider:
     if getattr(settings, "model_provider", "deterministic") == "openai_compatible" and getattr(settings, "model_base_url", ""):
-        return OpenAICompatibleResearchModelProvider(
+        provider = OpenAICompatibleResearchModelProvider(
             base_url=settings.model_base_url,
             api_key=getattr(settings, "model_api_key", ""),
             chat_model=getattr(settings, "model_chat_model", "gpt-4o-mini"),
@@ -601,11 +601,266 @@ def build_model_provider(settings: Any) -> ResearchModelProvider:
             temperature=float(getattr(settings, "model_temperature", 0.2)),
             embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256)),
         )
+        if getattr(settings, "strict_providers", False):
+            return provider
+        from .deterministic_provider import DeterministicResearchModelProvider
+
+        return FallbackResearchModelProvider(
+            primary=provider,
+            fallback=DeterministicResearchModelProvider(
+                embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256))
+            ),
+        )
     from .deterministic_provider import DeterministicResearchModelProvider
 
     return DeterministicResearchModelProvider(
         embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256)),
     )
+
+
+class FallbackResearchModelProvider(ResearchModelProvider):
+    name = "openai_compatible_with_deterministic_fallback"
+
+    def __init__(
+        self,
+        *,
+        primary: ResearchModelProvider,
+        fallback: ResearchModelProvider,
+    ) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.embedding_dimensions = primary.embedding_dimensions
+
+    def clarify_request(
+        self,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+    ) -> tuple[ClarificationContract, ModelUsage]:
+        return self._call(
+            "clarify_request",
+            lambda provider: provider.clarify_request(request, corpus_profile),
+        )
+
+    def decide_researcher_action(
+        self,
+        *,
+        item: PlanItem,
+        available_tools: Sequence[str],
+        previous_queries: Sequence[str],
+        evidence: Sequence[EvidenceItem],
+        gaps: Sequence[str],
+        iteration: int,
+        max_iterations: int,
+        mcp_tools: Sequence[MCPToolDescriptor] = (),
+    ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
+        return self._call(
+            "decide_researcher_action",
+            lambda provider: provider.decide_researcher_action(
+                item=item,
+                available_tools=available_tools,
+                previous_queries=previous_queries,
+                evidence=evidence,
+                gaps=gaps,
+                iteration=iteration,
+                max_iterations=max_iterations,
+                mcp_tools=mcp_tools,
+            ),
+        )
+
+    def draft_plan(
+        self,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+        *,
+        revision_count: int = 0,
+        revision_notes: Sequence[str] = (),
+    ) -> tuple[PlannerContract, ModelUsage]:
+        return self._call(
+            "draft_plan",
+            lambda provider: provider.draft_plan(
+                request,
+                corpus_profile,
+                revision_count=revision_count,
+                revision_notes=revision_notes,
+            ),
+        )
+
+    def supervise_research(
+        self,
+        request: ResearchRequest,
+        research_brief: str,
+        plan: Sequence[PlanItem],
+        retrieval_routes: Sequence[RetrievalRoute],
+        corpus_profile: CorpusProfile,
+        *,
+        revision_count: int = 0,
+        revision_notes: Sequence[str] = (),
+    ) -> tuple[SupervisorDecisionContract, ModelUsage]:
+        return self._call(
+            "supervise_research",
+            lambda provider: provider.supervise_research(
+                request,
+                research_brief,
+                plan,
+                retrieval_routes,
+                corpus_profile,
+                revision_count=revision_count,
+                revision_notes=revision_notes,
+            ),
+        )
+
+    def assess_report(
+        self,
+        report: ResearchReport,
+        evidence: Sequence[EvidenceItem],
+        plan: Sequence[PlanItem],
+        *,
+        revision_count: int = 0,
+        max_revisions: int = 2,
+    ) -> tuple[VerificationContract, ModelUsage]:
+        return self._call(
+            "assess_report",
+            lambda provider: provider.assess_report(
+                report,
+                evidence,
+                plan,
+                revision_count=revision_count,
+                max_revisions=max_revisions,
+            ),
+        )
+
+    def compose_report(
+        self,
+        topic: str,
+        sections: Sequence[ReportSection],
+        evidence: Sequence[EvidenceItem],
+        confidence: float,
+    ) -> tuple[ReporterContract, ModelUsage]:
+        return self._call(
+            "compose_report",
+            lambda provider: provider.compose_report(topic, sections, evidence, confidence),
+        )
+
+    def compress_source(
+        self,
+        *,
+        query: str,
+        title: str,
+        url: str | None,
+        raw_content: str,
+    ) -> tuple[SourceCompressionContract, ModelUsage]:
+        return self._call(
+            "compress_source",
+            lambda provider: provider.compress_source(
+                query=query,
+                title=title,
+                url=url,
+                raw_content=raw_content,
+            ),
+        )
+
+    def contextualize_chunk(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> tuple[ChunkContextContract, ModelUsage]:
+        return self._call(
+            "contextualize_chunk",
+            lambda provider: provider.contextualize_chunk(
+                document_title=document_title,
+                source=source,
+                metadata=metadata,
+                document_excerpt=document_excerpt,
+                chunk_text=chunk_text,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+            ),
+        )
+
+    def extract_knowledge_graph(
+        self,
+        *,
+        document_title: str,
+        source: str,
+        metadata: dict[str, Any],
+        document_excerpt: str,
+        chunk_text: str,
+        chunk_index: int,
+        total_chunks: int,
+        max_entities: int,
+        max_relationships: int,
+    ) -> tuple[KnowledgeGraphExtractionContract, ModelUsage]:
+        return self._call(
+            "extract_knowledge_graph",
+            lambda provider: provider.extract_knowledge_graph(
+                document_title=document_title,
+                source=source,
+                metadata=metadata,
+                document_excerpt=document_excerpt,
+                chunk_text=chunk_text,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+                max_entities=max_entities,
+                max_relationships=max_relationships,
+            ),
+        )
+
+    def extract_graph_query(
+        self,
+        *,
+        query: str,
+        max_local_keywords: int,
+        max_global_keywords: int,
+    ) -> tuple[KnowledgeGraphQueryContract, ModelUsage]:
+        return self._call(
+            "extract_graph_query",
+            lambda provider: provider.extract_graph_query(
+                query=query,
+                max_local_keywords=max_local_keywords,
+                max_global_keywords=max_global_keywords,
+            ),
+        )
+
+    def embed_text(self, text: str) -> tuple[list[float], ModelUsage]:
+        return self.primary.embed_text(text)
+
+    def embed_texts(self, texts: Sequence[str]) -> tuple[list[list[float]], ModelUsage]:
+        return self.primary.embed_texts(texts)
+
+    def _call(
+        self,
+        operation: str,
+        callback: Callable[[ResearchModelProvider], tuple[TContract, ModelUsage]],
+    ) -> tuple[TContract, ModelUsage]:
+        try:
+            return callback(self.primary)
+        except Exception as exc:
+            result, usage = callback(self.fallback)
+            usage = ModelUsage(
+                provider=self.name,
+                model=f"{usage.model}:fallback_after_{operation}",
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                cost_usd=usage.cost_usd,
+                latency_ms=usage.latency_ms,
+            )
+            model_fields = getattr(type(result), "model_fields", {})
+            if hasattr(result, "model_copy") and "confidence" in model_fields:
+                result = result.model_copy(
+                    update={
+                        "confidence": max(
+                            0.0,
+                            min(1.0, float(getattr(result, "confidence", 0.0) or 0.0) - 0.08),
+                        )
+                    }
+                )  # type: ignore[assignment]
+            return result, usage
 
 
 def build_embedding_provider(settings: Any, model_provider: ResearchModelProvider | None = None) -> ResearchModelProvider:

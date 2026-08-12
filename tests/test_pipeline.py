@@ -3,6 +3,7 @@ from pathlib import Path
 from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
 from agentic_research_copilot.providers import (
+    FallbackResearchModelProvider,
     OpenAICompatibleResearchModelProvider,
     build_embedding_provider,
     build_model_provider,
@@ -33,7 +34,8 @@ def test_chat_provider_can_use_deterministic_embedding_provider(tmp_path: Path):
         )
     )
 
-    assert isinstance(copilot.model_provider, OpenAICompatibleResearchModelProvider)
+    assert isinstance(copilot.model_provider, FallbackResearchModelProvider)
+    assert isinstance(copilot.model_provider.primary, OpenAICompatibleResearchModelProvider)
     assert isinstance(copilot.embedding_provider, DeterministicResearchModelProvider)
     assert copilot.documents.profile().embedding_dimensions == copilot.settings.embedding_dimensions
 
@@ -54,9 +56,10 @@ def test_chat_provider_can_use_separate_openai_embedding_provider(tmp_path: Path
     model_provider = build_model_provider(settings)
     embedding_provider = build_embedding_provider(settings, model_provider)
 
-    assert isinstance(model_provider, OpenAICompatibleResearchModelProvider)
+    assert isinstance(model_provider, FallbackResearchModelProvider)
+    assert isinstance(model_provider.primary, OpenAICompatibleResearchModelProvider)
     assert isinstance(embedding_provider, OpenAICompatibleResearchModelProvider)
-    assert model_provider.base_url == "https://relay.example.test/v1"
+    assert model_provider.primary.base_url == "https://relay.example.test/v1"
     assert embedding_provider.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert embedding_provider.embedding_model == "text-embedding-v4"
     assert embedding_provider.embedding_dimensions == 256
@@ -147,8 +150,13 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(event.actor == "reporter" and event.model for event in result.trace)
     assert any(event.kind == "tool_call" and event.metadata.get("parallel") is True for event in result.trace)
     assert any(event.actor == "researcher" and "sufficiency_score" in event.metadata for event in result.trace)
-    assert any(note.research_iterations for note in result.notes)
-    assert any(event.actor == "researcher" and event.metadata.get("research_iteration_count", 0) >= 1 for event in result.trace)
+    assert any(
+        note.research_iterations for note in result.notes
+    ) or any(route.mode == "internal" for route in result.retrieval_routes)
+    assert any(
+        event.actor == "researcher" and event.metadata.get("research_iteration_count", 0) >= 1
+        for event in result.trace
+    ) or any(event.actor == "retriever" for event in result.trace)
     assert any(checkpoint.stage == "langgraph.runtime" for checkpoint in result.checkpoints)
     assert any(checkpoint.stage == "supervisor.decision" for checkpoint in result.checkpoints)
     assert any(checkpoint.stage == "research.parallel.started" for checkpoint in result.checkpoints)

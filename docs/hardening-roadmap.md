@@ -2,21 +2,60 @@
 
 ## Current Assessment
 
-The current architecture is coherent for an autumn-recruiting project when it is framed as a technical research and engineering-intelligence copilot:
+The current architecture is coherent for an autumn-recruiting project when it is framed as an Agentic Research Runtime rather than a commercial research assistant.
 
-- ODR-style planning and supervision are real.
+Already credible:
+
+- ODR-style planning and supervision are implemented.
 - The LangGraph workflow is explicit and test-covered.
-- Agentic RAG is not a thin wrapper: it includes child chunks, parent/neighbor context, dense retrieval, BM25, graph signal fusion, and rerank.
-- GitHub MCP adds developer source-of-truth evidence for repositories, code, issues, pull requests, and releases.
+- Agentic RAG is more than a thin top-k wrapper: it includes child chunks, parent/neighbor context, dense retrieval, BM25, graph signal fusion, and rerank.
+- GitHub MCP can add developer source-of-truth evidence for repositories, code, issues, pull requests, and releases.
 - Report generation is tied to existing evidence and checked by verifier/evaluator metrics.
 - Trace, checkpoints, jobs, runs, and evaluation artifacts make the system explainable in interviews.
 
-Two features were removed because they weakened the story:
+Removed because they weakened the story:
 
 - project memory as a core module
 - local research-workbench MCP server
 
-The reason is practical: without strong real corpus/history assets, those modules looked like broad framework features rather than industrial-quality product capabilities.
+The reason is practical: without strong real corpus/history assets, those modules looked like broad framework features rather than evidence-backed project capabilities.
+
+## What Needs To Be Added Now
+
+The project should not add another large feature before the demo evidence is strong. The missing pieces are mostly proof, polish, and reproducibility.
+
+### P0: Resume-Ready Proof
+
+1. Build 2-3 repeatable demo topics:
+   - open-source due diligence over a named repository
+   - technical decision memo over two libraries or architectures
+   - local corpus research over papers or project notes
+2. Prepare a small real corpus for each local RAG demo.
+3. Save report, trace, route, source-index, and evaluation artifacts for each topic.
+4. Document one successful strict-provider run and one deterministic fallback run.
+5. Keep the adoption memo lab current: team context pack, repo decision topic, generated report, trace, evaluation, and analysis.
+6. Keep `pytest` passing after the docs/demo cleanup.
+
+### P1: Evaluation And Reliability
+
+1. Expand `examples/eval-dataset.jsonl` with labeled expected sources and expected evidence types.
+2. Add regression checks for citation coverage, source diversity, unsupported sections, and retrieval route visibility.
+3. Add a GitHub MCP smoke test or runbook section that explains auth, allowlisted tools, expected evidence, and network fallback.
+4. Add or document a run-bundle export path, for example a script that exports:
+   - request
+   - report markdown
+   - source index
+   - trace JSON
+   - evaluation JSON
+   - runtime config summary
+5. Make failure states demo-friendly: provider missing, search missing, MCP auth missing, empty corpus, and reranker unavailable.
+
+### P2: Product Polish
+
+1. Improve the web console around the artifacts that matter: plan, evidence, citations, quality gates, trace, and replay.
+2. Add example screenshots only after real demo artifacts exist.
+3. Add a short "How to read a run" guide for interview preparation.
+4. Consider exposing this app as an MCP Server later, but only as a facade over the stable API.
 
 ## Current Demo Standard
 
@@ -51,16 +90,6 @@ Future:
 - expose this app as an MCP Server with `run_research`, `search_local_corpus`, and `inspect_research_run`
 - keep that as a separate API facade over the stable core
 
-## Next Hardening Items
-
-1. Build 2-3 repeatable demo corpora.
-2. Save report/trace/evaluation artifacts for each demo topic.
-3. Keep the GitHub MCP smoke demo stable and documented.
-4. Expand pipeline integration tests for GitHub MCP evidence and trace visibility.
-5. Improve graph extraction quality with stricter entity/relation schemas and duplicate normalization.
-6. Add a small labeled eval set for retrieval and citation quality.
-7. Add a command that exports a run bundle for resume/interview review.
-
 ## What Not To Add Now
 
 - generic chat memory
@@ -70,6 +99,7 @@ Future:
 - distributed cluster claims
 - a second local MCP server just for demos
 - a full frontend rebuild before the research runtime is understood
+- more provider integrations before the current provider path is demo-stable
 
 ## Interview Framing
 
