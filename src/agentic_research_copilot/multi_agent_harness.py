@@ -87,6 +87,16 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
             "适配",
             "可维护",
             "可观测",
+            "workbench",
+            "sqlite",
+            "qdrant",
+            "celery",
+            "service boundary",
+            "background job",
+            "replacement",
+            "capability boundary",
+            "system boundary",
+            "positioning",
         ),
         preferred_tools=("vector_retrieval", "web_search"),
         shared_tools=("web_search", "vector_retrieval"),
@@ -122,6 +132,129 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
         shared_tools=("web_search", "vector_retrieval", "mcp_tool"),
     ),
 }
+
+REPO_SIGNAL_TERMS = (
+    "repo",
+    "repository",
+    "github",
+    "github.com",
+    "readme",
+    "issue",
+    "issues",
+    "pull request",
+    "pr",
+    "release",
+    "license",
+    "stars",
+    "community",
+    "source of truth",
+    "source code",
+    "public source",
+    "reference design",
+    "open-source",
+    "open source",
+    "code",
+    "codebase",
+    "源码",
+    "仓库",
+    "开源",
+)
+
+OPS_SIGNAL_TERMS = (
+    "deployment",
+    "deploy",
+    "docker",
+    "compose",
+    "single-node",
+    "single node",
+    "local deployment",
+    "local workbench",
+    "single-user local",
+    "rollback",
+    "token",
+    "auth",
+    "approval",
+    "unavailable",
+    "risk",
+    "security",
+    "compliance",
+    "cost",
+    "latency",
+    "reliability",
+    "availability",
+    "restart",
+    "recovery",
+    "heartbeat",
+    "checkpoint",
+    "frozen replay",
+    "replay fidelity",
+    "re-call live tools",
+    "benchmark",
+    "skill pack",
+    "skillpack",
+    "preflight",
+    "plugin marketplace",
+    "tool registry",
+    "session key",
+    "sessionkey",
+    "playbook",
+    "reuse",
+    "constraint coverage",
+    "hard team constraint",
+    "coverage below",
+    "service boundary",
+    "background job",
+    "maintenance signals",
+    "community health",
+    "tool boundary",
+    "coding agent",
+    "provider failure",
+    "live provider",
+    "out of scope",
+    "do not overclaim",
+)
+
+ARCH_SIGNAL_TERMS = (
+    "architecture",
+    "workflow",
+    "runtime",
+    "stategraph",
+    "checkpoint",
+    "graph",
+    "dag",
+    "agent",
+    "rag",
+    "retrieval",
+    "fastapi",
+    "api",
+    "sdk",
+    "session",
+    "memory",
+    "trace",
+    "replay",
+    "benchmark",
+    "evaluation",
+    "verifier",
+    "writer",
+    "tool",
+    "tool loop",
+    "skill",
+    "manifest",
+    "planning",
+    "planner",
+    "prompt",
+    "constraint",
+    "workbench",
+    "sqlite",
+    "qdrant",
+    "celery",
+    "service boundary",
+    "background job",
+    "replacement",
+    "capability boundary",
+    "system boundary",
+    "positioning",
+)
 
 
 def specialist_catalog() -> list[dict[str, Any]]:
@@ -238,29 +371,37 @@ def select_specialists(
     workspace_context: str = "",
     plan: Sequence[PlanItem] = (),
 ) -> list[AgentSpecialistId]:
-    text = " ".join(
+    scenario_hint = _scenario_hint_from_request(request, skill_id=skill_id)
+    signal_text = " ".join(
         [
             request.topic,
-            skill_id or "",
             workspace_context,
-            " ".join(_plan_item_text(item) for item in plan),
+            _request_constraint_text(request),
         ]
     )
-    scores = {role_id: _score_role_for_text(role_id, text) for role_id in SPECIALIST_PROFILES}
-    lower = text.lower()
+    plan_text = " ".join(_plan_item_text(item) for item in plan)
+    scores = {role_id: _score_role_for_text(role_id, signal_text) for role_id in SPECIALIST_PROFILES}
+    plan_scores = {role_id: _score_role_for_text(role_id, plan_text) for role_id in SPECIALIST_PROFILES}
+    lower = signal_text.lower()
 
-    if skill_id == "open_source_adoption_review" or any(word in lower for word in ("adoption", "采用", "引入", "repo", "github")):
-        scores["repo_signal"] += 3
+    if _has_arch_signal(lower) or scenario_hint == "architecture_tradeoff_memo":
         scores["architecture_fit"] += 2
-        if any(word in lower for word in ("团队", "约束", "deploy", "部署", "risk", "风险", "rollback", "回滚", "docker")):
-            scores["ops_risk"] += 2
-    if skill_id == "architecture_tradeoff_memo" or any(word in lower for word in ("tradeoff", "对比", "比较", "选型", "architecture")):
-        scores["architecture_fit"] += 3
-    if skill_id == "demo_readiness_risk_review" or any(word in lower for word in ("demo", "秋招", "面试", "展示")):
-        scores["ops_risk"] += 2
-        scores["architecture_fit"] += 1
+    if _has_repo_signal(lower):
+        scores["repo_signal"] += 3
+    else:
+        scores["repo_signal"] = 0
+    if _has_ops_signal(lower):
+        scores["ops_risk"] += 3
 
-    selected = [role_id for role_id, score in sorted(scores.items(), key=lambda item: (-item[1], item[0])) if score > 0]
+    for role_id in SPECIALIST_PROFILES:
+        if scores[role_id] > 0:
+            scores[role_id] += min(plan_scores[role_id], 2)
+
+    selected = [
+        role_id
+        for role_id, score in sorted(scores.items(), key=lambda item: (-item[1], item[0]))
+        if score > 0
+    ]
     if not selected:
         selected = ["architecture_fit"]
     return selected
@@ -685,6 +826,49 @@ def _selection_reason(selected: Sequence[AgentSpecialistId]) -> str:
     return f"Selected specialist lanes for this bounded open-source adoption workflow: {names}."
 
 
+def _scenario_hint_from_request(request: ResearchRequest, *, skill_id: str | None) -> str:
+    metadata = request.metadata or {}
+    for key in ("benchmark_scenario", "scenario", "skill_id"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip().lower()
+    return (skill_id or "").strip().lower()
+
+
+def _has_repo_signal(text: str) -> bool:
+    explicit_terms = [term for term in REPO_SIGNAL_TERMS if term != "github"]
+    if _has_any_signal(text, explicit_terms):
+        return True
+    if _contains_signal(text, "github"):
+        return not _contains_signal(text, "mcp") or any(
+            _contains_signal(text, term)
+            for term in ("repository", "repo", "readme", "issue", "release", "license", "source")
+        )
+    return bool(
+        re.search(
+            r"(?<![a-z0-9])(?:[\w.-]*-[\w.-]+|[\w.-]+-[\w.-]*)/[\w.-]+(?![a-z0-9])",
+            text.lower(),
+        )
+    )
+
+
+def _has_ops_signal(text: str) -> bool:
+    if _has_any_signal(text, OPS_SIGNAL_TERMS):
+        return True
+    return (
+        _contains_signal(text, "memory")
+        and (
+            _contains_signal(text, "skill")
+            or _contains_signal(text, "reuse")
+            or _contains_signal(text, "playbook")
+        )
+    )
+
+
+def _has_arch_signal(text: str) -> bool:
+    return _has_any_signal(text, ARCH_SIGNAL_TERMS)
+
+
 def _assignment_reason(role_id: AgentSpecialistId, request: ResearchRequest, item_ids: Sequence[str]) -> str:
     profile = SPECIALIST_PROFILES[role_id]
     scope = f"{len(item_ids)} plan item(s)" if item_ids else "no plan item"
@@ -733,8 +917,42 @@ def _confidence_for_assignment(item_ids: Sequence[str], evidence_count: int, too
 
 
 def _score_role_for_text(role_id: AgentSpecialistId, text: str) -> int:
-    normalized = text.lower()
-    return sum(1 for keyword in SPECIALIST_PROFILES[role_id].trigger_keywords if keyword.lower() in normalized)
+    return sum(
+        1
+        for keyword in SPECIALIST_PROFILES[role_id].trigger_keywords
+        if _contains_signal(text, keyword)
+    )
+
+
+def _has_any_signal(text: str, terms: Sequence[str]) -> bool:
+    return any(_contains_signal(text, term) for term in terms)
+
+
+def _request_constraint_text(request: ResearchRequest) -> str:
+    metadata = request.metadata or {}
+    constraints = metadata.get("hard_constraints", [])
+    if not isinstance(constraints, list):
+        return ""
+    return " ".join(str(item) for item in constraints if str(item).strip())
+
+
+def _contains_signal(text: str, term: str) -> bool:
+    """Match English signals as terms, while preserving substring matching for CJK."""
+    normalized_text = text.lower()
+    normalized_term = term.lower().strip()
+    if not normalized_term:
+        return False
+    if any("\u4e00" <= char <= "\u9fff" for char in normalized_term):
+        return normalized_term in normalized_text
+    escaped = re.escape(normalized_term)
+    escaped = escaped.replace(r"\ ", r"\s+")
+    escaped = escaped.replace(r"\-", r"[\s_-]+")
+    return bool(
+        re.search(
+            rf"(?<![a-z0-9]){escaped}(?![a-z0-9])",
+            normalized_text,
+        )
+    )
 
 
 def _plan_item_text(item: PlanItem) -> str:
