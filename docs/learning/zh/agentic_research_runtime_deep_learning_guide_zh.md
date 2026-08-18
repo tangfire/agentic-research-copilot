@@ -152,7 +152,7 @@ Graph runtime 层负责“按状态图执行任务”。它决定先规划、再
 
 Agent 层负责“把某类决策封装成清楚职责”。例如 planner 只负责计划，verifier 只负责检查报告。
 
-Provider 层负责“真正调用模型”。这样测试时可以换 deterministic provider，真实 demo 时可以换 OpenAI-compatible provider。
+Provider 层负责“真正调用模型”。产品运行只走 OpenAI-compatible provider；测试时通过构造函数显式注入 fixture provider。
 
 Retrieval 层负责“从本地语料里找证据”。它不是简单 top-k。
 
@@ -570,7 +570,7 @@ reporter 的危险点是最容易幻觉。所以这个项目让 reporter 基于�
 
 provider 抽象带来几个好处：
 
-- 真实模型和 deterministic test double 可以互换。
+- 真实模型和 fixture provider 共享同一套结构化契约，但 fixture 只用于测试和本地回归。
 - prompt 和 JSON schema 集中管理。
 - usage/cost/latency 可以统一记录。
 - 不同模型 provider 可以走同一套接口。
@@ -849,7 +849,7 @@ provider 会尝试提取结构化参数，例如：
 
 ## 13. 跑起来：最小学习实验
 
-先用 deterministic / 默认配置跑测试，不要一上来就折腾真实 provider。
+先用 pytest 里的 fixture provider 跑结构化测试，再配置真实 provider 做产品 demo。
 
 ### 13.1 安装
 
@@ -869,7 +869,7 @@ pip install -e .[dev,documents,mcp]
 pytest -q
 ```
 
-这一步的目的不是为了“显示测试通过”，而是让你知道项目有一条 deterministic 路径，可以不依赖真实模型完成基本行为验证。
+这一步的目的不是为了“显示测试通过”，而是让你知道项目有一条显式 fixture 测试路径，可以不依赖真实模型完成基本行为验证。
 
 ### 13.3 启动 API
 
@@ -1183,7 +1183,7 @@ Codex 是成熟产品，这个项目是学习和复现底层机制。你不是�
 
 产出：
 
-- 跑一次本地 deterministic run。
+- 跑一次本地 fixture benchmark。
 - 保存 run_id。
 - 查看 report、trace、evaluation。
 - 准备 3 分钟项目讲解。

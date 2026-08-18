@@ -32,7 +32,7 @@ The project should not add another large feature before the demo evidence is str
    - local corpus research over papers or project notes
 2. Prepare a small real corpus for each local RAG demo.
 3. Save report, trace, route, source-index, and evaluation artifacts for each topic.
-4. Document one successful strict-provider run and one deterministic fallback run.
+4. Document one successful strict-provider run and one fixture-based regression run.
 5. Keep the adoption memo lab current: team context pack, repo decision topic, generated report, trace, evaluation, and analysis.
 6. Keep the conversational session demo current: saved team constraints, plan draft, confirmed job, completed run, memory, trace, and evaluation.
 7. Keep `pytest` passing after the docs/demo cleanup.

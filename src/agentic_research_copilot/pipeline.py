@@ -15,6 +15,7 @@ from .ledger import JobLedger, RunLedger
 from .mcp_tools import build_mcp_tool
 from .multi_agent_harness import enrich_research_run, replay_from_frozen_run
 from .providers import build_embedding_provider, build_model_provider
+from .provider_base import ResearchModelProvider
 from .provider_validation import provider_runtime_report, require_real_provider_config
 from .retrieval import DocumentStore, RerankerConfig, build_reranker
 from .schemas import (
@@ -57,12 +58,14 @@ class ResearchCopilot:
         settings: AppSettings | None = None,
         storage: SQLiteStore | None = None,
         search_tool: SearchTool | None = None,
+        model_provider: ResearchModelProvider | None = None,
+        embedding_provider: ResearchModelProvider | None = None,
     ) -> None:
         self.settings = settings or load_settings()
-        if self.settings.strict_providers:
+        if self.settings.strict_providers and model_provider is None:
             require_real_provider_config(self.settings)
-        self.model_provider = build_model_provider(self.settings)
-        self.embedding_provider = build_embedding_provider(self.settings, self.model_provider)
+        self.model_provider = model_provider or build_model_provider(self.settings)
+        self.embedding_provider = embedding_provider or build_embedding_provider(self.settings, self.model_provider)
         self.mcp_registry = build_mcp_tool(self.settings)
         self.mcp_tool = self.mcp_registry.search if self.mcp_registry is not None else None
         self.mcp_tool_catalog_error = ""
@@ -508,7 +511,7 @@ class ResearchCopilot:
                 ],
                 "product_specific_differences": [
                     "Uses an ODR-style LLM research supervisor; ConductResearch calls carry selected tools, query rewrites, grounding mode, and sufficiency criteria",
-                    "Keeps deterministic route hints only for offline tests/fallbacks, not as the primary real-provider decision layer",
+                    "Keeps explainable route hints as audit metadata, not as the primary real-provider decision layer",
                     "Adds local document grounding with text/Markdown/HTML/PDF parsing before Qdrant retrieval",
                     "Adds a conversational session and memory layer in front of the research graph instead of turning every chat turn into a run",
                     "Uses single-node FastAPI/Celery/Redis/SQLite/Qdrant deployment, not a distributed platform",
@@ -971,7 +974,7 @@ class ResearchCopilot:
                 "research supervisor, emit ConductResearch calls with selected tools and query rewrites, "
                 "route between external search, vector_retrieval, configured MCP tools, and hybrid evidence, "
                 "verify citations, evaluate RAG quality, persist trace and replay artifacts, and support "
-                "OpenAI-compatible chat providers, Qwen embeddings, Tavily search, and deterministic test doubles."
+                "OpenAI-compatible chat providers, Qwen embeddings, Tavily search, and explicit dev fixtures for tests."
             ),
             metadata={"kind": "project_overview"},
         )
@@ -983,7 +986,7 @@ class ResearchCopilot:
                 "The architecture centers on a LangGraph StateGraph supervisor, planner, "
                 "ODR-style research_supervisor, concurrent researcher/retriever workers, Qdrant dense "
                 "vectors, indexing-time contextual retrieval prefixes, SQLite FTS5 BM25 keyword retrieval, "
-                "RRF/DBSF hybrid fusion, Qwen/DashScope reranking with deterministic fallback, "
+                "RRF/DBSF hybrid fusion, Qwen/DashScope reranking with local rule fallback, "
                 "reporter, Verifier, Evaluator, SQLite checkpoints, trace replay, source quality, "
                 "citation precision, evidence sufficiency, context precision, context recall, "
                 "faithfulness proxy, queued jobs, retry, and cancelled states."
@@ -1014,7 +1017,7 @@ class ResearchCopilot:
                 "The hardening roadmap says source quality remains evaluation-side rather than a "
                 "runtime hard filter because the Open Deep Research reference treats source quality "
                 "as evaluator output. The useful v1 boundary is a 12-case regression set, a "
-                "Qwen/DashScope reranker with deterministic fallback for offline tests, clear "
+                "Qwen/DashScope reranker with local rule fallback, explicit fixture injection for tests, clear "
                 "single-node SQLite checkpoint/replay boundaries, and SQLite-backed job/run status "
                 "visibility across the API and local worker. Streaming, auth, and multi-tenancy are "
                 "deferred because this is a personal research copilot, not a SaaS platform."

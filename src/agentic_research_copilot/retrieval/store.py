@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from ..deterministic_provider import DeterministicResearchModelProvider
 from ..provider_base import ModelUsage, ResearchModelProvider
 from ..schemas import (
     ChunkContextContract,
@@ -115,7 +114,9 @@ class DocumentStore:
     ) -> None:
         self._docs: list[EvidenceItem] = []
         self._chunks: list[DocumentChunk] = []
-        self.embedding_provider = embedding_provider or DeterministicResearchModelProvider()
+        if embedding_provider is None:
+            raise ValueError("DocumentStore requires an explicit embedding provider.")
+        self.embedding_provider = embedding_provider
         self.collection_name = collection_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -131,10 +132,6 @@ class DocumentStore:
         self.reranker = reranker or RuleBasedReranker()
         self.contextualizer_provider = contextualizer_provider or self.embedding_provider
         self.graph_provider = graph_provider or self.contextualizer_provider
-        self._fallback_contextualizer = DeterministicResearchModelProvider(
-            embedding_dimensions=getattr(self.embedding_provider, "embedding_dimensions", 256)
-        )
-        self._fallback_graph_provider = self._fallback_contextualizer
         self.allow_local_fallback = allow_local_fallback
         self._contextualization_cache: dict[str, tuple[ChunkContextContract, ModelUsage]] = {}
         self._graph_extraction_cache: dict[
@@ -465,7 +462,7 @@ class DocumentStore:
         except Exception as exc:
             if not self.allow_local_fallback:
                 raise RuntimeError(f"Chunk contextualization failed: {exc}") from exc
-            result = self._fallback_contextualizer.contextualize_chunk(
+            result = _local_chunk_context(
                 document_title=doc.title,
                 source=doc.source,
                 metadata=doc.metadata,
@@ -519,16 +516,9 @@ class DocumentStore:
             if not self.allow_local_fallback:
                 raise RuntimeError(f"Knowledge graph extraction failed: {exc}") from exc
             fallback_reason = exc.__class__.__name__
-            contract, usage = self._fallback_graph_provider.extract_knowledge_graph(
-                document_title=doc.title,
-                source=doc.source,
-                metadata=doc.metadata,
-                document_excerpt=document_excerpt,
-                chunk_text=chunk_text,
-                chunk_index=chunk_index,
-                total_chunks=total_chunks,
-                max_entities=self.graph_max_entities_per_chunk,
-                max_relationships=self.graph_max_relationships_per_chunk,
+            contract, usage = KnowledgeGraphExtractionContract(), ModelUsage(
+                provider="local_rule",
+                model="graph-disabled-after-provider-error",
             )
 
         result = (
@@ -1091,10 +1081,16 @@ class DocumentStore:
             if not self.allow_local_fallback:
                 raise RuntimeError(f"Graph query extraction failed: {exc}") from exc
             fallback_reason = exc.__class__.__name__
-            contract, usage = self._fallback_graph_provider.extract_graph_query(
-                query=query_text,
-                max_local_keywords=self.graph_max_entities_per_chunk,
-                max_global_keywords=self.graph_relation_candidate_limit,
+            contract, usage = (
+                KnowledgeGraphQueryContract(
+                    local_keywords=list(dict.fromkeys(query_tokens))[: self.graph_max_entities_per_chunk],
+                    global_keywords=list(dict.fromkeys(query_tokens))[: self.graph_relation_candidate_limit],
+                    confidence=0.35,
+                ),
+                ModelUsage(
+                    provider="local_rule",
+                    model="graph-query-terms-fallback",
+                ),
             )
 
         normalized = _normalize_graph_query_contract(
@@ -1356,6 +1352,36 @@ def _build_contextual_text(
     context_lines.append("Excerpt:")
     context_lines.append(chunk_text)
     return "\n".join(context_lines)
+
+
+def _local_chunk_context(
+    *,
+    document_title: str,
+    source: str,
+    metadata: dict[str, object],
+    document_excerpt: str,
+    chunk_text: str,
+    chunk_index: int,
+    total_chunks: int,
+) -> tuple[ChunkContextContract, ModelUsage]:
+    terms = [
+        token
+        for token in dict.fromkeys(_tokenize(f"{document_title} {chunk_text}"))
+        if len(token) >= 3
+    ][:10]
+    context = (
+        f"Local rule context for document '{document_title}', source '{source}', "
+        f"chunk {chunk_index + 1}/{total_chunks}. Key terms: {', '.join(terms[:6]) or 'n/a'}."
+    )
+    return (
+        ChunkContextContract(
+            context=context,
+            key_terms=terms,
+            provenance_hint=f"{document_title} chunk {chunk_index + 1}",
+            confidence=0.35,
+        ),
+        ModelUsage(provider="local_rule", model="chunk-context-terms-fallback"),
+    )
 
 
 def _document_context_excerpt(document_text: str, chunk_text: str, max_chars: int = 12000) -> str:

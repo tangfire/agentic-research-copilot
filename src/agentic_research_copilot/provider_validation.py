@@ -20,7 +20,7 @@ class ProviderConfigurationError(RuntimeError):
 def validate_real_provider_config(settings: Any) -> list[ProviderValidationIssue]:
     issues: list[ProviderValidationIssue] = []
 
-    model_provider = getattr(settings, "model_provider", "deterministic")
+    model_provider = getattr(settings, "model_provider", "openai_compatible")
     if model_provider != "openai_compatible":
         issues.append(
             ProviderValidationIssue(
@@ -51,14 +51,7 @@ def validate_real_provider_config(settings: Any) -> list[ProviderValidationIssue
         )
 
     embedding_provider = getattr(settings, "embedding_provider", "model")
-    if embedding_provider == "deterministic":
-        issues.append(
-            ProviderValidationIssue(
-                field="ARC_EMBEDDING_PROVIDER",
-                message="Strict demo mode cannot use deterministic embeddings.",
-            )
-        )
-    elif embedding_provider == "openai_compatible":
+    if embedding_provider == "openai_compatible":
         if not (getattr(settings, "embedding_base_url", "") or getattr(settings, "model_base_url", "")):
             issues.append(
                 ProviderValidationIssue(
@@ -85,6 +78,13 @@ def validate_real_provider_config(settings: Any) -> list[ProviderValidationIssue
             ProviderValidationIssue(
                 field="ARC_EMBEDDING_PROVIDER",
                 message="ARC_EMBEDDING_PROVIDER=model is only real when the model provider is OpenAI-compatible.",
+            )
+        )
+    elif embedding_provider != "model":
+        issues.append(
+            ProviderValidationIssue(
+                field="ARC_EMBEDDING_PROVIDER",
+                message="ARC_EMBEDDING_PROVIDER must be model or openai_compatible.",
             )
         )
 

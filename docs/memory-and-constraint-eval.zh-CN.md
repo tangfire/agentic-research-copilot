@@ -150,7 +150,7 @@ GET /v1/agent/sessions/{session_id}/memory/evaluation
 
 - 面试项目里更容易讲清实现。
 - 测试稳定。
-- 不把 deterministic/real model 的差异混在 memory 基础能力里。
+- 不把 fixture/real provider 的差异混在 memory 基础能力里。
 - 后续可以加 LLM extractor，再拿 labeled fixture 做 precision/recall。
 
 ## 5. Memory Quality 指标

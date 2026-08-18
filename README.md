@@ -104,11 +104,7 @@ Run:
 python scripts/run_adoption_memo_experiment.py --clean
 ```
 
-The default lab run now uses the configured real provider stack: real chat model, external search, real embeddings, real rerank, local persistent Qdrant, trace, and evaluation. Deterministic mode is kept only for offline regression tests:
-
-```powershell
-python scripts/run_adoption_memo_experiment.py --clean --mode deterministic
-```
+The default lab run uses the configured real provider stack: real chat model, external search, real embeddings, real rerank, local persistent Qdrant, trace, and evaluation. Offline regression checks use explicit fixture injection inside tests/scripts; fixture output is not product proof.
 
 For GitHub MCP evidence, add `--use-mcp`. The run will fail fast when GitHub MCP auth is missing instead of silently falling back to web-only evidence:
 
@@ -152,7 +148,7 @@ These items are tracked in [Hardening Roadmap](docs/hardening-roadmap.md).
 - `Qwen/DashScope rerank`: reorders fused candidates with a query-aware reranker in real-provider mode.
 - `Celery/Redis`: optional single-node API/worker separation for strict demo runs, not a distributed platform claim.
 - `MCP`: optional external tool interface. GitHub MCP is the preferred extension because it adds developer source-of-truth evidence that Tavily-style web search and local RAG do not cover as precisely.
-- `OpenAI-compatible providers`: let the same contracts work with DeepSeek, Qwen/DashScope-compatible endpoints, OpenAI-style APIs, and deterministic test doubles.
+- `OpenAI-compatible providers`: let the same contracts work with DeepSeek, Qwen/DashScope-compatible endpoints, OpenAI-style APIs, and explicit dev fixtures in tests.
 
 ## MCP Recommendation
 

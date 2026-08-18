@@ -68,14 +68,14 @@ class AppSettings(BaseModel):
     job_queue_backend: Literal["in_process", "celery"] = "in_process"
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/1"
-    model_provider: Literal["deterministic", "openai_compatible"] = "deterministic"
+    model_provider: Literal["openai_compatible"] = "openai_compatible"
     model_base_url: str = ""
     model_api_key: str = ""
     model_chat_model: str = "gpt-4o-mini"
     model_embedding_model: str = "text-embedding-3-small"
     model_timeout_seconds: float = 30.0
     model_temperature: float = 0.2
-    embedding_provider: Literal["model", "deterministic", "openai_compatible"] = "model"
+    embedding_provider: Literal["model", "openai_compatible"] = "model"
     embedding_base_url: str = ""
     embedding_api_key: str = ""
     embedding_model: str = "qwen3.7-text-embedding"
@@ -152,7 +152,7 @@ def load_settings() -> AppSettings:
         job_queue_backend=os.getenv("ARC_JOB_QUEUE_BACKEND", "in_process").lower(),
         celery_broker_url=os.getenv("ARC_CELERY_BROKER_URL", "redis://localhost:6379/0"),
         celery_result_backend=os.getenv("ARC_CELERY_RESULT_BACKEND", "redis://localhost:6379/1"),
-        model_provider=os.getenv("ARC_MODEL_PROVIDER", "deterministic").lower(),
+        model_provider=os.getenv("ARC_MODEL_PROVIDER", "openai_compatible").lower(),
         model_base_url=model_base_url,
         model_api_key=_model_api_key(model_base_url),
         model_chat_model=os.getenv("ARC_MODEL_CHAT_MODEL", "gpt-4o-mini"),

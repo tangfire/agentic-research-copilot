@@ -5,7 +5,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..deterministic_provider import DeterministicResearchModelProvider
 from ..provider_base import ResearchModelProvider
 from ..schemas import EvidenceItem, MCPToolDescriptor, PlanItem
 from ..source_reader import SourceReader, SourceReaderStrategy
@@ -38,7 +37,7 @@ class ResearchAgent:
         self.search_tool = search_tool
         self.mcp_tool = mcp_tool
         self.mcp_tool_catalog = list(mcp_tool_catalog)
-        self.model_provider = model_provider or DeterministicResearchModelProvider()
+        self.model_provider = model_provider
         self.source_reader_enabled = source_reader_enabled
         self.max_iterations = max(1, max_iterations)
         self.source_reader = SourceReader(
@@ -167,6 +166,8 @@ class ResearchAgent:
 
         for iteration_index in range(iteration_budget):
             gaps_before = self._sufficiency_gaps(evidence, min_evidence=min_evidence, min_sources=min_sources)
+            if self.model_provider is None:
+                raise RuntimeError("ResearchAgent.collect_iterative requires an explicit model provider.")
             decision, usage = self.model_provider.decide_researcher_action(
                 item=item,
                 available_tools=available_tools,

@@ -1,9 +1,8 @@
 from pathlib import Path
 
+from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
 from agentic_research_copilot.pipeline import ResearchCopilot
-from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
 from agentic_research_copilot.providers import (
-    FallbackResearchModelProvider,
     OpenAICompatibleResearchModelProvider,
     build_embedding_provider,
     build_model_provider,
@@ -22,7 +21,7 @@ from agentic_research_copilot.schemas import (
 from agentic_research_copilot.source_reader import SourceReader
 
 
-def test_chat_provider_can_use_deterministic_embedding_provider(tmp_path: Path):
+def test_chat_provider_can_share_embedding_provider(tmp_path: Path):
     copilot = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(tmp_path / "deepseek.sqlite"),
@@ -30,13 +29,11 @@ def test_chat_provider_can_use_deterministic_embedding_provider(tmp_path: Path):
             model_base_url="https://api.deepseek.com",
             model_api_key="test-key",
             model_chat_model="deepseek-chat",
-            embedding_provider="deterministic",
         )
     )
 
-    assert isinstance(copilot.model_provider, FallbackResearchModelProvider)
-    assert isinstance(copilot.model_provider.primary, OpenAICompatibleResearchModelProvider)
-    assert isinstance(copilot.embedding_provider, DeterministicResearchModelProvider)
+    assert isinstance(copilot.model_provider, OpenAICompatibleResearchModelProvider)
+    assert copilot.embedding_provider is copilot.model_provider
     assert copilot.documents.profile().embedding_dimensions == copilot.settings.embedding_dimensions
 
 
@@ -56,21 +53,23 @@ def test_chat_provider_can_use_separate_openai_embedding_provider(tmp_path: Path
     model_provider = build_model_provider(settings)
     embedding_provider = build_embedding_provider(settings, model_provider)
 
-    assert isinstance(model_provider, FallbackResearchModelProvider)
-    assert isinstance(model_provider.primary, OpenAICompatibleResearchModelProvider)
+    assert isinstance(model_provider, OpenAICompatibleResearchModelProvider)
     assert isinstance(embedding_provider, OpenAICompatibleResearchModelProvider)
-    assert model_provider.primary.base_url == "https://relay.example.test/v1"
+    assert model_provider.base_url == "https://relay.example.test/v1"
     assert embedding_provider.base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1"
     assert embedding_provider.embedding_model == "text-embedding-v4"
     assert embedding_provider.embedding_dimensions == 256
 
 
 def test_clarify_request_identifies_vague_topics(tmp_path: Path):
+    provider = FixtureResearchModelProvider()
     copilot = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(tmp_path / "clarify.sqlite"),
             langgraph_checkpoint_path=str(tmp_path / "clarify-checkpoints.sqlite"),
-        )
+        ),
+        model_provider=provider,
+        embedding_provider=provider,
     )
 
     result = copilot.clarify(ResearchRequest(topic="RAG"))
@@ -83,11 +82,14 @@ def test_clarify_request_identifies_vague_topics(tmp_path: Path):
 
 
 def test_clarify_request_accepts_specific_topics(tmp_path: Path):
+    provider = FixtureResearchModelProvider()
     copilot = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(tmp_path / "clarify-specific.sqlite"),
             langgraph_checkpoint_path=str(tmp_path / "clarify-specific-checkpoints.sqlite"),
-        )
+        ),
+        model_provider=provider,
+        embedding_provider=provider,
     )
 
     result = copilot.clarify(
@@ -104,12 +106,15 @@ def test_clarify_request_accepts_specific_topics(tmp_path: Path):
 
 
 def test_pipeline_returns_report(tmp_path: Path):
+    provider = FixtureResearchModelProvider()
     copilot = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(tmp_path / "pipeline.sqlite"),
             langgraph_checkpoint_path=str(tmp_path / "pipeline-checkpoints.sqlite"),
             seed_reference_knowledge=True,
-        )
+        ),
+        model_provider=provider,
+        embedding_provider=provider,
     )
     result = copilot.run(ResearchRequest(topic="multi-agent research orchestration"))
 
@@ -206,7 +211,12 @@ def test_pipeline_returns_report(tmp_path: Path):
 
 
 def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):
-    copilot = ResearchCopilot(settings=AppSettings(storage_path=str(tmp_path / "sections.sqlite")))
+    provider = FixtureResearchModelProvider()
+    copilot = ResearchCopilot(
+        settings=AppSettings(storage_path=str(tmp_path / "sections.sqlite")),
+        model_provider=provider,
+        embedding_provider=provider,
+    )
     request = ResearchRequest(topic="battery recycling supply chain", max_sections=1)
     plan = [
         PlanItem(
@@ -273,7 +283,12 @@ def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):
 
 
 def test_report_evidence_ranking_keeps_weak_sources_visible_but_not_primary(tmp_path: Path):
-    copilot = ResearchCopilot(settings=AppSettings(storage_path=str(tmp_path / "ranking.sqlite")))
+    provider = FixtureResearchModelProvider()
+    copilot = ResearchCopilot(
+        settings=AppSettings(storage_path=str(tmp_path / "ranking.sqlite")),
+        model_provider=provider,
+        embedding_provider=provider,
+    )
     ranked = copilot._rank_evidence_for_report(
         [
             EvidenceItem(
@@ -326,7 +341,14 @@ def test_research_agent_extracts_raw_content_into_read_evidence():
             }
     ]
 
-    agent = ResearchAgent(fake_search, source_reader_enabled=True, excerpt_max_chars=180)
+    provider = FixtureResearchModelProvider()
+    agent = ResearchAgent(
+        fake_search,
+        model_provider=provider,
+        embedding_provider=provider,
+        source_reader_enabled=True,
+        excerpt_max_chars=180,
+    )
     evidence = agent.collect(
         PlanItem(
             id="plan-1",
@@ -369,7 +391,14 @@ def test_research_agent_iterates_until_evidence_is_sufficient():
             }
         ]
 
-    agent = ResearchAgent(fake_search, source_reader_enabled=False, max_iterations=3)
+    provider = FixtureResearchModelProvider()
+    agent = ResearchAgent(
+        fake_search,
+        model_provider=provider,
+        embedding_provider=provider,
+        source_reader_enabled=False,
+        max_iterations=3,
+    )
     collection = agent.collect_iterative(
         PlanItem(
             id="plan-1",
@@ -424,6 +453,8 @@ def test_research_agent_can_call_mcp_when_search_evidence_is_insufficient():
 
     agent = ResearchAgent(
         fake_search,
+        model_provider=FixtureResearchModelProvider(),
+        embedding_provider=FixtureResearchModelProvider(),
         mcp_tool=fake_mcp,
         source_reader_enabled=False,
         max_iterations=3,
@@ -468,7 +499,7 @@ def test_research_agent_can_model_compress_raw_content():
 
     agent = ResearchAgent(
         fake_search,
-        model_provider=DeterministicResearchModelProvider(),
+        model_provider=FixtureResearchModelProvider(),
         source_reader_enabled=True,
         source_reader_strategy="model_compress",
         excerpt_max_chars=400,
@@ -483,7 +514,7 @@ def test_research_agent_can_model_compress_raw_content():
     )
 
     assert evidence[0].metadata["read_strategy"] == "provider_raw_content_model_compress"
-    assert evidence[0].metadata["source_reader_model"] == "heuristic-source-compressor"
+    assert evidence[0].metadata["source_reader_model"] == "fixture-source-compressor"
     assert evidence[0].metadata["key_excerpt_count"] >= 1
     assert "Key excerpts" in (evidence[0].content or "")
 
@@ -509,7 +540,7 @@ def test_research_agent_can_chunk_rerank_then_compress_raw_content():
             }
         ]
 
-    provider = DeterministicResearchModelProvider()
+    provider = FixtureResearchModelProvider()
     agent = ResearchAgent(
         fake_search,
         model_provider=provider,
@@ -574,11 +605,14 @@ def test_source_reader_expands_neighbor_chunks_before_compression():
 def test_api_process_reads_worker_updates_from_sqlite(tmp_path: Path):
     storage_path = tmp_path / "shared-worker.sqlite"
     request = ResearchRequest(topic="single-node worker visibility")
+    provider = FixtureResearchModelProvider()
     api_process = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(storage_path),
             langgraph_checkpoint_path=str(tmp_path / "api-checkpoints.sqlite"),
-        )
+        ),
+        model_provider=provider,
+        embedding_provider=provider,
     )
     queued_job = ResearchJob(
         job_id="job-shared-1",
@@ -587,11 +621,14 @@ def test_api_process_reads_worker_updates_from_sqlite(tmp_path: Path):
     )
     api_process._record_job(queued_job)
 
+    worker_provider = FixtureResearchModelProvider()
     worker_process = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(storage_path),
             langgraph_checkpoint_path=str(tmp_path / "worker-checkpoints.sqlite"),
-        )
+        ),
+        model_provider=worker_provider,
+        embedding_provider=worker_provider,
     )
     run = worker_process.run(request, job_id=queued_job.job_id)
     worker_process._record_job(

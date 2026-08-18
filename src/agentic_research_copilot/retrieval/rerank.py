@@ -65,7 +65,7 @@ class RuleBasedReranker(BaseReranker):
 
 
 class DashScopeReranker(BaseReranker):
-    """DashScope/Qwen reranker with an optional deterministic rule fallback."""
+    """DashScope/Qwen reranker with an optional local rule fallback."""
 
     name = "dashscope_qwen3_rerank"
 

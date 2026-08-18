@@ -11,6 +11,7 @@ from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.schemas import BenchmarkTask, ResearchRequest
 from agentic_research_copilot.settings import AppSettings, load_settings, resolve_storage_path
 from agentic_research_copilot.storage import SQLiteStore
+from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
 
 
 DEFAULT_DATASET = Path("examples/research-desk-v4-benchmark.jsonl")
@@ -21,7 +22,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Research Desk v4 harness benchmark.")
     parser.add_argument("--dataset", default=str(DEFAULT_DATASET))
     parser.add_argument("--output", default=str(DEFAULT_REPORT))
-    parser.add_argument("--mode", choices=["deterministic", "real"], default="deterministic")
+    parser.add_argument("--mode", choices=["fixture", "real"], default="fixture")
     parser.add_argument("--max-tasks", type=int, default=24)
     parser.add_argument("--clean", action="store_true")
     args = parser.parse_args()
@@ -36,7 +37,16 @@ def main() -> None:
             output_path.unlink()
 
     cases = _load_cases(dataset_path)[: max(1, args.max_tasks)]
-    copilot = ResearchCopilot(settings=settings)
+    fixture_provider = (
+        FixtureResearchModelProvider(embedding_dimensions=settings.embedding_dimensions)
+        if args.mode == "fixture"
+        else None
+    )
+    copilot = ResearchCopilot(
+        settings=settings,
+        model_provider=fixture_provider,
+        embedding_provider=fixture_provider,
+    )
     results: list[dict[str, Any]] = []
     try:
         for case in cases:
@@ -84,16 +94,14 @@ def _benchmark_settings(mode: str) -> AppSettings:
         "source_reader_enabled": False,
         "mcp_enabled": False,
     }
-    if mode == "deterministic":
+    if mode == "fixture":
         updates.update(
             {
                 "strict_providers": False,
-                "model_provider": "deterministic",
-                "embedding_provider": "deterministic",
                 "search_provider": "none",
                 "rerank_provider": "rule",
-                "model_chat_model": "heuristic-chat",
-                "embedding_model": "hashed-embedding",
+                "model_chat_model": "fixture-chat",
+                "embedding_model": "fixture-embedding",
             }
         )
     return base.model_copy(update=updates)

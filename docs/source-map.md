@@ -54,7 +54,7 @@ No LightRAG code is copied. The local graph layer is a bounded retrieval signal 
 - `schemas.py`: structured contracts for requests, plan items, routes, evidence, reports, trace, and evaluation.
 - `agent.py`: conversational session facade, memory extraction, plan confirmation, and research job binding.
 - `providers.py`: OpenAI-compatible real model provider, structured JSON calls, embeddings, graph extraction, source compression, and report composition.
-- `deterministic_provider.py`: offline/test provider with contract-compatible behavior.
+- `dev_fixtures.py`: explicit fixture provider for tests and local regression scripts; it is not a product runtime provider.
 - `graph_runtime.py`: LangGraph orchestration path.
 - `pipeline.py`: application facade that wires providers, retrieval, agents, storage, jobs, telemetry, and runtime config.
 - `agents/planner.py`: delegates planning to the model provider.

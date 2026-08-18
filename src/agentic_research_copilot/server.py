@@ -76,8 +76,8 @@ class SkillScriptRunInput(BaseModel):
     timeout_seconds: float | None = None
 
 
-def create_app() -> FastAPI:
-    copilot = ResearchCopilot()
+def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
+    copilot = copilot or ResearchCopilot()
     agent = ConversationalResearchAgent(copilot)
 
     @asynccontextmanager

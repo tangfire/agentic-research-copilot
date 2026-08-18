@@ -1,8 +1,8 @@
 from collections.abc import Sequence
 from pathlib import Path
 
+from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
 from agentic_research_copilot.agents import ResearchAgent
-from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
 from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.provider_base import ModelUsage
 from agentic_research_copilot.schemas import (
@@ -15,7 +15,7 @@ from agentic_research_copilot.schemas import (
 from agentic_research_copilot.settings import AppSettings
 
 
-class StructuredMCPDecisionProvider(DeterministicResearchModelProvider):
+class StructuredMCPDecisionProvider(FixtureResearchModelProvider):
     def decide_researcher_action(
         self,
         *,
@@ -38,16 +38,21 @@ class StructuredMCPDecisionProvider(DeterministicResearchModelProvider):
                 ),
                 ModelUsage(provider="test", model="structured-mcp-test"),
             )
+        selected_tool = mcp_tools[0].name if mcp_tools else "get_file_contents"
+        if selected_tool == "search_code":
+            tool_args = {"query": "repository architecture implementation"}
+        else:
+            tool_args = {
+                "owner": "langchain-ai",
+                "repo": "open_deep_research",
+                "path": "README.md",
+            }
         return (
             ResearcherToolDecisionContract(
                 action="mcp_tool",
                 query="read repository README",
-                mcp_tool_name="get_file_contents",
-                mcp_tool_args={
-                    "owner": "langchain-ai",
-                    "repo": "open_deep_research",
-                    "path": "README.md",
-                },
+                mcp_tool_name=selected_tool,
+                mcp_tool_args=tool_args,
                 rationale="Read the source-of-truth repository file through GitHub MCP.",
                 confidence=0.85,
             ),
@@ -153,6 +158,7 @@ def test_pipeline_trace_records_structured_github_mcp_tool_call(tmp_path: Path):
             }
         ]
 
+    provider = StructuredMCPDecisionProvider()
     copilot = ResearchCopilot(
         settings=AppSettings(
             storage_path=str(tmp_path / "github-mcp.sqlite"),
@@ -162,6 +168,8 @@ def test_pipeline_trace_records_structured_github_mcp_tool_call(tmp_path: Path):
             rag_min_source_diversity=2,
         ),
         search_tool=fake_search,
+        model_provider=provider,
+        embedding_provider=provider,
     )
     catalog = [
         MCPToolDescriptor(

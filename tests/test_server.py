@@ -3,6 +3,8 @@ from time import sleep, time
 
 from fastapi.testclient import TestClient
 
+from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
+from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.server import create_app
 
 
@@ -19,10 +21,20 @@ def wait_for_job(client: TestClient, status_url: str, timeout_seconds: float = 5
     raise AssertionError(f"Job did not finish in time: {last_status}")
 
 
+def create_fixture_app():
+    provider = FixtureResearchModelProvider()
+    return create_app(
+        copilot=ResearchCopilot(
+            model_provider=provider,
+            embedding_provider=provider,
+        )
+    )
+
+
 def test_root_page_includes_simple_workbench_controls(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "root.sqlite"))
-    client = TestClient(create_app())
+    client = TestClient(create_fixture_app())
 
     response = client.get("/")
 
@@ -38,7 +50,7 @@ def test_clarify_endpoint_returns_follow_up_for_vague_topic(tmp_path: Path, monk
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "clarify-server.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "clarify-server-checkpoints.sqlite"))
-    client = TestClient(create_app())
+    client = TestClient(create_fixture_app())
 
     response = client.post("/v1/research/clarify", json={"topic": "RAG"})
 
@@ -54,7 +66,7 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "server.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "server-checkpoints.sqlite"))
     monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
-    client = TestClient(create_app())
+    client = TestClient(create_fixture_app())
 
     memory_response = client.get("/v1/memory")
     assert memory_response.status_code == 200
@@ -173,7 +185,7 @@ def test_agent_session_collects_clarification_for_vague_message(tmp_path: Path, 
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "agent-clarify.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "agent-clarify-checkpoints.sqlite"))
-    client = TestClient(create_app())
+    client = TestClient(create_fixture_app())
 
     session_response = client.post("/v1/agent/sessions", json={"title": "Vague research"})
     assert session_response.status_code == 200
@@ -228,7 +240,7 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "agent-flow.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "agent-flow-checkpoints.sqlite"))
     monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
-    with TestClient(create_app()) as client:
+    with TestClient(create_fixture_app()) as client:
         session_response = client.post("/v1/agent/sessions", json={"title": "LangGraph adoption"})
         assert session_response.status_code == 200
         session_id = session_response.json()["session_id"]
@@ -342,7 +354,7 @@ def test_memory_endpoint_can_add_list_and_delete_items(tmp_path: Path, monkeypat
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "memory.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "memory-checkpoints.sqlite"))
-    client = TestClient(create_app())
+    client = TestClient(create_fixture_app())
 
     create_response = client.post(
         "/v1/memory",
@@ -372,7 +384,7 @@ def test_workspace_and_skill_registry_and_context_compaction(tmp_path: Path, mon
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "workspace.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "workspace-checkpoints.sqlite"))
-    with TestClient(create_app()) as client:
+    with TestClient(create_fixture_app()) as client:
         workspaces_response = client.get("/v1/agent/workspaces")
         assert workspaces_response.status_code == 200
         workspaces = workspaces_response.json()
@@ -453,7 +465,7 @@ def test_agent_reports_mcp_unavailable_when_token_is_missing(tmp_path: Path, mon
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_PERSONAL_ACCESS_TOKEN", raising=False)
-    client = TestClient(create_app())
+    client = TestClient(create_fixture_app())
 
     session_response = client.post("/v1/agent/sessions", json={"title": "MCP status"})
     assert session_response.status_code == 200
@@ -491,7 +503,7 @@ def test_mcp_unavailable_creates_approval_request(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("GH_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("GITHUB_PERSONAL_ACCESS_TOKEN", raising=False)
-    with TestClient(create_app()) as client:
+    with TestClient(create_fixture_app()) as client:
         session_response = client.post("/v1/agent/sessions", json={"title": "MCP approval"})
         assert session_response.status_code == 200
         session_id = session_response.json()["session_id"]
@@ -533,7 +545,7 @@ def test_job_status_result_and_runtime_config(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "jobs.sqlite"))
     monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "jobs-checkpoints.sqlite"))
     monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
-    with TestClient(create_app()) as client:
+    with TestClient(create_fixture_app()) as client:
         job_response = client.post(
             "/v1/research/jobs",
             json={

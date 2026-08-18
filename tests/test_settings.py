@@ -136,7 +136,8 @@ def test_strict_provider_mode_reports_missing_real_config(monkeypatch):
 
     assert settings.strict_providers is True
     assert issues
-    assert any(issue.field == "ARC_MODEL_PROVIDER" for issue in issues)
+    assert any(issue.field == "ARC_MODEL_BASE_URL" for issue in issues)
+    assert any(issue.field == "ARC_MODEL_API_KEY" for issue in issues)
 
 
 def test_strict_provider_mode_accepts_real_provider_shape(monkeypatch):

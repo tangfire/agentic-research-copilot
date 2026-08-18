@@ -292,11 +292,11 @@ Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循
 
 > 现在它是 LightRAG-inspired 的轻量图增强，不是完整 GraphRAG 平台。
 
-### Q3：deterministic 模式是不是假的？
+### Q3：fixture 路径是不是假的？
 
 答：
 
-> deterministic 模式只是测试替身，用来保证 CI 和离线回归稳定。产品证明必须看 real mode：真实模型、真实搜索、真实 embedding/rerank、真实 trace/eval。项目里也保留了 adoption memo experiment 来跑真实链路。
+> fixture 路径只是测试替身，用来保证 CI 和离线回归稳定。产品证明必须看 real mode：真实模型、真实搜索、真实 embedding/rerank、真实 trace/eval。项目里也保留了 adoption memo experiment 来跑真实链路。
 
 ### Q4：GitHub MCP 没 token 怎么办？
 
@@ -323,7 +323,7 @@ Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循
 - 这是单用户本地 workbench，不是多租户 SaaS。
 - memory extractor v1 是轻量规则，后续可以换成 LLM extractor 加 eval。
 - approval v2 是可观测审批，不是完整 durable interrupt。
-- deterministic 模式不是产品效果证明。
+- fixture 路径不是产品效果证明。
 - GitHub MCP 依赖 token 和网络，缺失时只能跑 web+local。
 - evaluation 是工程质量代理指标，不是严格学术 benchmark。
 - 图增强是轻量实体/关系召回，不是完整知识图谱系统。

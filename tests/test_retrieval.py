@@ -1,6 +1,6 @@
 import pytest
 
-from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
+from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
 from agentic_research_copilot.provider_base import ModelUsage
 from agentic_research_copilot.retrieval import (
     BaseReranker,
@@ -28,7 +28,11 @@ class PreferSecondReranker(BaseReranker):
         ]
 
 
-class StaticContextProvider(DeterministicResearchModelProvider):
+def make_store(**kwargs) -> DocumentStore:
+    return DocumentStore(FixtureResearchModelProvider(), **kwargs)
+
+
+class StaticContextProvider(FixtureResearchModelProvider):
     name = "static_context_provider"
 
     def contextualize_chunk(self, **kwargs):
@@ -96,7 +100,7 @@ class StaticGraphProvider(StaticContextProvider):
 
 
 def test_document_store_returns_contextual_chunks():
-    store = DocumentStore(chunk_size=120, chunk_overlap=20)
+    store = make_store(chunk_size=120, chunk_overlap=20)
     document = store.add(
         title="Research Notes",
         source="notes.md",
@@ -132,7 +136,7 @@ def test_document_store_returns_contextual_chunks():
 
 
 def test_document_store_expands_child_hit_to_parent_context():
-    store = DocumentStore(chunk_size=70, chunk_overlap=0, parent_context_window=2, parent_context_max_chars=1200)
+    store = make_store(chunk_size=70, chunk_overlap=0, parent_context_window=2, parent_context_max_chars=1200)
     store.add(
         title="Pricing Playbook",
         source="pricing.md",
@@ -155,7 +159,7 @@ def test_document_store_expands_child_hit_to_parent_context():
 
 
 def test_document_store_fuses_light_rag_inspired_graph_signal():
-    store = DocumentStore(chunk_size=130, chunk_overlap=0, graph_enabled=True, graph_neighbor_limit=4)
+    store = make_store(chunk_size=130, chunk_overlap=0, graph_enabled=True, graph_neighbor_limit=4)
     store.add(
         title="Argus Runtime Notes",
         source="argus.md",
@@ -177,7 +181,7 @@ def test_document_store_fuses_light_rag_inspired_graph_signal():
 
 def test_document_store_indexes_structured_entity_relationship_graph():
     provider = StaticGraphProvider()
-    store = DocumentStore(
+    store = make_store(
         chunk_size=220,
         chunk_overlap=0,
         contextualizer_provider=provider,
@@ -212,7 +216,7 @@ def test_document_store_indexes_structured_entity_relationship_graph():
 
 
 def test_document_store_uses_real_bm25_keyword_index_for_exact_terms():
-    store = DocumentStore(chunk_size=140, chunk_overlap=0)
+    store = make_store(chunk_size=140, chunk_overlap=0)
     store.add(
         title="Generic Planning Notes",
         source="generic.md",
@@ -235,7 +239,7 @@ def test_document_store_uses_real_bm25_keyword_index_for_exact_terms():
 
 
 def test_contextual_retrieval_prefix_is_indexed_for_bm25():
-    store = DocumentStore(
+    store = make_store(
         chunk_size=160,
         chunk_overlap=0,
         contextualizer_provider=StaticContextProvider(),
@@ -259,7 +263,7 @@ def test_contextual_retrieval_prefix_is_indexed_for_bm25():
 
 
 def test_document_store_chunks_long_paragraphs_with_sentence_boundaries():
-    store = DocumentStore(chunk_size=90, chunk_overlap=12)
+    store = make_store(chunk_size=90, chunk_overlap=12)
     store.add(
         title="Long Parser Notes",
         source="parser.md",
@@ -278,7 +282,7 @@ def test_document_store_chunks_long_paragraphs_with_sentence_boundaries():
 
 
 def test_document_store_can_delete_single_document_from_index():
-    store = DocumentStore(chunk_size=120, chunk_overlap=20)
+    store = make_store(chunk_size=120, chunk_overlap=20)
     removed = store.add(
         title="Temporary Notes",
         source="tmp.md",
@@ -303,7 +307,7 @@ def test_document_store_can_delete_single_document_from_index():
 
 
 def test_document_store_accepts_pluggable_reranker():
-    store = DocumentStore(chunk_size=80, chunk_overlap=0, reranker=PreferSecondReranker())
+    store = make_store(chunk_size=80, chunk_overlap=0, reranker=PreferSecondReranker())
     store.add(
         title="Architecture Notes",
         source="notes.md",
@@ -320,7 +324,7 @@ def test_document_store_accepts_pluggable_reranker():
 
 
 def test_dashscope_reranker_falls_back_without_key():
-    store = DocumentStore(
+    store = make_store(
         chunk_size=80,
         chunk_overlap=0,
         reranker=DashScopeReranker(RerankerConfig(provider="dashscope", api_key="", base_url="")),
@@ -339,7 +343,7 @@ def test_dashscope_reranker_falls_back_without_key():
 
 
 def test_dashscope_reranker_strict_mode_raises_without_key():
-    store = DocumentStore(
+    store = make_store(
         chunk_size=80,
         chunk_overlap=0,
         reranker=DashScopeReranker(
@@ -362,7 +366,7 @@ def test_dashscope_reranker_strict_mode_raises_without_key():
 
 
 def test_document_store_profile_summarizes_internal_corpus():
-    store = DocumentStore()
+    store = make_store()
     store.add(title="Resume Notes", source="notes.md", content="Private notes about agent routing.")
     store.add(title="Project README", source="README.md", content="Project overview and grounding.")
 

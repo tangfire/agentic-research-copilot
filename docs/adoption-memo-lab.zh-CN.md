@@ -25,15 +25,15 @@
 python scripts/run_adoption_memo_experiment.py --clean
 ```
 
-真实模式会使用当前 `.env` 里的真实 provider：chat model、Tavily 搜索、embedding、rerank、本地 Qdrant、trace 和 evaluation。它不是 deterministic 假跑。
+真实模式会使用当前 `.env` 里的真实 provider：chat model、Tavily 搜索、embedding、rerank、本地 Qdrant、trace 和 evaluation。它不是假跑。
 
-如果你只是想做离线回归测试，才使用 deterministic：
+如果你只是想做离线回归测试，可以显式使用 fixture：
 
 ```powershell
-python scripts/run_adoption_memo_experiment.py --clean --mode deterministic
+python scripts/run_adoption_memo_experiment.py --clean --mode fixture
 ```
 
-deterministic 的作用是稳定测试流程和数据结构，不适合用来证明产品真实有效。
+fixture 的作用是稳定测试流程和数据结构，不适合用来证明产品真实有效。
 
 ## GitHub MCP 怎么接
 

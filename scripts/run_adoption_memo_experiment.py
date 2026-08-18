@@ -8,7 +8,6 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
 from agentic_research_copilot.mcp_tools import build_mcp_tool
 from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.schemas import EvidenceItem, ResearchRequest, ResearchRun
@@ -21,6 +20,7 @@ from agentic_research_copilot.settings import (
     resolve_storage_path,
 )
 from agentic_research_copilot.storage import SQLiteStore
+from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
 
 
 LAB_DIR = Path("examples/adoption-lab")
@@ -100,8 +100,8 @@ def main() -> None:
     parser.add_argument(
         "--mode",
         default="real",
-        choices=["deterministic", "real"],
-        help="Use real configured providers, or deterministic providers for offline regression tests.",
+        choices=["real", "fixture"],
+        help="Use real configured providers, or explicit fixture injection for local regression checks.",
     )
     parser.add_argument("--use-mcp", action="store_true", help="Use configured MCP tools for this run.")
     parser.add_argument(
@@ -120,7 +120,16 @@ def main() -> None:
     _validate_experiment_settings(settings, mode=args.mode, use_mcp=args.use_mcp)
     _clear_experiment_store(settings)
 
-    copilot = ResearchCopilot(settings=settings)
+    fixture_provider = (
+        FixtureResearchModelProvider(embedding_dimensions=settings.embedding_dimensions)
+        if args.mode == "fixture"
+        else None
+    )
+    copilot = ResearchCopilot(
+        settings=settings,
+        model_provider=fixture_provider,
+        embedding_provider=fixture_provider,
+    )
     try:
         if not args.full_real_indexing:
             _use_budgeted_indexing(copilot, settings)
@@ -136,7 +145,7 @@ def main() -> None:
     finally:
         copilot.close()
 
-    summary = _build_summary(run, settings)
+    summary = _build_summary(run, settings, mode=args.mode)
     _write_outputs(run, settings, summary)
     print(json.dumps(summary["headline"], ensure_ascii=False))
 
@@ -182,16 +191,14 @@ def _experiment_settings(*, use_mcp: bool, mode: str) -> AppSettings:
                 ),
             }
         )
-    if mode == "deterministic":
+    if mode == "fixture":
         updates.update(
             {
-                "model_provider": "deterministic",
-                "embedding_provider": "deterministic",
                 "search_provider": "none",
                 "rerank_provider": "rule",
                 "mcp_enabled": False,
-                "model_chat_model": "heuristic-chat",
-                "embedding_model": "hashed-embedding",
+                "model_chat_model": "fixture-chat",
+                "embedding_model": "fixture-embedding",
             }
         )
     return settings.model_copy(
@@ -271,17 +278,17 @@ def _use_budgeted_indexing(copilot: ResearchCopilot, settings: AppSettings) -> N
     Document contextualization and graph extraction call the chat provider once per
     chunk. In strict real-provider mode that can dominate a small demo run. This
     lab keeps embeddings/search/research decisions/reporting real by default, but
-    uses deterministic indexing helpers so the local context pack remains
-    repeatable and fast.
+    uses fixture indexing helpers so the local context pack remains repeatable
+    and fast.
     """
-    helper = DeterministicResearchModelProvider(
+    helper = FixtureResearchModelProvider(
         embedding_dimensions=settings.embedding_dimensions
     )
     copilot.documents.contextualizer_provider = helper
     copilot.documents.graph_provider = helper
 
 
-def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
+def _build_summary(run: ResearchRun, settings: AppSettings, *, mode: str = "real") -> dict[str, Any]:
     report_text = _report_text(run)
     source_blob = "\n".join(
         [
@@ -361,9 +368,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
             "mcp_tools": settings.mcp_tools if settings.mcp_enabled else [],
             "rerank_provider": settings.rerank_provider,
             "qdrant": "local-path",
-            "experiment_mode": "deterministic"
-            if settings.model_provider == "deterministic"
-            else "real",
+            "experiment_mode": mode,
         },
         "evaluation": run.evaluation.model_dump(mode="json") if run.evaluation else None,
         "findings": [
