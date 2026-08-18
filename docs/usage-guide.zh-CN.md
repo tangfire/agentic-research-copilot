@@ -68,7 +68,7 @@ http://127.0.0.1:8000/docs
 - 工作区：团队背景、技术栈、部署约束、偏好来源。
 - Skill：当前选择的场景 playbook 和可执行脚本。
 - 工具：web、vector、GitHub MCP 的状态和调用记录。
-- 路由：三个 specialist 分别被选择的原因。
+- 路由：RepoSignal / ArchitectureFit / OpsRisk 三个 specialist lane 为什么被选中。
 - 质量：引用、忠实度、上下文召回和约束覆盖。
 
 ## 4. 记忆怎么用
@@ -141,7 +141,7 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 这条顺序对应 agent 的核心链路：
 
 ```text
-为什么选这个 specialist
+为什么选这个 specialist lane
 -> 调用了哪些工具
 -> 中间经过哪些步骤
 -> 结果质量如何
@@ -156,4 +156,3 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 2. 再保存一条 project constraint，观察下一次计划是否自动使用。
 3. 再打开高级信息，理解 route、tool loop 和 trace。
 4. 最后运行 benchmark，观察 route precision / recall 和 constraint coverage。
-

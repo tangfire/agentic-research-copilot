@@ -36,7 +36,7 @@
 
 读这些文件：
 
-1. `docs/product-positioning.md`
+1. `docs/project-guide.zh-CN.md`
 2. `docs/architecture.md`
 3. `src/agentic_research_copilot/schemas.py`
 4. `src/agentic_research_copilot/server.py`
@@ -87,8 +87,8 @@ API -> ResearchCopilot -> LangGraphResearchRuntime -> agents/tools/retrieval -> 
 
 读这些文件：
 
-1. `docs/interview-notes.zh-CN.md`
-2. `docs/resume-demo-runbook.md`
+1. `docs/interview-question-bank.zh-CN.md`
+2. `docs/demo-script.zh-CN.md`
 3. `docs/hardening-roadmap.md`
 4. `examples/eval-dataset.jsonl`
 
@@ -1177,8 +1177,8 @@ Codex 是成熟产品，这个项目是学习和复现底层机制。你不是�
 
 读：
 
-- `docs/resume-demo-runbook.md`
-- `docs/interview-notes.zh-CN.md`
+- `docs/demo-script.zh-CN.md`
+- `docs/interview-question-bank.zh-CN.md`
 - `examples/eval-dataset.jsonl`
 
 产出：

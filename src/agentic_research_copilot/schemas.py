@@ -461,6 +461,7 @@ class AgentRoleAssignment(BaseModel):
     agent_id: AgentSpecialistId
     agent_name: str
     status: AgentRoleStatus = "selected"
+    execution_mode: Literal["role_routing_overlay"] = "role_routing_overlay"
     reason: str = ""
     plan_item_ids: list[str] = Field(default_factory=list)
     selected_tools: list[ResearchToolName] = Field(default_factory=list)
@@ -480,6 +481,7 @@ class RouteDecision(BaseModel):
     agent_id: AgentSpecialistId
     agent_name: str
     status: RouteDecisionStatus = "selected"
+    execution_mode: Literal["role_routing_overlay"] = "role_routing_overlay"
     mode: Literal["external", "internal", "hybrid"] = "hybrid"
     selected_tools: list[ResearchToolName] = Field(default_factory=list)
     reason: str = ""
@@ -538,6 +540,7 @@ class BenchmarkRunSummary(BaseModel):
     run_id: str | None = None
     session_id: str | None = None
     task_id: str | None = None
+    metric_scope: Literal["labeled_fixture_or_proxy"] = "labeled_fixture_or_proxy"
     route_precision: float = 0.0
     route_recall: float = 0.0
     specialist_completion_rate: float = 0.0

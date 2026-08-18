@@ -919,11 +919,14 @@
       if (!plan) {
         return '<section class="block"><h3>计划</h3><p>还没有计划。先在左侧输入研究目标和团队约束。</p></section>';
       }
+      const rolePreview = (plan.metadata && plan.metadata.role_preview) || {};
+      const previewLanes = rolePreview.selected_lanes || rolePreview.selected_agents || [];
       return `
         <section class="block">
           <h3>计划</h3>
           <p>${escapeHtml(plan.research_brief)}</p>
           <ol>${plan.plan_items.map((item) => `<li>${escapeHtml(item.question)}</li>`).join("")}</ol>
+          ${previewLanes.length ? `<p class="subtle">专长路由预览：${previewLanes.map((lane) => escapeHtml(lane)).join(" / ")}。这是责任分配预览，不是第二套研究执行。</p>` : ""}
           <div class="settings">
             <button id="confirmPlanInline" class="primary">确认并开始研究</button>
             <button id="continueConstraintsBtn">继续补充约束</button>
@@ -1059,7 +1062,7 @@
         <section class="block">
           <h3>路由</h3>
           <div class="metric-grid">
-            ${metric("角色数", assignments.length)}
+            ${metric("专长 lane", assignments.length)}
             ${metric("路由数", decisions.length)}
             ${metric("冲突数", conflicts.length)}
             ${metric("回放一致性", summary.replay_fidelity)}
@@ -1075,7 +1078,7 @@
               <span>${escapeHtml(short(assignment.reason, 180))}</span>
               <span class="subtle">${escapeHtml((assignment.selected_tools || []).join(", ") || "无工具")} · 证据 ${escapeHtml(assignment.evidence_count || 0)}</span>
             </div>
-          `).join("") : '<p>还没有角色分配。</p>'}
+          `).join("") : '<p>还没有专长路由。</p>'}
           ${conflicts.length ? `
             <h3>冲突</h3>
             ${conflicts.slice(0, 6).map((conflict) => `

@@ -39,7 +39,7 @@ class SpecialistProfile:
 SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
     "repo_signal": SpecialistProfile(
         agent_id="repo_signal",
-        agent_name="RepoSignalAgent",
+        agent_name="RepoSignalLane",
         responsibility="Checks repository facts, maintenance signals, code/issue/PR/release evidence, and source authority.",
         trigger_keywords=(
             "repo",
@@ -66,7 +66,7 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
     ),
     "architecture_fit": SpecialistProfile(
         agent_id="architecture_fit",
-        agent_name="ArchitectureFitAgent",
+        agent_name="ArchitectureFitLane",
         responsibility="Checks architecture fit, API/runtime design, integration cost, workflow semantics, and local KB alignment.",
         trigger_keywords=(
             "architecture",
@@ -103,7 +103,7 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
     ),
     "ops_risk": SpecialistProfile(
         agent_id="ops_risk",
-        agent_name="OpsRiskAgent",
+        agent_name="OpsRiskLane",
         responsibility="Checks deployment, rollback, compliance, dependency, cost, reliability, and operational risk constraints.",
         trigger_keywords=(
             "ops",
@@ -267,6 +267,8 @@ def specialist_catalog() -> list[dict[str, Any]]:
             "preferred_tools": list(profile.preferred_tools),
             "exclusive_tools": list(profile.exclusive_tools),
             "shared_tools": list(profile.shared_tools),
+            "execution_mode": "role_routing_overlay",
+            "online_worker": False,
         }
         for profile in SPECIALIST_PROFILES.values()
     ]
@@ -293,9 +295,11 @@ def role_preview_for_plan(
             item_roles[item_id] = [_best_role_for_text(_plan_item_text(next(item for item in plan if item.id == item_id)), selected)]
     return {
         "selected_agents": [SPECIALIST_PROFILES[role_id].agent_name for role_id in selected],
+        "selected_lanes": [SPECIALIST_PROFILES[role_id].agent_name for role_id in selected],
         "selected_agent_ids": selected,
         "item_roles": item_roles,
         "reason": _selection_reason(selected),
+        "execution_mode": "role_routing_overlay",
     }
 
 
@@ -468,6 +472,11 @@ def build_role_assignments(
                     "responsibility": profile.responsibility,
                     "preferred_tools": list(profile.preferred_tools),
                     "skill_id": skill_id,
+                    "online_worker": False,
+                    "execution_boundary": (
+                        "This specialist lane is a route/evidence ownership overlay. "
+                        "It does not start a second model/tool execution after the LangGraph runtime."
+                    ),
                 },
             )
         )
@@ -796,11 +805,13 @@ def _append_harness_trace(
         RunTraceEvent(
             kind="step",
             actor="multi_agent_harness",
-            message="Assigned plan items to specialist lanes.",
+            message="Mapped completed research artifacts to specialist lanes.",
             step="harness.role_assignment",
             metadata={
                 "role_assignments": [assignment.model_dump(mode="json") for assignment in assignments],
                 "selected_agent_ids": [assignment.agent_id for assignment in assignments],
+                "execution_mode": "role_routing_overlay",
+                "online_worker": False,
             },
         )
     )
@@ -815,6 +826,7 @@ def _append_harness_trace(
                 "conflict_count": len(conflicts),
                 "evidence_ledger": evidence_ledger.model_dump(mode="json"),
                 "benchmark_summary": summary.model_dump(mode="json"),
+                "execution_mode": "role_routing_overlay",
             },
         )
     )

@@ -33,6 +33,7 @@ from .schemas import (
     WorkspaceProfile,
     ToolInvocation,
 )
+from .multi_agent_harness import role_preview_for_plan
 from .skill_registry import SkillRegistry
 
 
@@ -346,6 +347,12 @@ class ConversationalResearchAgent:
         session = self._save_session_status(session, "planning")
         corpus_profile = self.copilot.documents.profile()
         planner_contract = self.copilot.planner.draft(research_request, corpus_profile=corpus_profile)
+        role_preview = role_preview_for_plan(
+            research_request,
+            planner_contract.plan,
+            skill_id=selected_skill.skill_id,
+            workspace_context=_workspace_context_summary(workspace),
+        )
         plan_draft = AgentPlanDraft(
             session_id=session_id,
             workspace_id=workspace.workspace_id,
@@ -361,6 +368,7 @@ class ConversationalResearchAgent:
                 "planner_confidence": planner_contract.confidence,
                 "memory_ids": [memory.memory_id for memory in self.relevant_memory(content, session_id=session_id)],
                 "mcp_status": self.mcp_status(),
+                "role_preview": role_preview,
                 "skill_preflight": skill_preflight.model_dump(mode="json") if skill_preflight is not None else None,
                 "skill_id": selected_skill.skill_id,
                 "skill_name": selected_skill.name,
@@ -389,6 +397,7 @@ class ConversationalResearchAgent:
                 "required_confirmation": True,
                 "skill_id": selected_skill.skill_id,
                 "workspace_id": workspace.workspace_id,
+                "role_preview": role_preview,
                 "skill_preflight": skill_preflight.model_dump(mode="json") if skill_preflight is not None else None,
             },
         )
@@ -401,6 +410,7 @@ class ConversationalResearchAgent:
                 "required_confirmation": True,
                 "plan_item_count": len(plan_draft.plan_items),
                 "skill_id": selected_skill.skill_id,
+                "role_preview": role_preview,
                 "skill_preflight": skill_preflight.model_dump(mode="json") if skill_preflight is not None else None,
             },
         )
@@ -1861,6 +1871,21 @@ def _default_skill_catalog() -> list[ResearchSkill]:
             metadata={"default": False},
         ),
     ]
+
+
+def _workspace_context_summary(workspace: WorkspaceProfile) -> str:
+    parts: list[str] = []
+    if workspace.name:
+        parts.append(f"name={workspace.name}")
+    if workspace.team_context:
+        parts.append(f"team={workspace.team_context}")
+    if workspace.default_stack:
+        parts.append(f"stack={', '.join(workspace.default_stack)}")
+    if workspace.deployment_constraints:
+        parts.append(f"deployment={', '.join(workspace.deployment_constraints)}")
+    if workspace.risk_policy:
+        parts.append(f"risk={workspace.risk_policy}")
+    return " ; ".join(parts)
 
 
 def _stable_id(*parts: str | None) -> str:

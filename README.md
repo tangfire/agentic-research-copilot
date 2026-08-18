@@ -4,7 +4,7 @@
 
 The goal is not to beat mature general-purpose agents. The goal is to implement the engineering skeleton behind a citation-grounded research agent: session state, memory, interactive planning, human confirmation, step visibility, tool policy, approval artifacts, evidence routing, GitHub MCP integration, local Agentic RAG, report synthesis, constraint coverage, verification, evaluation, and trace replay.
 
-See [Product Positioning](docs/product-positioning.md), [Architecture](docs/architecture.md), [Research Desk v3 Architecture](docs/research-desk-v3-architecture.zh-CN.md), [OpenClaw / Hermes Design Notes](docs/openclaw-hermes-design-notes.zh-CN.md), [Agent Maturity Pack](docs/agent-maturity-pack.zh-CN.md), [Tool Loop And HITL](docs/tool-loop-and-hitl.zh-CN.md), [Memory And Constraint Evaluation](docs/memory-and-constraint-eval.zh-CN.md), [Agent Reference Stack](docs/agent-reference-stack.zh-CN.md), [Autumn Recruiting Playbook](docs/autumn-recruiting-playbook.zh-CN.md), [Interview Question Bank](docs/interview-question-bank.zh-CN.md), [Demo Script](docs/demo-script.zh-CN.md), [Usage Guide](docs/usage-guide.zh-CN.md), [Hardening Roadmap](docs/hardening-roadmap.md), and [Chinese Interview Notes](docs/interview-notes.zh-CN.md) for the intended project boundary.
+Read [Project Guide](docs/project-guide.zh-CN.md) first. The supporting documents are [Architecture](docs/architecture.md), [OpenClaw / Hermes Design Notes](docs/openclaw-hermes-design-notes.zh-CN.md), [Agent Maturity Pack](docs/agent-maturity-pack.zh-CN.md), [Tool Loop And HITL](docs/tool-loop-and-hitl.zh-CN.md), [Memory And Constraint Evaluation](docs/memory-and-constraint-eval.zh-CN.md), [Autumn Recruiting Playbook](docs/autumn-recruiting-playbook.zh-CN.md), [Interview Question Bank](docs/interview-question-bank.zh-CN.md), [Demo Script](docs/demo-script.zh-CN.md), [Usage Guide](docs/usage-guide.zh-CN.md), and [Hardening Roadmap](docs/hardening-roadmap.md).
 
 ## Honest Positioning
 
@@ -39,7 +39,27 @@ The conversational layer now also carries a workspace control plane and a small 
 
 The skill layer is now backed by local skill packs under `skills/`: each pack can ship a `skill.json` manifest, a `SKILL.md` instruction file, and optional whitelist-only scripts that run through a controlled JSON stdin/stdout boundary. This is intentionally smaller than a full plugin marketplace, but it is real enough to demonstrate discoverable skills, instruction loading, preflight hooks, and safe local execution.
 
-The v4 harness keeps the multi-agent story narrow: `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent` are stable specialist lanes for open-source adoption review. They do not replace the underlying planner/researcher/reporter; they make route decisions, evidence ownership, conflicts, and benchmark summaries visible in the run artifact and session export.
+The v4 specialist routing layer keeps the role story narrow: `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane` are stable responsibility lanes for open-source adoption review. They do not start another model/tool loop after the research runtime. They make route decisions, evidence ownership, conflicts, and benchmark summaries visible in the run artifact and session export.
+
+## Node, Agent, And Lane
+
+These three words have different meanings in this repository:
+
+- **Workflow node**: a LangGraph state transition such as `planner`, `research_supervisor`, `parallel_research`, `reporter`, or `verifier_evaluator`. A node controls when a stage runs and how state moves.
+- **Agent**: a model-backed capability invoked by a node, such as `PlannerAgent`, `SupervisorAgent`, `ResearchAgent`, `ReporterAgent`, or `VerifierAgent`. An agent owns a decision contract or execution contract.
+- **Specialist lane**: a bounded role-routing overlay. `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane` describe which responsibility and evidence should be covered. They do not invoke a second hidden research workflow.
+
+The execution path is therefore one workflow:
+
+```text
+LangGraph node -> agent capability -> shared state/evidence -> next node
+```
+
+The specialist lane is selected before and recorded during the run, then used to explain evidence ownership and evaluate route precision/recall. It is not:
+
+```text
+workflow nodes -> another hidden agent loop -> final report
+```
 
 ## What The System Does
 
@@ -55,7 +75,7 @@ The v4 harness keeps the multi-agent story narrow: `RepoSignalAgent`, `Architect
 10. `Retriever` grounds uploaded documents and project memory with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, graph signal fusion, and reranking.
 11. `Reporter` writes topic-specific sections from notes and evidence. It does not use fixed demo sections.
 12. `ConstraintCoverage` checks hard project constraints against report sections and evidence, adding warnings or failing evaluation when coverage is too weak.
-13. `MultiAgentHarness` maps plan items to `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent`, then writes role assignments, route decisions, conflicts, an evidence ledger, and benchmark proxy metrics.
+13. `Specialist routing` maps plan items to `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane`, then writes role assignments, route decisions, conflicts, an evidence ledger, and labeled/proxy benchmark metrics. The compatibility module is `multi_agent_harness.py`; it does not execute another research loop.
 14. `Verifier` and `RAGEvaluator` check citation coverage, evidence sufficiency, source diversity, context precision, and unsupported sections.
 15. `RunLedger`, SQLite storage, telemetry, and LangGraph checkpoints make the run inspectable; frozen replay reuses saved artifacts instead of re-calling live tools.
 
@@ -264,14 +284,14 @@ Open the local workbench at `http://127.0.0.1:8000/`.
 
 Read in this order:
 
-1. `docs/product-positioning.md`
+1. `docs/project-guide.zh-CN.md`
 2. `docs/architecture.md`
 3. `docs/agent-maturity-pack.zh-CN.md`
 4. `docs/tool-loop-and-hitl.zh-CN.md`
 5. `docs/memory-and-constraint-eval.zh-CN.md`
-6. `docs/interview-question-bank.zh-CN.md`
-7. `docs/source-map.md`
-8. `docs/learning/zh/ai_research_copilot_learning_guide_zh.md`
+6. `docs/autumn-recruiting-playbook.zh-CN.md`
+7. `docs/interview-question-bank.zh-CN.md`
+8. `docs/learning/zh/agentic_research_runtime_deep_learning_guide_zh.md`
 9. `src/agentic_research_copilot/agent.py`
 10. `src/agentic_research_copilot/schemas.py`
 11. `src/agentic_research_copilot/providers.py`

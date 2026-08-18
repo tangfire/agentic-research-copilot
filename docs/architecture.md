@@ -11,7 +11,7 @@ The runtime is aimed at open-source project research, engineering decision resea
 The current runtime path is:
 
 ```text
-chat session -> memory -> clarify/plan -> confirm -> step stream -> tool policy/approval -> supervise -> search/read/retrieve -> synthesize -> constraint gate -> verify/evaluate -> multi-agent harness -> frozen replay
+chat session -> memory -> clarify/plan -> confirm -> step stream -> tool policy/approval -> supervise -> search/read/retrieve -> synthesize -> constraint gate -> verify/evaluate -> specialist routing/evidence ledger -> frozen replay
 ```
 
 The agent layer is deliberately thin. It owns `AgentSession`, `AgentMessage`, `AgentPlanDraft`, `AgentRunStep`, memory extraction, memory lookup, tool policy, approval artifacts, and the confirmation gate. It does not replace `ResearchCopilot`; it converts a confirmed plan into the existing `ResearchRequest` and binds the resulting job/run back to the session.
@@ -55,8 +55,8 @@ flowchart LR
   Reporter --> Verifier["Verifier"]
   Verifier --> Coverage["Constraint Coverage Gate"]
   Coverage --> Eval["RAG Evaluator"]
-  Eval --> Harness["Role Assignment / Evidence Ledger / Conflicts"]
-  Harness --> Storage["SQLite Runs / Trace / Evaluation"]
+  Eval --> Routing["Specialist Role Routing / Evidence Ledger / Conflicts"]
+  Routing --> Storage["SQLite Runs / Trace / Evaluation"]
   Storage --> Session
   Storage --> Steps
 ```
@@ -86,6 +86,22 @@ Important schema objects:
 - `AgentSessionBundle`: session, messages, plan draft, relevant memory, steps, tool registry, tool invocations, approval requests, active job, active run, constraint coverage, memory evaluation, role assignments, route decisions, evidence ledger, benchmark summary, and MCP status.
 
 The most important design choice is the confirmation gate. A good agent should not turn every chat turn into a long-running research job. The session first collects constraints, asks one clarification question if needed, or drafts a plan. Only `POST /v1/agent/sessions/{session_id}/confirm-plan` starts the research job.
+
+## Node, Agent, And Specialist Lane Boundary
+
+The project uses three different layers and deliberately does not execute them twice:
+
+- A **workflow node** is a control-flow position in `LangGraphResearchRuntime`. It reads and writes `ResearchGraphState`, records checkpoints, and decides which stage runs next.
+- An **agent** is a model-backed capability called by a node. `PlannerAgent` creates the plan, `SupervisorAgent` delegates research units, `ResearchAgent` runs the bounded tool loop, `ReporterAgent` synthesizes the report, and `VerifierAgent` checks quality.
+- A **specialist lane** is a responsibility label attached to plan items and evidence. `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane` are selected before the run and recorded after the run for route/evidence evaluation. They do not make a second model call or start another tool loop.
+
+The important execution rule is:
+
+```text
+node -> agent capability -> shared state/evidence -> next node
+```
+
+The specialist routing module is an explanation and evaluation boundary, not a hidden second workflow. Its exported `execution_mode` is `role_routing_overlay`, and `online_worker` is `false`.
 
 ## Workspace And Skills
 
@@ -140,17 +156,17 @@ Default tool policy:
 - `vector_retrieval`: low risk, no approval.
 - `mcp_tool`: medium risk, enabled only when configured and authenticated. If configured but unavailable, the UI shows `GitHub MCP not configured`, writes a pending approval, and does not count fake MCP evidence.
 
-## Multi-Agent Harness
+## Specialist Routing Harness
 
-v4 adds a narrow specialist harness for the open-source adoption review scenario. It does not add a general agent platform.
+v4 adds a narrow specialist routing harness for the open-source adoption review scenario. It does not add a general agent platform or a second execution graph.
 
 The stable roles are:
 
-- `RepoSignalAgent`: repository facts, code, issues, pull requests, releases, licenses, and source authority.
-- `ArchitectureFitAgent`: architecture fit, API/runtime semantics, integration cost, workflow design, and local KB alignment.
-- `OpsRiskAgent`: deployment, rollback, dependency, security/compliance, cost, latency, and reliability constraints.
+- `RepoSignalLane`: repository facts, code, issues, pull requests, releases, licenses, and source authority.
+- `ArchitectureFitLane`: architecture fit, API/runtime semantics, integration cost, workflow design, and local KB alignment.
+- `OpsRiskLane`: deployment, rollback, dependency, security/compliance, cost, latency, and reliability constraints.
 
-The harness runs after the research runtime has produced plan items, routes, evidence, report, and evaluation. It writes:
+The plan stage also exposes a routing preview. After the research runtime has produced plan items, routes, evidence, report, and evaluation, the harness materializes the final ownership and quality artifacts. It writes:
 
 - `AgentRoleAssignment`
 - `RouteDecision`
@@ -158,7 +174,7 @@ The harness runs after the research runtime has produced plan items, routes, evi
 - `EvidenceLedger`
 - `BenchmarkRunSummary`
 
-This is deliberately an observability and evaluation layer, not a second hidden research engine. The goal is to answer interview questions such as "who did what", "why use multiple roles", "which evidence was used", and "where did the run fail".
+This is deliberately a role-routing, observability, and evaluation layer, not a second hidden research engine. The goal is to answer interview questions such as "which responsibility was selected", "which evidence was used", and "where did the run fail".
 
 Replay is now frozen-artifact replay. `POST /v1/research/runs/{run_id}/replay` creates a new run id from the saved report/evidence/trace artifacts and appends a `replay.frozen` trace event. It does not re-call live search, MCP, or model tools.
 
@@ -178,12 +194,15 @@ supervisor_start
 
 `revision_prepare` loops back to `planner` when verification or evaluation detects quality gaps and revision budget remains.
 
+The node names are not extra agents. They are the durable control-flow points where the model-backed agents are invoked. For example, `parallel_research` calls the `ResearchAgent` for multiple plan items; it does not call a separate specialist agent after the research agent finishes.
+
 ## Core Design Choices
 
 - `LangGraph` is used because the workflow has explicit state, branches, retries, revision loops, checkpoints, and finalization.
 - `FastAPI` is used as a thin local API, not as a business CRUD backend.
 - `SQLite` persists sessions, messages, plan drafts, memory, jobs, runs, and replayable research artifacts for a single-user local workbench.
 - `AgentRunStep` and `RunTraceEvent` are both kept: steps are session-facing and trace is runtime-facing.
+- `role_routing_overlay` is kept separate from online execution so route precision/recall cannot be mistaken for proof that three independent model workers ran.
 - `Tool policy` is explicit but bounded. v2 supports web/vector/MCP observability and MCP auth gating, not destructive local tools.
 - `Qdrant` handles dense retrieval for uploaded/project documents.
 - `SQLite FTS5/BM25` provides exact lexical recall and keeps local demos reproducible.

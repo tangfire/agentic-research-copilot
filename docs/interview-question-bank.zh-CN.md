@@ -62,21 +62,21 @@ team constraints / repo / technical question
 
 30 秒答法：
 
-> 主链路里有 ConversationalResearchAgent 做会话入口和确认门，底层 research runtime 里有 planner、research supervisor、researcher、retriever、reporter、verifier、evaluator。v4 里我又加了一个轻量的 multi-agent harness，把结果按 RepoSignal、ArchitectureFit、OpsRisk 三个专家角色做归类和复盘。
+> 主链路里有 ConversationalResearchAgent 做会话入口和确认门，底层 research runtime 里有 planner、research supervisor、researcher、retriever、reporter、verifier、evaluator。v4 里我又加了一个轻量的 specialist routing layer，把结果按 RepoSignalLane、ArchitectureFitLane、OpsRiskLane 三个责任边界做归类和复盘。
 
 对应 artifact：`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/multi_agent_harness.py`
 
-### Q5: 为什么要拆成三个专家角色，而不是一个大 Agent？
+### Q5: 为什么要拆成三个专长 lane，而不是一个大 Agent？
 
 考察点：是不是硬凑多 Agent。
 
 30 秒答法：
 
-> 因为开源引入评审本身就有三类稳定问题：仓库事实是否可信、架构是否适配、部署和运维风险是否可接受。拆成三个角色能让 planner 的路由、报告的覆盖和 review 的证据更清楚，而不是一个角色同时管所有东西。
+> 因为开源引入评审本身就有三类稳定问题：仓库事实是否可信、架构是否适配、部署和运维风险是否可接受。拆成三个 lane 能让 planner 的路由、报告的覆盖和 review 的证据更清楚，而不是一个责任边界同时管所有东西。
 
 2 分钟答法：
 
-> 我不是为了多 Agent 而多 Agent。拆角色的前提是每个角色有稳定职责和触发信号：RepoSignalAgent 看 repo 信号和开发事实，ArchitectureFitAgent 看架构和集成成本，OpsRiskAgent 看部署、回滚、依赖和风险。这样最终 memo 里的每一段都能对应一个责任边界。
+> 我不是为了多 Agent 而多 Agent。拆角色的前提是每个 lane 有稳定职责和触发信号：RepoSignalLane 看 repo 信号和开发事实，ArchitectureFitLane 看架构和集成成本，OpsRiskLane 看部署、回滚、依赖和风险。这样最终 memo 里的每一段都能对应一个责任边界。
 
 对应 artifact：`src/agentic_research_copilot/multi_agent_harness.py`
 
@@ -86,7 +86,7 @@ team constraints / repo / technical question
 
 30 秒答法：
 
-> 可以退化成单 Agent，但那样角色分工、路由精度和证据覆盖会变差。这个项目里多角色更多是为了让研究任务的责任边界清楚，而不是为了堆并发。
+> 可以退化成单 Agent，但那样角色分工、路由精度和证据覆盖会变差。这个项目里多角色更多是为了让研究任务的责任边界清楚，而不是为了堆并发。真正执行还是同一条 workflow，不是先跑一遍节点再偷偷跑一遍 agent。
 
 ## 3. 工具与技能
 

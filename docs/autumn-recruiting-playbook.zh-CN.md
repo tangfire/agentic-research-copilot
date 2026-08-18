@@ -260,15 +260,15 @@ http://127.0.0.1:8000/
 
 v4 不再把“多 Agent”讲成数量，而是讲成责任边界：
 
-- `RepoSignalAgent`：仓库、代码、issue、PR、release 和 license 事实。
-- `ArchitectureFitAgent`：架构适配、API、workflow、集成成本和本地知识库。
-- `OpsRiskAgent`：部署、回滚、依赖、可靠性、成本和风险。
+- `RepoSignalLane`：仓库、代码、issue、PR、release 和 license 事实。
+- `ArchitectureFitLane`：架构适配、API、workflow、集成成本和本地知识库。
+- `OpsRiskLane`：部署、回滚、依赖、可靠性、成本和风险。
 
-Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循环和报告生成。三类 specialist lane 负责把“谁应该关注什么”显式写进 run artifact。Writer 合并结论，Verifier 检查证据、冲突和约束覆盖。
+Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循环和报告生成。三类 specialist lane 负责把“谁应该关注什么”显式写进 run artifact。Writer 合并结论，Verifier 检查证据、冲突和约束覆盖。它们不是第二套在线研究 worker。
 
 可以这样回答“这是不是硬凑技术”：
 
-> 如果只是问一个事实，三个 specialist 确实是过度设计。但开源引入评审需要同时回答仓库事实、架构适配和运维风险，而且每一类证据来源和失败方式都不同。我只保留三个稳定角色，并用 route precision、evidence utilization、constraint coverage 和 conflict record 验证拆分是否有价值。
+> 如果只是问一个事实，三个 specialist 确实是过度设计。但开源引入评审需要同时回答仓库事实、架构适配和运维风险，而且每一类证据来源和失败方式都不同。我只保留三个稳定 lane，并用 route precision、evidence utilization、constraint coverage 和 conflict record 验证拆分是否有价值。
 
 可以这样回答“和研究闭环有什么关系”：
 

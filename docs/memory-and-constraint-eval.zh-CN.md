@@ -163,6 +163,11 @@ memory_recall = 有 accepted memory 的 user message 数 / user message 总数
 project_constraint_count = accepted 里 project 或 constraint 的数量
 ```
 
+这里要区分两种结果：
+
+- session endpoint 的指标来自真实对话中的 `MemoryExtractionResult`。
+- `scripts/run_memory_constraint_eval.py` 读取 adoption-lab 的 curated team context 和报告，是一个 `curated_fixture_proxy`，不能当成通用 memory benchmark。
+
 它能回答：
 
 - 用户给了约束，系统是否抽出来？
@@ -239,6 +244,8 @@ GET /v1/research/runs/{run_id}/constraint-coverage
 ```powershell
 python scripts/run_memory_constraint_eval.py
 ```
+
+这个脚本会过滤常见英文 stopwords，再用 `threshold=0.45` 判断覆盖。`weak=true` 表示有一些关键词重合，但还没有达到稳定覆盖阈值。
 
 ## 7. Constraint Coverage 怎么算
 
@@ -323,4 +330,3 @@ DELETE /v1/memory/{memory_id}
 被问“memory 会不会越存越脏”：
 
 > 会，所以 v2 不把所有话都长期保存。它只保存明确偏好、团队约束和会话事实，并记录 MemoryExtractionResult。后续可以引入人工标注集和 LLM extractor 做更严格的 precision/recall。
-
