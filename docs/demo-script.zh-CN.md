@@ -89,15 +89,24 @@ http://127.0.0.1:8000/
 重点切右侧：
 
 - `Tools`：tool registry / invocation / approval
+- `Harness`：RepoSignal / ArchitectureFit / OpsRisk 三个 specialist lane、route decisions、conflicts、evidence ledger、benchmark summary
 - `Quality`：citation precision / context recall / constraint coverage
 - `Run Result`：report / source index / recommendation
 - `Export`：导出整个 session bundle
+
+讲法：
+
+> 这里的 multi-agent 不是为了把 agent 数量堆上去，而是把开源引入评审拆成三个稳定责任边界：仓库事实、架构适配、运维风险。Harness 区能看到每个角色负责哪些 plan item、用了哪些工具、拿到多少证据，以及 Verifier 发现了哪些冲突或覆盖缺口。
 
 ### Step 6：收尾
 
 讲一句：
 
 > 这不是一个“能聊天的玩具”，而是一个能把研究过程结构化、可复盘、可解释的 agent runtime。
+
+如果演示 replay：
+
+> Replay 不是重新联网再跑一次，而是基于冻结的 run artifact 生成一个新 run id，用来复盘当时的工具结果、报告、trace 和质量指标。
 
 ## 4. 如果 GitHub MCP 没配置
 

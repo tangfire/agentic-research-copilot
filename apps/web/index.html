@@ -763,6 +763,7 @@
         renderSkills(bundle),
         renderPlan(bundle.plan_draft),
         renderMemory(bundle),
+        renderHarness(bundle),
         renderTools(bundle),
         renderQuality(bundle),
         renderRun(bundle.active_run),
@@ -905,6 +906,61 @@
                 <span>${escapeHtml(short(result.reason, 180))}</span>
               </div>
             `).join("")}
+          ` : ""}
+        </section>
+      `;
+    }
+
+    function renderHarness(bundle) {
+      const assignments = bundle.role_assignments || (bundle.active_run ? bundle.active_run.role_assignments || [] : []);
+      const decisions = bundle.route_decisions || (bundle.active_run ? bundle.active_run.route_decisions || [] : []);
+      const conflicts = bundle.conflicts || (bundle.active_run ? bundle.active_run.conflicts || [] : []);
+      const ledger = bundle.evidence_ledger || (bundle.active_run ? bundle.active_run.evidence_ledger : null) || {};
+      const summary = bundle.benchmark_summary || (bundle.active_run ? bundle.active_run.benchmark_summary : null) || {};
+      return `
+        <section class="block">
+          <h3>Harness</h3>
+          <div class="metric-grid">
+            ${metric("roles", assignments.length)}
+            ${metric("routes", decisions.length)}
+            ${metric("conflicts", conflicts.length)}
+            ${metric("replay fidelity", summary.replay_fidelity)}
+            ${metric("evidence used", ledger.utilization_rate)}
+            ${metric("route recall", summary.route_recall)}
+          </div>
+          ${assignments.length ? assignments.map((assignment) => `
+            <div class="quality-row">
+              <div class="row-head">
+                <strong>${escapeHtml(assignment.agent_name || assignment.agent_id)}</strong>
+                <span class="pill ${assignment.status === "completed" ? "good" : "warn"}">${escapeHtml(assignment.status)}</span>
+              </div>
+              <span>${escapeHtml(short(assignment.reason, 180))}</span>
+              <span class="subtle">${escapeHtml((assignment.selected_tools || []).join(", ") || "no tool")} · evidence ${escapeHtml(assignment.evidence_count || 0)}</span>
+            </div>
+          `).join("") : '<p>No role assignment yet.</p>'}
+          ${conflicts.length ? `
+            <h3>Conflicts</h3>
+            ${conflicts.slice(0, 6).map((conflict) => `
+              <div class="coverage-row">
+                <div class="row-head">
+                  <strong>${escapeHtml(conflict.kind)}</strong>
+                  <span class="pill ${conflict.resolved ? "good" : conflict.severity === "high" ? "bad" : "warn"}">${escapeHtml(conflict.severity)}</span>
+                </div>
+                <span>${escapeHtml(short(conflict.description, 180))}</span>
+                <span class="subtle">${escapeHtml(short(conflict.resolution, 180))}</span>
+              </div>
+            `).join("")}
+          ` : ""}
+          ${Object.keys(ledger.by_agent || {}).length ? `
+            <h3>Evidence Ledger</h3>
+            <div class="source-row">
+              <strong>by agent</strong>
+              <span>${escapeHtml(JSON.stringify(ledger.by_agent || {}))}</span>
+            </div>
+            <div class="source-row">
+              <strong>by tool</strong>
+              <span>${escapeHtml(JSON.stringify(ledger.by_tool || {}))}</span>
+            </div>
           ` : ""}
         </section>
       `;

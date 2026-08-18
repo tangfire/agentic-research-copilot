@@ -289,6 +289,10 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert bundle_data["selected_skill"]["skill_id"] == "open_source_adoption_review"
         assert bundle_data["active_run"]["report"]["sections"]
         assert bundle_data["active_run"]["evaluation"]["citation_precision"] >= 1.0
+        assert bundle_data["role_assignments"]
+        assert bundle_data["route_decisions"]
+        assert bundle_data["evidence_ledger"]["total_evidence_count"] >= 1
+        assert bundle_data["benchmark_summary"]["replay_fidelity"] == 0.0
         assert bundle_data["steps"]
         assert any(step["kind"] == "planning" for step in bundle_data["steps"])
         assert any(step["kind"] == "research" and step["status"] == "completed" for step in bundle_data["steps"])
@@ -313,6 +317,9 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert export_data["session_key"] == session_id
         assert export_data["workspace"]["workspace_id"]
         assert export_data["selected_skill"]["skill_id"] == "open_source_adoption_review"
+        assert export_data["role_assignments"]
+        assert export_data["route_decisions"]
+        assert export_data["benchmark_summary"]["route_recall"] >= 0.0
 
         tool_invocations_response = client.get(f"/v1/agent/sessions/{session_id}/tool-invocations")
         assert tool_invocations_response.status_code == 200
@@ -321,6 +328,13 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         coverage_response = client.get(f"/v1/research/runs/{status_data['run_id']}/constraint-coverage")
         assert coverage_response.status_code == 200
         assert coverage_response.json()
+
+        harness_response = client.get(f"/v1/research/runs/{status_data['run_id']}/harness")
+        assert harness_response.status_code == 200
+        harness_data = harness_response.json()
+        assert harness_data["role_assignments"]
+        assert harness_data["route_decisions"]
+        assert harness_data["evidence_ledger"]["total_evidence_count"] >= 1
 
 
 def test_memory_endpoint_can_add_list_and_delete_items(tmp_path: Path, monkeypatch):

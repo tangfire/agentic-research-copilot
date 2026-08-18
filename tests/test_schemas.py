@@ -1,4 +1,4 @@
-from agentic_research_copilot.schemas import ResearcherToolDecisionContract, SupervisorDecisionContract
+from agentic_research_copilot.schemas import BenchmarkTask, ResearchRequest, ResearcherToolDecisionContract, SupervisorDecisionContract
 
 
 def test_supervisor_contract_treats_null_lists_as_empty_lists():
@@ -40,3 +40,24 @@ def test_researcher_contract_treats_null_reflection_as_empty_string():
 
     assert contract.reflection == ""
     assert contract.rationale == ""
+
+
+def test_research_request_and_benchmark_task_accept_metadata():
+    request = ResearchRequest.model_validate(
+        {
+            "topic": "Evaluate LangGraph for adoption",
+            "metadata": {"session_id": "session-1", "workspace_id": "workspace-1"},
+        }
+    )
+    task = BenchmarkTask.model_validate(
+        {
+            "task_id": "task-1",
+            "topic": "Evaluate LangGraph for adoption",
+            "expected_agent_ids": ["repo_signal"],
+            "expected_tools": ["web_search"],
+            "metadata": {"note": "benchmark"},
+        }
+    )
+
+    assert request.metadata["session_id"] == "session-1"
+    assert task.metadata["note"] == "benchmark"

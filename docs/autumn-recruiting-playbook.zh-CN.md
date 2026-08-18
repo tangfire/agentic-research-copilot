@@ -1,5 +1,7 @@
 # AI Research Copilot 秋招讲解手册
 
+配套问答卡片见：[Research Desk 秋招问答包](interview-question-bank.zh-CN.md)。
+
 ## 1. 项目一句话
 
 一个面向技术调研和开源引入评审的 conversational research agent runtime：用户在会话里输入 repo、技术问题和团队约束，系统先把这些约束落进 workspace profile，再通过 skill/playbook 选择、可确认研究计划、step stream、tool policy、approval gate、web、本地知识库、GitHub MCP 等机制收集证据，最后输出带 citation、trace、constraint coverage、evaluation 和 export bundle 的技术采用 memo。
@@ -241,6 +243,8 @@ http://127.0.0.1:8000/
 8. 看 Tools 区：tool registry、approval requests、tool invocation、steps。
 9. 看 Quality 区：citation precision、context recall、faithfulness、constraint coverage。
 10. 说明 GitHub MCP 如果没 token，会显示 unavailable，不会伪装成 MCP evidence。
+11. 打开 Harness 区：展示三个 specialist lane、route decision、evidence ledger、conflict 和 benchmark summary。
+12. 调用 replay，说明它复用冻结 run artifact，不重新搜索、不重新调用 MCP。
 
 ## 6. 面试官问“为什么不用 Codex/Deep Research”
 
@@ -251,6 +255,24 @@ http://127.0.0.1:8000/
 如果面试官继续问“那你的项目有什么用”：
 
 > 它可以作为小团队的技术采用评审台。团队先保存自己的技术栈、部署限制和评审规则，以后评估一个开源库时，不需要每次复制约束。agent 先给出研究计划，经确认后再收集 GitHub、Web 和本地文档证据，最后输出可复盘的 adoption memo。
+
+## 8. v4 面试叙事
+
+v4 不再把“多 Agent”讲成数量，而是讲成责任边界：
+
+- `RepoSignalAgent`：仓库、代码、issue、PR、release 和 license 事实。
+- `ArchitectureFitAgent`：架构适配、API、workflow、集成成本和本地知识库。
+- `OpsRiskAgent`：部署、回滚、依赖、可靠性、成本和风险。
+
+Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循环和报告生成。三类 specialist lane 负责把“谁应该关注什么”显式写进 run artifact。Writer 合并结论，Verifier 检查证据、冲突和约束覆盖。
+
+可以这样回答“这是不是硬凑技术”：
+
+> 如果只是问一个事实，三个 specialist 确实是过度设计。但开源引入评审需要同时回答仓库事实、架构适配和运维风险，而且每一类证据来源和失败方式都不同。我只保留三个稳定角色，并用 route precision、evidence utilization、constraint coverage 和 conflict record 验证拆分是否有价值。
+
+可以这样回答“和研究闭环有什么关系”：
+
+> specialist 不是额外的聊天机器人，而是研究闭环中的责任分配和证据账本。它们从 plan item 出发，绑定工具和证据，最后把 coverage 和 conflict 交给 Verifier。没有证据就不能因为角色存在而算完成。
 
 ## 7. 面试官可能追问的问题
 

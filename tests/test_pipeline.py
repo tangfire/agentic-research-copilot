@@ -134,6 +134,14 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert result.checkpoints
     assert result.trace
     assert result.handoffs
+    assert result.role_assignments
+    assert {assignment.agent_id for assignment in result.role_assignments} >= {"architecture_fit"}
+    assert result.route_decisions
+    assert result.evidence_ledger is not None
+    assert result.evidence_ledger.total_evidence_count == len(result.evidence)
+    assert result.benchmark_summary is not None
+    assert 0.0 <= result.benchmark_summary.evidence_utilization <= 1.0
+    assert any(event.step == "harness.role_assignment" for event in result.trace)
     assert result.evaluation is not None
     assert result.evaluation.citation_precision >= 1.0
     assert result.evaluation.plan_coverage >= 0.8
@@ -186,6 +194,15 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(hit.metadata.get("contextualizer_prompt_version") == "contextual-retrieval-v1" for hit in result.document_hits)
     assert copilot.list_runs()
     assert copilot.get_run(result.run_id) is not None
+
+    replayed = copilot.replay(result.run_id)
+    assert replayed is not None
+    assert replayed.run_id != result.run_id
+    assert replayed.metadata["replay_mode"] == "frozen_artifacts"
+    assert replayed.metadata["replay_source_run_id"] == result.run_id
+    assert replayed.benchmark_summary is not None
+    assert replayed.benchmark_summary.replay_fidelity == 1.0
+    assert any(event.step == "replay.frozen" for event in replayed.trace)
 
 
 def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):

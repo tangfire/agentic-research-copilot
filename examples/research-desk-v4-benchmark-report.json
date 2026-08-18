@@ -1,0 +1,1138 @@
+{
+  "summary": {
+    "case_count": 24,
+    "pass_rate": 0.125,
+    "avg_route_precision": 0.6181,
+    "avg_route_recall": 0.7778,
+    "avg_specialist_completion_rate": 1.0,
+    "avg_tool_success_rate": 1.0,
+    "avg_evidence_utilization": 1.0,
+    "avg_citation_precision": 1.0,
+    "avg_constraint_coverage": 1.0,
+    "avg_replay_fidelity": 0.0,
+    "avg_source_count": 4.4583,
+    "avg_latency_ms": 34.2083
+  },
+  "results": [
+    {
+      "task_id": "adopt-langgraph-runtime",
+      "scenario": "open_source_adoption_review",
+      "topic": "Evaluate langchain-ai/langgraph as the workflow runtime for a 5-person Python/FastAPI research agent team using single-node Docker Compose and rollback requirements.",
+      "run_id": "4a183964-0d98-4899-927f-e20b9d9a0009",
+      "status": "completed",
+      "passed": true,
+      "route_precision": 1.0,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 36,
+      "expected_agent_ids": [
+        "repo_signal",
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "ops_risk",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval",
+        "mcp_tool"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "LangGraph",
+        "workflow",
+        "checkpoint",
+        "FastAPI",
+        "rollback"
+      ],
+      "matched_terms": [
+        "LangGraph",
+        "workflow",
+        "checkpoint",
+        "FastAPI",
+        "rollback"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "adopt-qdrant-vector-store",
+      "scenario": "open_source_adoption_review",
+      "topic": "Assess whether Qdrant is a good vector store for local knowledge base retrieval in the Research Desk with Python/FastAPI and low-maintenance deployment constraints.",
+      "run_id": "b120cf63-bcfc-443a-b7d0-e73b66188821",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 38,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "Qdrant",
+        "vector",
+        "retrieval",
+        "deployment"
+      ],
+      "matched_terms": [
+        "Qdrant",
+        "vector",
+        "retrieval",
+        "deployment"
+      ],
+      "source_count": 5,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "adopt-openhands-boundary",
+      "scenario": "open_source_adoption_review",
+      "topic": "Review OpenHands as a reference design for tool boundaries and observability, but decide whether this project should avoid becoming a general coding agent.",
+      "run_id": "79df3ccc-17a1-4915-978d-96acd4d798b5",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 1.0,
+      "route_recall": 0.6667,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 39,
+      "expected_agent_ids": [
+        "repo_signal",
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval",
+        "mcp_tool"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "OpenHands",
+        "tool boundary",
+        "observability",
+        "coding agent"
+      ],
+      "matched_terms": [
+        "OpenHands",
+        "observability",
+        "coding agent"
+      ],
+      "source_count": 4,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "adopt-openclaw-mini-runtime",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Compare openclaw-mini style sessionKey event stream and heartbeat design with this Research Desk session runtime.",
+      "run_id": "c985cd8b-5b45-421c-a150-e353de325398",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 23,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "sessionKey",
+        "event stream",
+        "heartbeat",
+        "context"
+      ],
+      "matched_terms": [
+        "sessionKey",
+        "event stream",
+        "heartbeat",
+        "context"
+      ],
+      "source_count": 5,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "adopt-hermes-skill-memory",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Evaluate Hermes-style skills and memory reuse for Research Desk without turning it into a generic personal assistant.",
+      "run_id": "3f509e8a-ea53-4ebb-aab6-c29b2b01a461",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 39,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "skill",
+        "memory",
+        "playbook",
+        "reuse"
+      ],
+      "matched_terms": [
+        "skill",
+        "memory",
+        "reuse"
+      ],
+      "source_count": 5,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "demo-readiness-risk-review",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Review whether Research Desk is ready for an autumn recruiting demo, focusing on risks around hard-sounding technology, evaluation evidence, and live provider failures.",
+      "run_id": "e72331de-14eb-4e2a-959f-11bf5398a3ef",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.6667,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 25,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "ops_risk",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "demo",
+        "evaluation",
+        "trace",
+        "replay",
+        "risk"
+      ],
+      "matched_terms": [
+        "demo",
+        "evaluation",
+        "trace",
+        "risk"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "mcp-token-unavailable",
+      "scenario": "open_source_adoption_review",
+      "topic": "Plan how Research Desk should behave when GitHub MCP is configured for repository evidence but the token is missing.",
+      "run_id": "9452a093-5698-4cd9-a21b-75e093789745",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 23,
+      "expected_agent_ids": [
+        "repo_signal",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "repo_signal",
+        "architecture_fit"
+      ],
+      "expected_tools": [
+        "mcp_tool",
+        "web_search"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "GitHub MCP",
+        "token",
+        "unavailable",
+        "approval"
+      ],
+      "matched_terms": [
+        "GitHub MCP",
+        "token"
+      ],
+      "source_count": 4,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "constraint-coverage-gate",
+      "scenario": "open_source_adoption_review",
+      "topic": "Evaluate whether hard team constraints are consistently covered in adoption memos and how constraint coverage should fail or warn.",
+      "run_id": "7e5d7a15-a3dd-49cd-b5c9-5fc97f8d0524",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 35,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval",
+        "web_search"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "constraint coverage",
+        "warning",
+        "evaluation",
+        "memory"
+      ],
+      "matched_terms": [
+        "constraint coverage",
+        "evaluation"
+      ],
+      "source_count": 5,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "frozen-replay-fidelity",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Assess frozen replay fidelity for Research Desk: replay should reuse saved artifacts instead of re-calling web, MCP, or model tools.",
+      "run_id": "c1fbc30f-952d-415c-9b92-f5ce7dca0aee",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 30,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "replay",
+        "frozen",
+        "trace",
+        "tool"
+      ],
+      "matched_terms": [
+        "replay",
+        "frozen",
+        "trace",
+        "tool"
+      ],
+      "source_count": 4,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "tool-registry-boundary",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Evaluate tool registry design for web search, vector retrieval, and GitHub MCP, including auth status, risk, and approval requirements.",
+      "run_id": "27e8aa77-27a4-4403-9e7b-7233bf1cbe1a",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.6667,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 61,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "repo_signal",
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval",
+        "mcp_tool"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "tool registry",
+        "auth",
+        "risk",
+        "approval"
+      ],
+      "matched_terms": [
+        "tool registry",
+        "auth",
+        "risk",
+        "approval"
+      ],
+      "source_count": 5,
+      "notes": []
+    },
+    {
+      "task_id": "repo-signal-maintenance",
+      "scenario": "open_source_adoption_review",
+      "topic": "For a GitHub repository adoption review, decide which maintenance signals matter: releases, issues, PR activity, license, docs, and community health.",
+      "run_id": "5b5be790-b8f9-4763-be46-f005c82bc01c",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 41,
+      "expected_agent_ids": [
+        "repo_signal",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "repo_signal",
+        "architecture_fit"
+      ],
+      "expected_tools": [
+        "web_search",
+        "mcp_tool"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "release",
+        "issue",
+        "pull request",
+        "license",
+        "maintenance"
+      ],
+      "matched_terms": [
+        "release",
+        "issue",
+        "license",
+        "maintenance"
+      ],
+      "source_count": 5,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "architecture-fit-fastapi",
+      "scenario": "open_source_adoption_review",
+      "topic": "Review how an agent workflow library should fit a Python/FastAPI service boundary and background job execution model.",
+      "run_id": "08ffcdc5-c7ae-4948-be2f-d53dda53019a",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 39,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "FastAPI",
+        "background job",
+        "workflow",
+        "service"
+      ],
+      "matched_terms": [
+        "FastAPI",
+        "background job",
+        "workflow",
+        "service"
+      ],
+      "source_count": 4,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "single-node-deployment-risk",
+      "scenario": "open_source_adoption_review",
+      "topic": "Assess operational risks for running Research Desk as a single-node local workbench with SQLite, Qdrant local mode, and optional Celery.",
+      "run_id": "e3d588ab-7ffa-492d-88ac-8689f643b11d",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.6667,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 39,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "ops_risk",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval",
+        "web_search"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "SQLite",
+        "Qdrant",
+        "single-node",
+        "Celery",
+        "risk"
+      ],
+      "matched_terms": [
+        "SQLite",
+        "Qdrant",
+        "single-node",
+        "Celery",
+        "risk"
+      ],
+      "source_count": 5,
+      "notes": []
+    },
+    {
+      "task_id": "memory-extraction-quality",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Evaluate memory extraction quality for project constraints, including precision, recall proxy, accepted and rejected memory candidates.",
+      "run_id": "3465c581-2421-4654-99ad-cbe477f9ff48",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 27,
+      "expected_agent_ids": [
+        "architecture_fit"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "memory extraction",
+        "precision",
+        "recall",
+        "constraint"
+      ],
+      "matched_terms": [
+        "memory extraction",
+        "precision",
+        "recall",
+        "constraint"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "local-kb-vs-web-search",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Compare local knowledge base retrieval with web search for open-source adoption review evidence and explain when each evidence source is necessary.",
+      "run_id": "52b272e3-93b6-4d5b-a7ce-7f0986d50976",
+      "status": "completed",
+      "passed": true,
+      "route_precision": 1.0,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 42,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "web_search",
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "local knowledge base",
+        "web search",
+        "evidence",
+        "retrieval"
+      ],
+      "matched_terms": [
+        "local knowledge base",
+        "web search",
+        "evidence",
+        "retrieval"
+      ],
+      "source_count": 5,
+      "notes": []
+    },
+    {
+      "task_id": "skill-pack-boundary",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Explain the boundary of Research Desk skill packs: manifest, SKILL.md instructions, optional scripts, preflight, and why it is not a plugin marketplace.",
+      "run_id": "e8acf82c-64b2-4045-b127-d1254c6bcba4",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 23,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "skill.json",
+        "SKILL.md",
+        "preflight",
+        "plugin marketplace"
+      ],
+      "matched_terms": [
+        "SKILL.md",
+        "preflight",
+        "plugin marketplace"
+      ],
+      "source_count": 4,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "planner-route-precision",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Evaluate whether planner route decisions choose the right specialist lanes for repo signal, architecture fit, and ops risk instead of running everything every time.",
+      "run_id": "a02ba96c-732b-46f3-b311-e609325ec4cf",
+      "status": "completed",
+      "passed": true,
+      "route_precision": 1.0,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 39,
+      "expected_agent_ids": [
+        "repo_signal",
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal",
+        "ops_risk"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "planner",
+        "route",
+        "specialist",
+        "precision"
+      ],
+      "matched_terms": [
+        "planner",
+        "route",
+        "specialist"
+      ],
+      "source_count": 5,
+      "notes": []
+    },
+    {
+      "task_id": "writer-verifier-boundary",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Explain why Writer and Verifier are separate: Writer synthesizes the adoption memo while Verifier checks evidence coverage, conflicts, and constraints.",
+      "run_id": "0340d816-3d40-45d4-a847-8b7799e1b32b",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 27,
+      "expected_agent_ids": [
+        "architecture_fit"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "Writer",
+        "Verifier",
+        "evidence",
+        "constraint"
+      ],
+      "matched_terms": [
+        "Writer",
+        "Verifier",
+        "evidence",
+        "constraint"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "trace-field-design",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Review trace field design for agent steps, tool calls, route decisions, evidence counts, and replay debugging.",
+      "run_id": "4ae708bb-a45a-4a88-b004-6fb39932c6e3",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 24,
+      "expected_agent_ids": [
+        "architecture_fit"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "trace",
+        "step",
+        "tool call",
+        "evidence count"
+      ],
+      "matched_terms": [
+        "trace",
+        "step",
+        "tool call",
+        "evidence count"
+      ],
+      "source_count": 5,
+      "notes": []
+    },
+    {
+      "task_id": "benchmark-design",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Design a benchmark for Research Desk that measures route precision, tool success, evidence utilization, constraint coverage, citation precision, and replay fidelity.",
+      "run_id": "c9e2e0f9-4e03-4111-8ceb-ce0b9bb57d87",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 0.5,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 38,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "benchmark",
+        "route precision",
+        "tool success",
+        "replay fidelity"
+      ],
+      "matched_terms": [
+        "benchmark",
+        "route precision",
+        "tool success",
+        "replay fidelity"
+      ],
+      "source_count": 5,
+      "notes": [
+        "Route recall missed at least one expected specialist."
+      ]
+    },
+    {
+      "task_id": "rag-retrieval-quality",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Evaluate the RAG retrieval pipeline with dense vectors, BM25, graph signal, RRF or DBSF fusion, parent context expansion, and reranking.",
+      "run_id": "6fd998bc-dfc5-4b37-8023-6b6d9d29a6af",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 36,
+      "expected_agent_ids": [
+        "architecture_fit"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "BM25",
+        "dense",
+        "graph",
+        "rerank",
+        "RRF"
+      ],
+      "matched_terms": [
+        "BM25",
+        "dense",
+        "graph",
+        "rerank",
+        "RRF"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "agent-vs-workflow",
+      "scenario": "architecture_tradeoff_memo",
+      "topic": "Explain the difference between agent and workflow in Research Desk and why the project uses a workflow harness rather than only direct model calls.",
+      "run_id": "8a43ea0c-d3fb-4268-83ff-533ad5cb5080",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.5,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 24,
+      "expected_agent_ids": [
+        "architecture_fit"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "agent",
+        "workflow",
+        "state",
+        "DAG"
+      ],
+      "matched_terms": [
+        "agent",
+        "workflow"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "cost-latency-optimization",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Analyze how to reduce cost and latency when Research Desk runs long research tasks with multiple tool calls and evaluation passes.",
+      "run_id": "585aa33c-d66c-4350-afd5-f0da369c1cc3",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.6667,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 46,
+      "expected_agent_ids": [
+        "architecture_fit",
+        "ops_risk"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "ops_risk",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval",
+        "web_search"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "latency",
+        "cost",
+        "tool call",
+        "max sections"
+      ],
+      "matched_terms": [
+        "latency",
+        "cost",
+        "tool call"
+      ],
+      "source_count": 4,
+      "notes": []
+    },
+    {
+      "task_id": "overclaim-risk",
+      "scenario": "demo_readiness_risk_review",
+      "topic": "Review the risk of overclaiming this project as a Codex or Deep Research replacement and prepare an honest interview answer.",
+      "run_id": "588b9f46-a549-4743-adbe-acc7cb915284",
+      "status": "completed",
+      "passed": false,
+      "route_precision": 0.6667,
+      "route_recall": 1.0,
+      "specialist_completion_rate": 1.0,
+      "tool_success_rate": 1.0,
+      "evidence_utilization": 1.0,
+      "citation_precision": 1.0,
+      "constraint_coverage": 1.0,
+      "replay_fidelity": 0.0,
+      "latency_ms": 27,
+      "expected_agent_ids": [
+        "ops_risk",
+        "architecture_fit"
+      ],
+      "selected_agent_ids": [
+        "architecture_fit",
+        "ops_risk",
+        "repo_signal"
+      ],
+      "expected_tools": [
+        "vector_retrieval"
+      ],
+      "selected_tools": [
+        "vector_retrieval"
+      ],
+      "expected_terms": [
+        "Codex",
+        "Deep Research",
+        "replacement",
+        "honest"
+      ],
+      "matched_terms": [
+        "Codex",
+        "Deep Research",
+        "replacement",
+        "honest"
+      ],
+      "source_count": 4,
+      "notes": []
+    }
+  ]
+}

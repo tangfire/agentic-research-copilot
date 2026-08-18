@@ -470,7 +470,28 @@ def create_app() -> FastAPI:
             "issues": run.issues,
             "evidence": run.evidence,
             "retrieval_routes": run.retrieval_routes,
+            "role_assignments": run.role_assignments,
+            "route_decisions": run.route_decisions,
+            "conflicts": run.conflicts,
+            "evidence_ledger": run.evidence_ledger,
+            "benchmark_summary": run.benchmark_summary,
             "checkpoints": run.checkpoints,
+        }
+
+    @app.get("/v1/research/runs/{run_id}/harness")
+    def get_run_harness(run_id: str):
+        run = copilot.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        return {
+            "run_id": run.run_id,
+            "status": run.status,
+            "role_assignments": run.role_assignments,
+            "route_decisions": run.route_decisions,
+            "conflicts": run.conflicts,
+            "evidence_ledger": run.evidence_ledger,
+            "benchmark_summary": run.benchmark_summary,
+            "metadata": run.metadata,
         }
 
     @app.get("/v1/research/runs/{run_id}/checkpoints")

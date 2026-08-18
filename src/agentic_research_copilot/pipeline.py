@@ -13,6 +13,7 @@ from .document_reader import DocumentReader
 from .evaluation import RAGEvaluator
 from .ledger import JobLedger, RunLedger
 from .mcp_tools import build_mcp_tool
+from .multi_agent_harness import enrich_research_run, replay_from_frozen_run
 from .providers import build_embedding_provider, build_model_provider
 from .provider_validation import provider_runtime_report, require_real_provider_config
 from .retrieval import DocumentStore, RerankerConfig, build_reranker
@@ -743,7 +744,20 @@ class ResearchCopilot:
         run = self.get_run(run_id)
         if run is None:
             return None
-        return self.run(run.request.model_copy())
+        replayed = replay_from_frozen_run(run)
+        coverage = extract_constraint_coverage_from_run(replayed)
+        if coverage:
+            self.storage.save_constraint_coverage(coverage)
+        self.ledger.record(replayed)
+        self.storage.save_run(replayed)
+        self.telemetry.emit(
+            "run.replay",
+            "Replayed frozen research artifacts without re-calling live tools.",
+            run_id=replayed.run_id,
+            source_run_id=run.run_id,
+            replay_mode="frozen_artifacts",
+        )
+        return replayed
 
     def _ensure_job_executor(self) -> ThreadPoolExecutor:
         with self._job_lock:
@@ -1011,11 +1025,29 @@ class ResearchCopilot:
         from .graph_runtime import LangGraphResearchRuntime
 
         run = LangGraphResearchRuntime(self).run(request, job_id=job_id)
+        run = run.model_copy(
+            update={
+                "metadata": {
+                    **run.metadata,
+                    "request_metadata": request.metadata,
+                    "job_id": job_id or run.job_id,
+                    "harness_version": "research-desk-v4",
+                },
+            }
+        )
         coverage = extract_constraint_coverage_from_run(run)
         if coverage:
             self.storage.save_constraint_coverage(coverage)
             run = apply_constraint_coverage_gate(run, coverage)
-            self.storage.save_run(run)
+        request_metadata = request.metadata or {}
+        run = enrich_research_run(
+            run,
+            session_id=_optional_text(request_metadata.get("session_id")),
+            skill_id=_optional_text(request_metadata.get("skill_id")),
+            workspace_context=_workspace_context_from_request_metadata(request_metadata),
+        )
+        self.ledger.record(run)
+        self.storage.save_run(run)
         return run
 
     def _research_plan_items(
@@ -1700,3 +1732,22 @@ class ResearchCopilot:
                 seen.add(item.source)
                 names.append(item.source)
         return names
+
+
+def _optional_text(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _workspace_context_from_request_metadata(metadata: dict[str, object]) -> str:
+    fragments: list[str] = []
+    for key in ("workspace_name", "workspace_context", "risk_policy", "skill_name", "skill_scenario"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            fragments.append(f"{key}: {value.strip()}")
+    for key in ("default_stack", "deployment_constraints", "preferred_sources", "evaluation_focus"):
+        value = metadata.get(key)
+        if isinstance(value, list) and value:
+            fragments.append(f"{key}: {', '.join(str(item) for item in value if str(item).strip())}")
+    return " | ".join(fragments)

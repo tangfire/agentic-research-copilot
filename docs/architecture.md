@@ -11,7 +11,7 @@ The runtime is aimed at open-source project research, engineering decision resea
 The current runtime path is:
 
 ```text
-chat session -> memory -> clarify/plan -> confirm -> step stream -> tool policy/approval -> supervise -> search/read/retrieve -> synthesize -> constraint gate -> verify/evaluate -> replay
+chat session -> memory -> clarify/plan -> confirm -> step stream -> tool policy/approval -> supervise -> search/read/retrieve -> synthesize -> constraint gate -> verify/evaluate -> multi-agent harness -> frozen replay
 ```
 
 The agent layer is deliberately thin. It owns `AgentSession`, `AgentMessage`, `AgentPlanDraft`, `AgentRunStep`, memory extraction, memory lookup, tool policy, approval artifacts, and the confirmation gate. It does not replace `ResearchCopilot`; it converts a confirmed plan into the existing `ResearchRequest` and binds the resulting job/run back to the session.
@@ -55,7 +55,8 @@ flowchart LR
   Reporter --> Verifier["Verifier"]
   Verifier --> Coverage["Constraint Coverage Gate"]
   Coverage --> Eval["RAG Evaluator"]
-  Eval --> Storage["SQLite Runs / Trace / Evaluation"]
+  Eval --> Harness["Role Assignment / Evidence Ledger / Conflicts"]
+  Harness --> Storage["SQLite Runs / Trace / Evaluation"]
   Storage --> Session
   Storage --> Steps
 ```
@@ -82,7 +83,7 @@ Important schema objects:
 - `AgentMessage`: user, assistant, system, or tool message with an intent such as `clarify`, `plan`, `confirm`, or `research`.
 - `AgentPlanDraft`: readable research brief, plan items, assumptions, success criteria, and `required_confirmation=true`.
 - `AgentRunStep`: session-visible stage record for message, planning, approval, tool call, retrieval, research, report, verification, evaluation, and failure.
-- `AgentSessionBundle`: session, messages, plan draft, relevant memory, steps, tool registry, tool invocations, approval requests, active job, active run, constraint coverage, memory evaluation, and MCP status.
+- `AgentSessionBundle`: session, messages, plan draft, relevant memory, steps, tool registry, tool invocations, approval requests, active job, active run, constraint coverage, memory evaluation, role assignments, route decisions, evidence ledger, benchmark summary, and MCP status.
 
 The most important design choice is the confirmation gate. A good agent should not turn every chat turn into a long-running research job. The session first collects constraints, asks one clarification question if needed, or drafts a plan. Only `POST /v1/agent/sessions/{session_id}/confirm-plan` starts the research job.
 
@@ -138,6 +139,28 @@ Default tool policy:
 - `web_search`: low risk, no approval.
 - `vector_retrieval`: low risk, no approval.
 - `mcp_tool`: medium risk, enabled only when configured and authenticated. If configured but unavailable, the UI shows `GitHub MCP not configured`, writes a pending approval, and does not count fake MCP evidence.
+
+## Multi-Agent Harness
+
+v4 adds a narrow specialist harness for the open-source adoption review scenario. It does not add a general agent platform.
+
+The stable roles are:
+
+- `RepoSignalAgent`: repository facts, code, issues, pull requests, releases, licenses, and source authority.
+- `ArchitectureFitAgent`: architecture fit, API/runtime semantics, integration cost, workflow design, and local KB alignment.
+- `OpsRiskAgent`: deployment, rollback, dependency, security/compliance, cost, latency, and reliability constraints.
+
+The harness runs after the research runtime has produced plan items, routes, evidence, report, and evaluation. It writes:
+
+- `AgentRoleAssignment`
+- `RouteDecision`
+- `ConflictRecord`
+- `EvidenceLedger`
+- `BenchmarkRunSummary`
+
+This is deliberately an observability and evaluation layer, not a second hidden research engine. The goal is to answer interview questions such as "who did what", "why use multiple roles", "which evidence was used", and "where did the run fail".
+
+Replay is now frozen-artifact replay. `POST /v1/research/runs/{run_id}/replay` creates a new run id from the saved report/evidence/trace artifacts and appends a `replay.frozen` trace event. It does not re-call live search, MCP, or model tools.
 
 ## Runtime Nodes
 
@@ -229,6 +252,7 @@ The exact agent endpoints are:
 - `POST /v1/agent/sessions/{session_id}/approvals/{approval_id}/approve`
 - `POST /v1/agent/sessions/{session_id}/approvals/{approval_id}/reject`
 - `GET /v1/agent/tools`
+- `GET /v1/research/runs/{run_id}/harness`
 - `GET /v1/research/runs/{run_id}/constraint-coverage`
 - `POST /v1/memory`
 - `GET /v1/memory`

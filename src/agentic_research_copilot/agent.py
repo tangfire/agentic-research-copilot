@@ -164,6 +164,11 @@ class ConversationalResearchAgent:
             memory_extraction_results=self.store.load_memory_extraction_results(session_id),
             memory_evaluation=self.memory_evaluation(session_id),
             constraint_coverage=self.constraint_coverage(session_id),
+            role_assignments=active_run.role_assignments if active_run else [],
+            route_decisions=active_run.route_decisions if active_run else [],
+            conflicts=active_run.conflicts if active_run else [],
+            evidence_ledger=active_run.evidence_ledger if active_run else None,
+            benchmark_summary=active_run.benchmark_summary if active_run else None,
             active_job=active_job,
             active_run=active_run,
             mcp_status=self.mcp_status(),
@@ -189,6 +194,11 @@ class ConversationalResearchAgent:
             "approval_requests": [item.model_dump(mode="json") for item in bundle.approval_requests],
             "memory_evaluation": bundle.memory_evaluation,
             "constraint_coverage": [item.model_dump(mode="json") for item in bundle.constraint_coverage],
+            "role_assignments": [item.model_dump(mode="json") for item in bundle.role_assignments],
+            "route_decisions": [item.model_dump(mode="json") for item in bundle.route_decisions],
+            "conflicts": [item.model_dump(mode="json") for item in bundle.conflicts],
+            "evidence_ledger": bundle.evidence_ledger.model_dump(mode="json") if bundle.evidence_ledger else None,
+            "benchmark_summary": bundle.benchmark_summary.model_dump(mode="json") if bundle.benchmark_summary else None,
             "active_job": bundle.active_job.model_dump(mode="json") if bundle.active_job else None,
             "active_run": bundle.active_run.model_dump(mode="json") if bundle.active_run else None,
             "mcp_status": bundle.mcp_status,
@@ -257,6 +267,15 @@ class ConversationalResearchAgent:
             include_private_docs=include_private_docs,
             max_sections=max(1, max_sections),
             max_revisions=max(0, max_revisions),
+            metadata={
+                "source": "agent_session",
+                "session_id": session_id,
+                "session_key": session.session_key or session.session_id,
+                "workspace_id": workspace.workspace_id,
+                "workspace_name": workspace.name,
+                "skill_id": selected_skill.skill_id,
+                "skill_name": selected_skill.name,
+            },
         )
         if missing_inputs:
             clarification = ClarificationContract(
@@ -1350,6 +1369,25 @@ class ConversationalResearchAgent:
             include_private_docs=include_private_docs,
             max_sections=max(1, max_sections),
             max_revisions=max(0, max_revisions),
+            metadata={
+                "source": "agent_session",
+                "session_id": session_id,
+                "session_key": session.session_key or session.session_id,
+                "workspace_id": workspace.workspace_id,
+                "workspace_name": workspace.name,
+                "workspace_context": workspace.team_context,
+                "default_stack": workspace.default_stack,
+                "deployment_constraints": workspace.deployment_constraints,
+                "risk_policy": workspace.risk_policy,
+                "preferred_sources": workspace.preferred_sources,
+                "skill_id": selected_skill.skill_id,
+                "skill_name": selected_skill.name,
+                "skill_scenario": selected_skill.scenario,
+                "required_inputs": selected_skill.required_inputs,
+                "evaluation_focus": selected_skill.evaluation_focus,
+                "memory_ids": [memory.memory_id for memory in memories],
+                "hard_constraint_memory_ids": [memory.memory_id for memory in hard_constraints],
+            },
         )
 
     def _render_plan_message(self, plan_draft: AgentPlanDraft) -> str:
@@ -1839,6 +1877,8 @@ def _trim(value: object, limit: int) -> str:
 def _step_kind_for_trace(kind: str, actor: str) -> str:
     if kind == "tool_call":
         return "tool_call"
+    if actor == "multi_agent_harness":
+        return "routing"
     if kind == "evaluation" or actor == "evaluator":
         return "evaluation"
     if kind == "verification" or actor == "verifier":

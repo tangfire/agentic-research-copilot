@@ -23,6 +23,7 @@ class ResearchRequest(BaseModel):
     include_private_docs: bool = True
     max_sections: int = 4
     max_revisions: int = 2
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class PlanItem(BaseModel):
@@ -378,6 +379,11 @@ class ResearchRun(BaseModel):
     checkpoints: list[RunCheckpoint] = Field(default_factory=list)
     trace: list[RunTraceEvent] = Field(default_factory=list)
     handoffs: list[AgentHandoff] = Field(default_factory=list)
+    role_assignments: list[AgentRoleAssignment] = Field(default_factory=list)
+    route_decisions: list[RouteDecision] = Field(default_factory=list)
+    conflicts: list[ConflictRecord] = Field(default_factory=list)
+    evidence_ledger: EvidenceLedger | None = None
+    benchmark_summary: BenchmarkRunSummary | None = None
     report: ResearchReport | None = None
     evaluation: RAGEvaluation | None = None
     issues: list[str] = Field(default_factory=list)
@@ -387,6 +393,7 @@ class ResearchRun(BaseModel):
     started_at: str | None = None
     finished_at: str | None = None
     duration_ms: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 AgentSessionStatus = Literal[
@@ -404,6 +411,7 @@ MemoryKind = Literal["preference", "constraint", "decision", "fact", "todo"]
 AgentRunStepKind = Literal[
     "message",
     "planning",
+    "routing",
     "approval",
     "tool_call",
     "retrieval",
@@ -419,12 +427,24 @@ AgentToolChannel = Literal["web", "vector", "mcp", "local"]
 AgentToolRiskLevel = Literal["low", "medium", "high"]
 ToolInvocationStatus = Literal["pending_approval", "running", "completed", "failed", "skipped"]
 ApprovalStatus = Literal["pending", "approved", "rejected", "expired"]
+AgentSpecialistId = Literal["repo_signal", "architecture_fit", "ops_risk"]
+AgentRoleStatus = Literal["selected", "skipped", "completed", "failed"]
+RouteDecisionStatus = Literal["selected", "blocked", "skipped"]
+ConflictKind = Literal[
+    "agent_overlap",
+    "coverage_gap",
+    "evidence_gap",
+    "constraint_mismatch",
+    "tool_gap",
+]
+ConflictSeverity = Literal["low", "medium", "high"]
 AgentEventKind = Literal[
     "message",
     "planning",
     "approval",
     "tool_call",
     "retrieval",
+    "routing",
     "research",
     "report",
     "verification",
@@ -432,6 +452,106 @@ AgentEventKind = Literal[
     "failure",
     "heartbeat",
 ]
+
+
+class AgentRoleAssignment(BaseModel):
+    assignment_id: str
+    run_id: str | None = None
+    session_id: str | None = None
+    agent_id: AgentSpecialistId
+    agent_name: str
+    status: AgentRoleStatus = "selected"
+    reason: str = ""
+    plan_item_ids: list[str] = Field(default_factory=list)
+    selected_tools: list[ResearchToolName] = Field(default_factory=list)
+    exclusive_tools: list[ResearchToolName] = Field(default_factory=list)
+    shared_tools: list[ResearchToolName] = Field(default_factory=list)
+    evidence_count: int = 0
+    confidence: float = 0.0
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RouteDecision(BaseModel):
+    decision_id: str
+    run_id: str | None = None
+    session_id: str | None = None
+    plan_item_id: str
+    agent_id: AgentSpecialistId
+    agent_name: str
+    status: RouteDecisionStatus = "selected"
+    mode: Literal["external", "internal", "hybrid"] = "hybrid"
+    selected_tools: list[ResearchToolName] = Field(default_factory=list)
+    reason: str = ""
+    query_count: int = 0
+    evidence_count: int = 0
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConflictRecord(BaseModel):
+    conflict_id: str
+    run_id: str | None = None
+    session_id: str | None = None
+    kind: ConflictKind
+    severity: ConflictSeverity = "low"
+    agent_ids: list[AgentSpecialistId] = Field(default_factory=list)
+    plan_item_ids: list[str] = Field(default_factory=list)
+    description: str
+    resolution: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+    resolved: bool = True
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class EvidenceLedger(BaseModel):
+    run_id: str | None = None
+    session_id: str | None = None
+    total_evidence_count: int = 0
+    citation_count: int = 0
+    by_agent: dict[str, int] = Field(default_factory=dict)
+    by_tool: dict[str, int] = Field(default_factory=dict)
+    by_source_kind: dict[str, int] = Field(default_factory=dict)
+    evidence_ids: list[str] = Field(default_factory=list)
+    utilization_rate: float = 0.0
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class BenchmarkTask(BaseModel):
+    task_id: str
+    scenario: str = "open_source_adoption_review"
+    topic: str
+    depth: Literal["quick", "standard", "deep"] = "standard"
+    expected_agent_ids: list[AgentSpecialistId] = Field(default_factory=list)
+    expected_tools: list[ResearchToolName] = Field(default_factory=list)
+    expected_evidence_kinds: list[str] = Field(default_factory=list)
+    expected_terms: list[str] = Field(default_factory=list)
+    hard_constraints: list[str] = Field(default_factory=list)
+    min_source_count: int = 1
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class BenchmarkRunSummary(BaseModel):
+    benchmark_id: str
+    run_id: str | None = None
+    session_id: str | None = None
+    task_id: str | None = None
+    route_precision: float = 0.0
+    route_recall: float = 0.0
+    specialist_completion_rate: float = 0.0
+    tool_success_rate: float = 0.0
+    evidence_utilization: float = 0.0
+    citation_precision: float = 0.0
+    constraint_coverage: float = 0.0
+    replay_fidelity: float = 0.0
+    latency_ms: int = 0
+    cost_usd: float = 0.0
+    passed: bool = False
+    notes: list[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkspaceProfile(BaseModel):
@@ -651,6 +771,11 @@ class AgentSessionBundle(BaseModel):
     memory_extraction_results: list[MemoryExtractionResult] = Field(default_factory=list)
     memory_evaluation: dict[str, Any] = Field(default_factory=dict)
     constraint_coverage: list[ConstraintCoverage] = Field(default_factory=list)
+    role_assignments: list[AgentRoleAssignment] = Field(default_factory=list)
+    route_decisions: list[RouteDecision] = Field(default_factory=list)
+    conflicts: list[ConflictRecord] = Field(default_factory=list)
+    evidence_ledger: EvidenceLedger | None = None
+    benchmark_summary: BenchmarkRunSummary | None = None
     active_job: ResearchJob | None = None
     active_run: ResearchRun | None = None
     mcp_status: dict[str, Any] = Field(default_factory=dict)
@@ -686,3 +811,7 @@ class SkillExecutionResult(BaseModel):
     started_at: str = Field(default_factory=_utc_now)
     finished_at: str = Field(default_factory=_utc_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+ResearchRun.model_rebuild()
+AgentSessionBundle.model_rebuild()
