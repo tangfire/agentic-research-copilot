@@ -4,7 +4,7 @@
 
 The goal is not to beat mature general-purpose agents. The goal is to implement the engineering skeleton behind a citation-grounded research agent: session state, memory, interactive planning, human confirmation, step visibility, tool policy, approval artifacts, evidence routing, GitHub MCP integration, local Agentic RAG, report synthesis, constraint coverage, verification, evaluation, and trace replay.
 
-See [Product Positioning](docs/product-positioning.md), [Architecture](docs/architecture.md), [Research Desk v3 Architecture](docs/research-desk-v3-architecture.zh-CN.md), [OpenClaw / Hermes Design Notes](docs/openclaw-hermes-design-notes.zh-CN.md), [Agent Maturity Pack](docs/agent-maturity-pack.zh-CN.md), [Tool Loop And HITL](docs/tool-loop-and-hitl.zh-CN.md), [Memory And Constraint Evaluation](docs/memory-and-constraint-eval.zh-CN.md), [Agent Reference Stack](docs/agent-reference-stack.zh-CN.md), [Autumn Recruiting Playbook](docs/autumn-recruiting-playbook.zh-CN.md), [Interview Question Bank](docs/interview-question-bank.zh-CN.md), [Demo Script](docs/demo-script.zh-CN.md), [Hardening Roadmap](docs/hardening-roadmap.md), and [Chinese Interview Notes](docs/interview-notes.zh-CN.md) for the intended project boundary.
+See [Product Positioning](docs/product-positioning.md), [Architecture](docs/architecture.md), [Research Desk v3 Architecture](docs/research-desk-v3-architecture.zh-CN.md), [OpenClaw / Hermes Design Notes](docs/openclaw-hermes-design-notes.zh-CN.md), [Agent Maturity Pack](docs/agent-maturity-pack.zh-CN.md), [Tool Loop And HITL](docs/tool-loop-and-hitl.zh-CN.md), [Memory And Constraint Evaluation](docs/memory-and-constraint-eval.zh-CN.md), [Agent Reference Stack](docs/agent-reference-stack.zh-CN.md), [Autumn Recruiting Playbook](docs/autumn-recruiting-playbook.zh-CN.md), [Interview Question Bank](docs/interview-question-bank.zh-CN.md), [Demo Script](docs/demo-script.zh-CN.md), [Usage Guide](docs/usage-guide.zh-CN.md), [Hardening Roadmap](docs/hardening-roadmap.md), and [Chinese Interview Notes](docs/interview-notes.zh-CN.md) for the intended project boundary.
 
 ## Honest Positioning
 
@@ -247,6 +247,18 @@ uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --
 ```
 
 Open the local workbench at `http://127.0.0.1:8000/`.
+
+## Quick Use
+
+打开页面后只需要记住这条路径：
+
+```text
+新建会话 -> 输入问题和团队约束 -> 发送 -> 查看计划 -> 确认并开始研究 -> 查看结果
+```
+
+页面默认只展示下一步、计划、记忆和结果。路由、工具、Skill、trace 和质量明细都收在“高级信息”里。
+
+完整的中文操作说明见 [Usage Guide](docs/usage-guide.zh-CN.md)。
 
 ## Study Path
 

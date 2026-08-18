@@ -20,7 +20,7 @@
       --warn: #a16207;
       --bad: #b91c1c;
       --good: #15803d;
-      --shadow: 0 14px 32px rgba(21, 32, 51, 0.08);
+      --shadow: 0 8px 22px rgba(21, 32, 51, 0.06);
     }
 
     * {
@@ -143,10 +143,10 @@
     .layout {
       width: min(1580px, 100%);
       margin: 0 auto;
-      padding: 18px clamp(12px, 3vw, 28px) 28px;
+      padding: 14px clamp(12px, 3vw, 24px) 24px;
       display: grid;
-      grid-template-columns: 260px minmax(0, 1fr) 380px;
-      gap: 16px;
+      grid-template-columns: 220px minmax(0, 1fr) 330px;
+      gap: 14px;
       min-height: calc(100vh - 62px);
     }
 
@@ -194,6 +194,10 @@
     .panel-head h3 {
       margin: 0;
       font-size: 15px;
+    }
+
+    .panel-head .subtle {
+      margin-left: auto;
     }
 
     .session-list,
@@ -326,8 +330,37 @@
     }
 
     .composer textarea {
-      min-height: 90px;
+      min-height: 104px;
       resize: vertical;
+    }
+
+    .composer-hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .field-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .advanced-settings {
+      display: grid;
+      gap: 8px;
+      padding-top: 2px;
+    }
+
+    .advanced-settings summary {
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      list-style-position: inside;
+    }
+
+    .advanced-settings .settings {
+      padding-top: 4px;
     }
 
     .composer-actions,
@@ -358,10 +391,12 @@
     .block {
       display: grid;
       gap: 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      background: #fff;
+      padding: 0 0 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .block:last-child {
+      border-bottom: 0;
     }
 
     .block h3 {
@@ -489,13 +524,62 @@
       line-height: 1.5;
     }
 
+    .quick-start,
+    .next-step {
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+      border: 1px solid #cfe4e0;
+      border-radius: 8px;
+      background: #f1faf8;
+    }
+
+    .quick-start h3,
+    .next-step h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .quick-start ol,
+    .next-step p {
+      margin: 0;
+      line-height: 1.55;
+    }
+
+    .quick-start ol {
+      padding-left: 20px;
+    }
+
+    .advanced-panel {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+
+    .advanced-panel summary {
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      list-style-position: inside;
+    }
+
+    .advanced-content {
+      display: grid;
+      gap: 16px;
+      padding-top: 14px;
+    }
+
+    .advanced-content .block {
+      padding-bottom: 14px;
+    }
+
     .error {
       color: var(--bad);
     }
 
     @media (max-width: 1180px) {
       .layout {
-        grid-template-columns: 230px minmax(0, 1fr);
+        grid-template-columns: 220px minmax(0, 1fr);
       }
 
       .inspector {
@@ -524,12 +608,11 @@
     <header class="topbar">
       <div class="brand">
         <strong>AI Research Copilot</strong>
-        <span>Conversational research agent with memory, planning, tools, trace, and evaluation</span>
+        <span>本地技术研究台：输入问题，确认计划，拿到有证据的报告</span>
       </div>
       <div class="settings">
         <a class="pill" href="/docs">API Docs</a>
-        <a class="pill" href="/v1/research/runs">/v1/research/runs</a>
-        <button id="exportBtn" class="compact" title="Export active session" disabled>Export</button>
+        <button id="exportBtn" class="compact" title="Export active session" disabled>导出会话</button>
         <span id="apiStatus" class="pill warn">checking</span>
       </div>
     </header>
@@ -537,8 +620,8 @@
     <div class="layout">
       <aside class="panel side">
         <div class="panel-head">
-          <h2>Sessions</h2>
-          <button id="newSessionBtn" title="New session">New</button>
+          <h2>会话</h2>
+          <button id="newSessionBtn" title="New session">新建</button>
         </div>
         <div id="sessionList" class="session-list"></div>
       </aside>
@@ -547,34 +630,41 @@
         <div class="status-strip">
           <span id="sessionStatus" class="pill">no session</span>
           <span id="workspaceStatus" class="pill">workspace unknown</span>
-          <span id="skillStatus" class="pill">skill unknown</span>
           <span id="mcpStatus" class="pill">MCP unknown</span>
           <span id="jobStatus" class="pill">no job</span>
         </div>
         <div id="timeline" class="timeline"></div>
         <div class="composer">
-          <textarea id="messageInput" placeholder="输入研究目标、团队约束或补充信息"></textarea>
+          <textarea id="messageInput" placeholder="例如：评估 langchain-ai/langgraph 是否适合 5 人 Python/FastAPI 团队。约束：单机 Docker、可回滚。"></textarea>
+          <div class="composer-hint">先写清楚“研究什么”和“团队有什么限制”。第一次发送只会生成计划，不会直接开跑。</div>
           <div class="composer-actions">
             <div class="settings">
-              <select id="depthSelect" title="Depth">
-                <option value="quick">quick</option>
-                <option value="standard" selected>standard</option>
-                <option value="deep">deep</option>
-              </select>
-              <input id="maxSectionsInput" type="number" min="1" max="8" value="4" title="Max sections" />
-            </div>
-            <div class="settings">
               <button id="confirmBtn" class="primary" disabled>确认并开始研究</button>
-              <button id="sendBtn" class="primary">开始研究</button>
+              <button id="sendBtn" class="primary">发送</button>
             </div>
           </div>
+          <details class="advanced-settings">
+            <summary>高级设置</summary>
+            <div class="settings">
+              <label class="field-label">研究深度
+                <select id="depthSelect" title="Depth">
+                  <option value="quick">快速</option>
+                  <option value="standard" selected>标准</option>
+                  <option value="deep">深入</option>
+                </select>
+              </label>
+              <label class="field-label">报告章节
+                <input id="maxSectionsInput" type="number" min="1" max="8" value="4" title="Max sections" />
+              </label>
+            </div>
+          </details>
         </div>
       </section>
 
       <aside class="panel inspector">
         <div class="panel-head">
-          <h2>Inspector</h2>
-          <button id="refreshBtn" title="Refresh">Refresh</button>
+          <h2>当前会话</h2>
+          <button id="refreshBtn" class="compact" title="Refresh">刷新</button>
         </div>
         <div id="inspector" class="inspector-body"></div>
       </aside>
@@ -598,7 +688,6 @@
       inspector: document.getElementById("inspector"),
       sessionStatus: document.getElementById("sessionStatus"),
       workspaceStatus: document.getElementById("workspaceStatus"),
-      skillStatus: document.getElementById("skillStatus"),
       mcpStatus: document.getElementById("mcpStatus"),
       jobStatus: document.getElementById("jobStatus"),
       messageInput: document.getElementById("messageInput"),
@@ -701,14 +790,12 @@
 
     function renderStatus(bundle) {
       if (!bundle) {
-        el.sessionStatus.textContent = "no session";
+        el.sessionStatus.textContent = "未选择会话";
         el.sessionStatus.className = "pill";
-        el.workspaceStatus.textContent = "workspace unknown";
+        el.workspaceStatus.textContent = "工作区未知";
         el.workspaceStatus.className = "pill";
-        el.skillStatus.textContent = "skill unknown";
-        el.skillStatus.className = "pill";
-        el.mcpStatus.textContent = "MCP unknown";
-        el.jobStatus.textContent = "no job";
+        el.mcpStatus.textContent = "MCP 未知";
+        el.jobStatus.textContent = "无任务";
         el.confirmBtn.disabled = true;
         el.exportBtn.disabled = true;
         return;
@@ -717,16 +804,13 @@
       el.sessionStatus.textContent = status;
       el.sessionStatus.className = `pill ${status === "completed" ? "good" : status === "failed" ? "bad" : "warn"}`;
       const mcp = bundle.mcp_status || {};
-      el.mcpStatus.textContent = mcp.label || (mcp.available ? "MCP available" : "MCP not configured");
+      el.mcpStatus.textContent = mcp.label || (mcp.available ? "MCP 可用" : "MCP 未配置");
       el.mcpStatus.className = `pill ${mcp.available ? "good" : "warn"}`;
       const workspace = bundle.workspace || {};
-      el.workspaceStatus.textContent = workspace.name || workspace.workspace_id || "workspace unknown";
+      el.workspaceStatus.textContent = workspace.name || workspace.workspace_id || "工作区未知";
       el.workspaceStatus.className = `pill ${workspace.name ? "good" : ""}`;
-      const skill = bundle.selected_skill || {};
-      el.skillStatus.textContent = skill.name || skill.skill_id || "skill unknown";
-      el.skillStatus.className = `pill ${skill.name ? "good" : ""}`;
       const job = bundle.active_job;
-      el.jobStatus.textContent = job ? `${job.status} · ${short(job.job_id, 10)}` : "no job";
+      el.jobStatus.textContent = job ? `${job.status} · ${short(job.job_id, 10)}` : "无任务";
       el.jobStatus.className = `pill ${job && job.status === "completed" ? "good" : job && job.status === "failed" ? "bad" : ""}`;
       el.confirmBtn.disabled = status !== "awaiting_confirmation" || !bundle.plan_draft;
       el.exportBtn.disabled = false;
@@ -734,11 +818,11 @@
 
     function renderTimeline(bundle) {
       if (!bundle) {
-        el.timeline.innerHTML = '<div class="empty">Create a session to start.</div>';
+        el.timeline.innerHTML = '<div class="empty">先新建一个会话。</div>';
         return;
       }
       if (!bundle.messages.length) {
-        el.timeline.innerHTML = '<div class="empty">Send a research goal or team constraint.</div>';
+        el.timeline.innerHTML = '<div class="empty">先输入研究目标和团队约束。</div>';
         return;
       }
       el.timeline.innerHTML = bundle.messages.map((message) => `
@@ -755,29 +839,89 @@
 
     function renderInspector(bundle) {
       if (!bundle) {
-        el.inspector.innerHTML = '<div class="empty">No active session.</div>';
+        el.inspector.innerHTML = renderQuickStart(null);
         return;
       }
       el.inspector.innerHTML = [
-        renderWorkspace(bundle),
-        renderSkills(bundle),
+        renderQuickStart(bundle),
         renderPlan(bundle.plan_draft),
         renderMemory(bundle),
-        renderHarness(bundle),
-        renderTools(bundle),
-        renderQuality(bundle),
         renderRun(bundle.active_run),
+        renderAdvanced(bundle),
       ].join("");
       bindInspectorActions();
     }
 
+    function renderQuickStart(bundle) {
+      if (!bundle) {
+        return `
+          <section class="quick-start">
+            <h3>怎么开始</h3>
+            <ol>
+              <li>点左侧“新建”。</li>
+              <li>输入 repo、技术问题和团队约束。</li>
+              <li>先看计划，确认后再开始研究。</li>
+            </ol>
+          </section>
+        `;
+      }
+      const status = bundle.session.status;
+      const guide = nextStepText(bundle);
+      const skill = bundle.selected_skill || {};
+      return `
+        <section class="next-step">
+          <h3>下一步</h3>
+          <p>${escapeHtml(guide)}</p>
+          <div class="settings">
+            <span class="pill ${status === "completed" ? "good" : status === "failed" ? "bad" : "warn"}">${escapeHtml(status)}</span>
+            <span class="pill">${escapeHtml(skill.name || "自动选择 skill")}</span>
+          </div>
+        </section>
+      `;
+    }
+
+    function nextStepText(bundle) {
+      const status = bundle.session.status;
+      if (status === "awaiting_confirmation" && bundle.plan_draft) {
+        return "计划已经生成。先检查计划和约束，没问题就点“确认并开始研究”。";
+      }
+      if (status === "researching") {
+        return "研究正在运行。可以等结果出来，或者展开高级信息看步骤、工具和路由。";
+      }
+      if (status === "completed") {
+        return "报告已经完成。先看结果和质量指标，需要复盘时再导出会话。";
+      }
+      if (status === "failed") {
+        return "这次运行失败了。展开高级信息看失败步骤和工具状态。";
+      }
+      if (status === "collecting") {
+        return "信息还不够。继续补充 repo、技术问题、团队规模、技术栈和部署约束。";
+      }
+      return "输入一个技术采用问题，系统会先生成研究计划，不会直接开跑。";
+    }
+
+    function renderAdvanced(bundle) {
+      return `
+        <details class="advanced-panel">
+          <summary>高级信息：工作区 / Skill / 工具 / 路由 / 质量</summary>
+          <div class="advanced-content">
+            ${renderWorkspace(bundle)}
+            ${renderSkills(bundle)}
+            ${renderHarness(bundle)}
+            ${renderTools(bundle)}
+            ${renderQuality(bundle)}
+          </div>
+        </details>
+      `;
+    }
+
     function renderPlan(plan) {
       if (!plan) {
-        return '<section class="block"><h3>Plan</h3><p>No draft yet.</p></section>';
+        return '<section class="block"><h3>计划</h3><p>还没有计划。先在左侧输入研究目标和团队约束。</p></section>';
       }
       return `
         <section class="block">
-          <h3>Plan Draft</h3>
+          <h3>计划</h3>
           <p>${escapeHtml(plan.research_brief)}</p>
           <ol>${plan.plan_items.map((item) => `<li>${escapeHtml(item.question)}</li>`).join("")}</ol>
           <div class="settings">
@@ -797,8 +941,8 @@
       const disabledValue = (workspace.disabled_tools || []).join(", ");
       return `
         <section class="block">
-          <h3>Workspace</h3>
-          <p>${escapeHtml(workspace.name || "No workspace")}</p>
+          <h3>工作区</h3>
+          <p>${escapeHtml(workspace.name || "未设置工作区")}</p>
           <div class="workspace-form">
             <input id="workspaceName" value="${escapeHtml(workspace.name || "")}" placeholder="Workspace name" />
             <textarea id="workspaceTeamContext" placeholder="Team context">${escapeHtml(workspace.team_context || "")}</textarea>
@@ -823,20 +967,19 @@
 
     function renderSkills(bundle) {
       const selected = bundle.selected_skill || {};
-      const catalog = bundle.skill_catalog || [];
       const scripts = selected.scripts || [];
       return `
         <section class="block">
-          <h3>Skills</h3>
-          <p>${escapeHtml(selected.name || "No skill selected")}</p>
+          <h3>Skill</h3>
+          <p>${escapeHtml(selected.name || "未选择 skill")}</p>
           <div class="metric-grid">
-            ${metric("skill id", selected.skill_id || "n/a")}
-            ${metric("type", selected.skill_type || "builtin")}
-            ${metric("version", selected.version || "n/a")}
-            ${metric("scenario", short(selected.scenario || "", 44))}
-            ${metric("required inputs", (selected.required_inputs || []).length)}
-            ${metric("focus", (selected.evaluation_focus || []).length)}
-            ${metric("scripts", scripts.length)}
+            ${metric("Skill ID", selected.skill_id || "n/a")}
+            ${metric("类型", selected.skill_type || "builtin")}
+            ${metric("版本", selected.version || "n/a")}
+            ${metric("场景", short(selected.scenario || "", 44))}
+            ${metric("必需输入", (selected.required_inputs || []).length)}
+            ${metric("关注点", (selected.evaluation_focus || []).length)}
+            ${metric("脚本", scripts.length)}
           </div>
           ${selected.source_path ? `<p class="subtle">pack: ${escapeHtml(selected.source_path)}${selected.instruction_path ? ` · ${escapeHtml(selected.instruction_path)}` : ""}</p>` : ""}
           ${selected.instructions_excerpt ? `<p class="subtle">${escapeHtml(short(selected.instructions_excerpt, 240))}</p>` : ""}
@@ -847,12 +990,7 @@
               `).join("")}
             </div>
           ` : ""}
-          ${catalog.length ? catalog.map((skill) => `
-            <div class="quality-row">
-              <span><strong>${escapeHtml(skill.name)}</strong> · ${escapeHtml(skill.skill_id)}</span>
-              <span>${escapeHtml(short(skill.scenario, 140))}${skill.scripts && skill.scripts.length ? ` · ${skill.scripts.length} script(s)` : ""}</span>
-            </div>
-          `).join("") : '<p>No skill catalog yet.</p>'}
+          <p class="subtle">脚本不是插件市场，只是这个 skill 能调用的有限动作。</p>
         </section>
       `;
     }
@@ -863,12 +1001,12 @@
       const extractionResults = bundle.memory_extraction_results || [];
       return `
         <section class="block">
-          <h3>Memory</h3>
+          <h3>记忆</h3>
           <div class="metric-grid">
-            ${metric("precision", evaluation.memory_precision)}
-            ${metric("recall proxy", evaluation.memory_recall)}
-            ${metric("accepted", evaluation.accepted_count)}
-            ${metric("project constraints", evaluation.project_constraint_count)}
+            ${metric("准确率", evaluation.memory_precision)}
+            ${metric("召回代理", evaluation.memory_recall)}
+            ${metric("已接受", evaluation.accepted_count)}
+            ${metric("项目约束", evaluation.project_constraint_count)}
           </div>
           <div class="memory-form">
             <textarea id="memoryInput" placeholder="保存团队约束、偏好或决策"></textarea>
@@ -885,21 +1023,21 @@
                 <option value="fact">fact</option>
                 <option value="todo">todo</option>
               </select>
-              <button id="saveMemoryBtn">Save</button>
+              <button id="saveMemoryBtn">保存</button>
             </div>
           </div>
-          ${items.length ? items.slice(0, 12).map((item) => `
+          ${items.length ? items.slice(0, 8).map((item) => `
             <div class="memory-row">
               <div class="row-head">
                 <strong>${escapeHtml(item.scope)} / ${escapeHtml(item.kind)}</strong>
-                <button class="compact danger" data-delete-memory="${escapeHtml(item.memory_id)}">Delete</button>
+                <button class="compact danger" data-delete-memory="${escapeHtml(item.memory_id)}">删除</button>
               </div>
               <span>${escapeHtml(item.content)}</span>
-              <span class="subtle">${escapeHtml(item.metadata && item.metadata.hard_constraint ? "hard constraint" : "memory")} · ${escapeHtml(short(item.updated_at, 24))}</span>
+              <span class="subtle">${escapeHtml(item.metadata && item.metadata.hard_constraint ? "硬约束" : "记忆")} · ${escapeHtml(short(item.updated_at, 24))}</span>
             </div>
-          `).join("") : '<p>No memory yet.</p>'}
+          `).join("") : '<p>还没有记忆。</p>'}
           ${extractionResults.length ? `
-            <h3>Extraction</h3>
+            <h3>提取结果</h3>
             ${extractionResults.slice(-4).reverse().map((result) => `
               <div class="extraction-row">
                 <strong>${escapeHtml(result.accepted.length)} accepted / ${escapeHtml(result.rejected.length)} rejected</strong>
@@ -919,14 +1057,14 @@
       const summary = bundle.benchmark_summary || (bundle.active_run ? bundle.active_run.benchmark_summary : null) || {};
       return `
         <section class="block">
-          <h3>Harness</h3>
+          <h3>路由</h3>
           <div class="metric-grid">
-            ${metric("roles", assignments.length)}
-            ${metric("routes", decisions.length)}
-            ${metric("conflicts", conflicts.length)}
-            ${metric("replay fidelity", summary.replay_fidelity)}
-            ${metric("evidence used", ledger.utilization_rate)}
-            ${metric("route recall", summary.route_recall)}
+            ${metric("角色数", assignments.length)}
+            ${metric("路由数", decisions.length)}
+            ${metric("冲突数", conflicts.length)}
+            ${metric("回放一致性", summary.replay_fidelity)}
+            ${metric("证据利用率", ledger.utilization_rate)}
+            ${metric("路由召回", summary.route_recall)}
           </div>
           ${assignments.length ? assignments.map((assignment) => `
             <div class="quality-row">
@@ -935,11 +1073,11 @@
                 <span class="pill ${assignment.status === "completed" ? "good" : "warn"}">${escapeHtml(assignment.status)}</span>
               </div>
               <span>${escapeHtml(short(assignment.reason, 180))}</span>
-              <span class="subtle">${escapeHtml((assignment.selected_tools || []).join(", ") || "no tool")} · evidence ${escapeHtml(assignment.evidence_count || 0)}</span>
+              <span class="subtle">${escapeHtml((assignment.selected_tools || []).join(", ") || "无工具")} · 证据 ${escapeHtml(assignment.evidence_count || 0)}</span>
             </div>
-          `).join("") : '<p>No role assignment yet.</p>'}
+          `).join("") : '<p>还没有角色分配。</p>'}
           ${conflicts.length ? `
-            <h3>Conflicts</h3>
+            <h3>冲突</h3>
             ${conflicts.slice(0, 6).map((conflict) => `
               <div class="coverage-row">
                 <div class="row-head">
@@ -952,7 +1090,7 @@
             `).join("")}
           ` : ""}
           ${Object.keys(ledger.by_agent || {}).length ? `
-            <h3>Evidence Ledger</h3>
+            <h3>证据账本</h3>
             <div class="source-row">
               <strong>by agent</strong>
               <span>${escapeHtml(JSON.stringify(ledger.by_agent || {}))}</span>
@@ -968,7 +1106,7 @@
 
     function renderRun(run) {
       if (!run || !run.report) {
-        return '<section class="block"><h3>Run Result</h3><p>No completed report yet.</p></section>';
+        return '<section class="block"><h3>结果</h3><p>还没有完成的报告。</p></section>';
       }
       const evaluation = run.evaluation || {};
       return `
@@ -976,10 +1114,10 @@
           <h3>${escapeHtml(run.report.title)}</h3>
           <p>${escapeHtml(run.report.summary)}</p>
           <div class="metric-grid">
-            ${metric("citation", evaluation.citation_precision)}
-            ${metric("faithfulness", evaluation.faithfulness_proxy)}
-            ${metric("context recall", evaluation.context_recall)}
-            ${metric("sources", run.report.source_count)}
+            ${metric("引用准确", evaluation.citation_precision)}
+            ${metric("忠实度", evaluation.faithfulness_proxy)}
+            ${metric("上下文召回", evaluation.context_recall)}
+            ${metric("来源数", run.report.source_count)}
           </div>
           ${run.report.sections.map((section) => `
             <div class="report-section">
@@ -1001,28 +1139,28 @@
       const steps = bundle.steps || [];
       return `
         <section class="block">
-          <h3>Tools</h3>
+          <h3>工具</h3>
           <p>${escapeHtml((bundle.mcp_status || {}).reason || "Tool registry is ready.")}</p>
           ${registry.length ? registry.map((tool) => `
             <div class="tool-row">
               <div class="row-head">
                 <strong>${escapeHtml(tool.name)} · ${escapeHtml(tool.channel)}</strong>
-                <span class="pill ${tool.enabled ? "good" : tool.requires_auth ? "warn" : "bad"}">${tool.enabled ? "enabled" : "unavailable"}</span>
+                <span class="pill ${tool.enabled ? "good" : tool.requires_auth ? "warn" : "bad"}">${tool.enabled ? "可用" : "不可用"}</span>
               </div>
               <span>${escapeHtml(short(tool.description, 180))}</span>
-              <span class="subtle">risk ${escapeHtml(tool.risk_level)} · approval ${tool.approval_required ? "required" : "not required"} · auth ${tool.auth_configured ? "ok" : "missing"}</span>
+              <span class="subtle">风险 ${escapeHtml(tool.risk_level)} · 审批 ${tool.approval_required ? "需要" : "不需要"} · 认证 ${tool.auth_configured ? "已配置" : "缺失"}</span>
             </div>
-          `).join("") : '<p>No tool registry yet.</p>'}
+          `).join("") : '<p>还没有工具注册表。</p>'}
           ${approvals.length ? `
-            <h3>Approvals</h3>
+            <h3>审批</h3>
             ${approvals.slice(-6).reverse().map((approval) => `
               <div class="approval-row">
                 <div class="row-head">
                   <strong>${escapeHtml(approval.status)} · ${escapeHtml(short(approval.requested_action, 60))}</strong>
                   ${approval.status === "pending" ? `
                     <span class="settings">
-                      <button class="compact primary" data-approve="${escapeHtml(approval.approval_id)}">Approve</button>
-                      <button class="compact danger" data-reject="${escapeHtml(approval.approval_id)}">Reject</button>
+                      <button class="compact primary" data-approve="${escapeHtml(approval.approval_id)}">通过</button>
+                      <button class="compact danger" data-reject="${escapeHtml(approval.approval_id)}">拒绝</button>
                     </span>
                   ` : ""}
                 </div>
@@ -1031,7 +1169,7 @@
             `).join("")}
           ` : ""}
           ${invocations.length ? `
-            <h3>Invocations</h3>
+            <h3>调用记录</h3>
             ${invocations.slice(-8).reverse().map((invocation) => `
               <div class="tool-row">
                 <div class="row-head">
@@ -1043,7 +1181,7 @@
             `).join("")}
           ` : ""}
           ${steps.length ? `
-            <h3>Steps</h3>
+            <h3>步骤</h3>
             ${steps.slice(-12).reverse().map((step) => `
               <div class="step-row">
                 <div class="row-head">
@@ -1051,17 +1189,17 @@
                   <span class="pill ${step.status === "completed" ? "good" : step.status === "failed" ? "bad" : "warn"}">${escapeHtml(step.status)}</span>
                 </div>
                 <span>${escapeHtml(short(step.title, 120))}</span>
-                <span class="subtle">${escapeHtml(step.tool_name || "no tool")} · evidence ${escapeHtml(step.evidence_count || 0)}</span>
+                <span class="subtle">${escapeHtml(step.tool_name || "无工具")} · 证据 ${escapeHtml(step.evidence_count || 0)}</span>
               </div>
             `).join("")}
           ` : ""}
-          ${routes.length ? `<h3>Routes</h3>` : ""}
+          ${routes.length ? `<h3>路由明细</h3>` : ""}
           ${routes.length ? routes.slice(0, 8).map((route) => `
             <div class="source-row">
-              <strong>${escapeHtml(route.mode)} · ${escapeHtml((route.selected_tools || []).join(", ") || "no tool")}</strong>
+              <strong>${escapeHtml(route.mode)} · ${escapeHtml((route.selected_tools || []).join(", ") || "无工具")}</strong>
               <span>${escapeHtml(short(route.reason, 180))}</span>
             </div>
-          `).join("") : '<p>No route decisions yet.</p>'}
+          `).join("") : '<p>还没有路由记录。</p>'}
           ${trace.length ? trace.slice(-8).map((event) => `
             <div class="trace-row">
               <strong>${escapeHtml(event.actor)} · ${escapeHtml(event.kind)}</strong>
@@ -1080,12 +1218,12 @@
       const coverageScore = coverage.length ? coveredCount / coverage.length : null;
       return `
         <section class="block">
-          <h3>Quality</h3>
+          <h3>质量</h3>
           <div class="metric-grid">
-            ${metric("citation", evaluation.citation_precision)}
-            ${metric("faithfulness", evaluation.faithfulness_proxy)}
-            ${metric("context recall", evaluation.context_recall)}
-            ${metric("constraint coverage", coverageScore === null ? "n/a" : coverageScore.toFixed(2))}
+            ${metric("引用准确", evaluation.citation_precision)}
+            ${metric("忠实度", evaluation.faithfulness_proxy)}
+            ${metric("上下文召回", evaluation.context_recall)}
+            ${metric("约束覆盖", coverageScore === null ? "n/a" : coverageScore.toFixed(2))}
           </div>
           ${coverage.length ? coverage.map((item) => `
             <div class="coverage-row">
@@ -1094,11 +1232,11 @@
                 <span class="pill ${item.covered ? "good" : "warn"}">${escapeHtml(item.confidence)}</span>
               </div>
               <span>${escapeHtml(item.content)}</span>
-              <span class="subtle">${escapeHtml(item.reason)} · ${escapeHtml((item.matched_sections || []).join(", ") || "no matched section")}</span>
+              <span class="subtle">${escapeHtml(item.reason)} · ${escapeHtml((item.matched_sections || []).join(", ") || "未匹配章节")}</span>
             </div>
-          `).join("") : '<p>No constraint coverage yet.</p>'}
+          `).join("") : '<p>还没有约束覆盖。</p>'}
           ${(evaluation.notes || []).length ? `
-            <h3>Notes</h3>
+            <h3>备注</h3>
             ${(evaluation.notes || []).slice(-5).map((note) => `<div class="quality-row"><span>${escapeHtml(note)}</span></div>`).join("")}
           ` : ""}
         </section>

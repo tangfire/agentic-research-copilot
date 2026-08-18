@@ -19,7 +19,7 @@ def wait_for_job(client: TestClient, status_url: str, timeout_seconds: float = 5
     raise AssertionError(f"Job did not finish in time: {last_status}")
 
 
-def test_root_page_includes_docs_link(tmp_path: Path, monkeypatch):
+def test_root_page_includes_simple_workbench_controls(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "root.sqlite"))
     client = TestClient(create_app())
@@ -29,8 +29,9 @@ def test_root_page_includes_docs_link(tmp_path: Path, monkeypatch):
     assert response.status_code == 200
     assert "AI Research Copilot" in response.text
     assert "/docs" in response.text
-    assert "/v1/research/runs" in response.text
-    assert "开始研究" in response.text
+    assert "下一步" in response.text
+    assert "高级信息" in response.text
+    assert "发送" in response.text
 
 
 def test_clarify_endpoint_returns_follow_up_for_vague_topic(tmp_path: Path, monkeypatch):
