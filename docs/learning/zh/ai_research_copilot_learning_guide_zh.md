@@ -6,17 +6,17 @@
 
 ## 这个项目到底是什么
 
-它不是普通聊天机器人，也不是后台 CRUD。它现在更准确的定位是“Agentic Research Runtime 实验项目”：用户给一个开放式技术问题，系统先规划，再选择 Web Search、GitHub MCP、本地 RAG 等证据源，收集证据，写报告，最后验证报告有没有引用和质量问题。
+它不是普通聊天机器人，也不是后台 CRUD。它现在更准确的定位是“Conversational Research Agent Runtime 实验项目”：用户在 session 里给一个开放式技术问题和团队约束，系统先写入 memory，再生成需要确认的研究计划，确认后选择 Web Search、GitHub MCP、本地 RAG 等证据源，收集证据，写报告，最后验证报告有没有引用和质量问题。
 
 你可以把它理解成一个自己学习 Deep Research / Codex 类系统工程机制的实验系统。它面向开源项目调研、工程技术选型、架构风险分析和本地技术语料 grounding，但不应该被包装成要替代成熟产品的商业 Copilot。它不是私人资料助手，也不是只分析 GitHub 项目的工具。
 
 核心链路：
 
 ```text
-问题 -> 计划 -> 监督者分派研究 -> 搜索/检索/工具调用 -> 证据压缩 -> 报告 -> 验证/评估 -> trace 复盘
+session -> memory -> 计划 -> 确认 -> 监督者分派研究 -> 搜索/检索/工具调用 -> 证据压缩 -> 报告 -> 验证/评估 -> trace 复盘
 ```
 
-现在核心里没有 project memory。之前的 memory 模块已经删除，因为它会让项目显得像在堆功能，但当前真正强的是 agentic research 和 RAG 证据链路。
+现在新增了本地 SQLite memory：`user` 保存长期偏好，`project` 保存团队/项目约束，`session` 保存当前对话事实。`project` memory 还会同步进本地 DocumentStore，参与向量、BM25 和图增强检索。它是 agent 入口层，不是企业级长期个性化系统。
 
 ## 先理解几个英文词
 
@@ -33,14 +33,15 @@
 
 ## 代码阅读顺序
 
-1. `src/agentic_research_copilot/schemas.py`
-2. `src/agentic_research_copilot/providers.py`
-3. `src/agentic_research_copilot/graph_runtime.py`
-4. `src/agentic_research_copilot/pipeline.py`
-5. `src/agentic_research_copilot/agents`
-6. `src/agentic_research_copilot/retrieval/store.py`
-7. `src/agentic_research_copilot/evaluation.py`
-8. `src/agentic_research_copilot/server.py`
+1. `src/agentic_research_copilot/agent.py`
+2. `src/agentic_research_copilot/schemas.py`
+3. `src/agentic_research_copilot/providers.py`
+4. `src/agentic_research_copilot/graph_runtime.py`
+5. `src/agentic_research_copilot/pipeline.py`
+6. `src/agentic_research_copilot/agents`
+7. `src/agentic_research_copilot/retrieval/store.py`
+8. `src/agentic_research_copilot/evaluation.py`
+9. `src/agentic_research_copilot/server.py`
 
 ## 最重要的几条链路
 

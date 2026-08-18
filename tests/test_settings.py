@@ -97,6 +97,21 @@ def test_load_settings_reads_github_mcp_readonly_config(monkeypatch):
     assert settings.mcp_auth_token == "github-token"
 
 
+def test_load_settings_reads_common_github_mcp_token_alias(monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
+    monkeypatch.setenv("ARC_MCP_ENABLED", "true")
+    monkeypatch.setenv("ARC_MCP_SERVER_URL", GITHUB_MCP_READONLY_URL)
+    monkeypatch.setenv("ARC_MCP_TOOLS", ",".join(GITHUB_MCP_READONLY_TOOLS))
+    monkeypatch.setenv("ARC_MCP_AUTH_REQUIRED", "true")
+    monkeypatch.delenv("ARC_MCP_AUTH_TOKEN", raising=False)
+    monkeypatch.delenv("MCP_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("GH_TOKEN", "gh-token")
+
+    settings = load_settings()
+
+    assert settings.mcp_auth_token == "gh-token"
+
+
 def test_load_settings_reads_bom_prefixed_dotenv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ARC_LOAD_DOTENV", "true")

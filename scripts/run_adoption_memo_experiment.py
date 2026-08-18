@@ -2,15 +2,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from agentic_research_copilot.deterministic_provider import DeterministicResearchModelProvider
+from agentic_research_copilot.mcp_tools import build_mcp_tool
 from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.schemas import EvidenceItem, ResearchRequest, ResearchRun
-from agentic_research_copilot.settings import AppSettings, load_settings, resolve_storage_path
+from agentic_research_copilot.settings import (
+    DASHSCOPE_COMPATIBLE_BASE_URL,
+    GITHUB_MCP_READONLY_TOOLS,
+    GITHUB_MCP_READONLY_URL,
+    AppSettings,
+    load_settings,
+    resolve_storage_path,
+)
 from agentic_research_copilot.storage import SQLiteStore
 
 
@@ -90,9 +99,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        default="deterministic",
+        default="real",
         choices=["deterministic", "real"],
-        help="Use deterministic providers for repeatable demos, or real configured providers.",
+        help="Use real configured providers, or deterministic providers for offline regression tests.",
     )
     parser.add_argument("--use-mcp", action="store_true", help="Use configured MCP tools for this run.")
     parser.add_argument(
@@ -108,6 +117,7 @@ def main() -> None:
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     settings = _experiment_settings(use_mcp=args.use_mcp, mode=args.mode)
+    _validate_experiment_settings(settings, mode=args.mode, use_mcp=args.use_mcp)
     _clear_experiment_store(settings)
 
     copilot = ResearchCopilot(settings=settings)
@@ -136,7 +146,7 @@ def _experiment_settings(*, use_mcp: bool, mode: str) -> AppSettings:
     updates: dict[str, Any] = {
         "storage_path": ".arc/adoption_memo_lab.db",
         "langgraph_checkpoint_path": ".arc/langgraph_adoption_memo_lab.sqlite",
-        "strict_providers": False,
+        "strict_providers": mode == "real",
         "qdrant_url": "",
         "qdrant_location": ".arc/qdrant-adoption-lab",
         "qdrant_prefer_local": True,
@@ -144,13 +154,34 @@ def _experiment_settings(*, use_mcp: bool, mode: str) -> AppSettings:
         "job_queue_backend": "in_process",
         "mcp_enabled": use_mcp,
         "seed_reference_knowledge": False,
-        "research_max_iterations": min(2, max(1, settings.research_max_iterations)),
+        "research_max_iterations": 1 if mode == "real" else min(2, max(1, settings.research_max_iterations)),
         "research_max_workers": 1,
         "rag_min_evidence_per_item": 1,
         "rag_min_source_diversity": 1,
-        "model_timeout_seconds": max(60.0, settings.model_timeout_seconds),
+        "model_timeout_seconds": min(90.0, max(45.0, settings.model_timeout_seconds)),
         "search_timeout_seconds": max(12.0, settings.search_timeout_seconds),
+        "search_max_results": min(3, max(1, settings.search_max_results)),
+        "search_include_raw_content": False,
+        "source_reader_enabled": False,
+        "mcp_timeout_seconds": min(15.0, max(5.0, settings.mcp_timeout_seconds)),
+        "max_revisions": 1,
     }
+    if mode == "real":
+        updates.update(_stable_real_chat_provider(settings))
+    if use_mcp and mode == "real":
+        updates.update(
+            {
+                "mcp_enabled": True,
+                "mcp_server_url": GITHUB_MCP_READONLY_URL,
+                "mcp_tools": GITHUB_MCP_READONLY_TOOLS,
+                "mcp_auth_required": True,
+                "mcp_prompt": (
+                    "Use GitHub MCP for source-of-truth repository evidence: README files, "
+                    "code search, issues, pull requests, and releases. Use Tavily only for "
+                    "broader web context outside GitHub."
+                ),
+            }
+        )
     if mode == "deterministic":
         updates.update(
             {
@@ -168,6 +199,47 @@ def _experiment_settings(*, use_mcp: bool, mode: str) -> AppSettings:
             **updates,
         }
     )
+
+
+def _stable_real_chat_provider(settings: AppSettings) -> dict[str, Any]:
+    preferred_model = os.getenv("ARC_REAL_LAB_CHAT_MODEL", "qwen-plus")
+    qwen_key = os.getenv("DASHSCOPE_API_KEY", "").strip() or os.getenv("QWEN_API_KEY", "").strip()
+    current_url = settings.model_base_url.lower()
+    current_model = settings.model_chat_model.lower()
+    relay_like = "relay.novelcat" in current_url or "deepseek" in current_model
+    if not qwen_key or not relay_like:
+        return {}
+    return {
+        "model_base_url": DASHSCOPE_COMPATIBLE_BASE_URL,
+        "model_api_key": qwen_key,
+        "model_chat_model": preferred_model,
+    }
+
+
+def _validate_experiment_settings(settings: AppSettings, *, mode: str, use_mcp: bool) -> None:
+    if mode != "real":
+        return
+    missing: list[str] = []
+    if settings.model_provider != "openai_compatible" or not settings.model_base_url or not settings.model_api_key:
+        missing.append("ARC_MODEL_PROVIDER=openai_compatible plus ARC_MODEL_BASE_URL/ARC_MODEL_API_KEY")
+    if settings.embedding_provider != "openai_compatible" or not settings.embedding_api_key:
+        missing.append("ARC_EMBEDDING_PROVIDER=openai_compatible plus ARC_EMBEDDING_API_KEY")
+    if settings.search_provider == "none" or not settings.search_api_key:
+        missing.append("ARC_SEARCH_PROVIDER plus ARC_SEARCH_API_KEY, for example Tavily")
+    if use_mcp and not settings.mcp_auth_token:
+        missing.append(
+            "ARC_MCP_AUTH_TOKEN or GH_TOKEN/GITHUB_TOKEN/GITHUB_PERSONAL_ACCESS_TOKEN for GitHub MCP"
+        )
+    if missing:
+        formatted = "\n".join(f"- {item}" for item in missing)
+        raise RuntimeError(f"Real adoption memo experiment is not fully configured:\n{formatted}")
+    if use_mcp:
+        registry = build_mcp_tool(settings)
+        if registry is None:
+            raise RuntimeError("GitHub MCP is enabled but the MCP registry was not created.")
+        descriptors = registry.describe_tools()
+        if not descriptors:
+            raise RuntimeError("GitHub MCP is enabled but no allowlisted tools were loaded.")
 
 
 def _clear_experiment_store(settings: AppSettings) -> None:
@@ -198,15 +270,15 @@ def _use_budgeted_indexing(copilot: ResearchCopilot, settings: AppSettings) -> N
 
     Document contextualization and graph extraction call the chat provider once per
     chunk. In strict real-provider mode that can dominate a small demo run. This
-    lab keeps embeddings/search/reporting real by default, but uses deterministic
-    indexing helpers so the local context pack remains repeatable and fast.
+    lab keeps embeddings/search/research decisions/reporting real by default, but
+    uses deterministic indexing helpers so the local context pack remains
+    repeatable and fast.
     """
     helper = DeterministicResearchModelProvider(
         embedding_dimensions=settings.embedding_dimensions
     )
     copilot.documents.contextualizer_provider = helper
     copilot.documents.graph_provider = helper
-    copilot.researcher.model_provider = helper
 
 
 def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
@@ -239,6 +311,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
     labeled = {
         "expected_term_recall": _ratio(len(expected_term_hits), len(EXPECTED_TERMS)),
         "constraint_recall": _ratio(len(constraint_hits), len(EXPECTED_CONSTRAINTS)),
+        "constraint_coverage_passed": _ratio(len(constraint_hits), len(EXPECTED_CONSTRAINTS)) >= 0.6,
         "expected_source_recall": _ratio(len(source_hits), len(EXPECTED_SOURCE_PATTERNS)),
         "matched_terms": expected_term_hits,
         "matched_constraints": constraint_hits,
@@ -254,6 +327,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
         "citation_precision": evaluation.citation_precision if evaluation else 0.0,
         "expected_term_recall": labeled["expected_term_recall"],
         "constraint_recall": labeled["constraint_recall"],
+        "constraint_coverage_passed": labeled["constraint_coverage_passed"],
         "graph_signal_hits": len(graph_signal_hits),
     }
     return {
@@ -283,6 +357,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
             "embedding_model": settings.embedding_model,
             "search_provider": settings.search_provider,
             "mcp_enabled": settings.mcp_enabled,
+            "mcp_auth_token_configured": bool(settings.mcp_auth_token),
             "mcp_tools": settings.mcp_tools if settings.mcp_enabled else [],
             "rerank_provider": settings.rerank_provider,
             "qdrant": "local-path",
@@ -292,9 +367,9 @@ def _build_summary(run: ResearchRun, settings: AppSettings) -> dict[str, Any]:
         },
         "evaluation": run.evaluation.model_dump(mode="json") if run.evaluation else None,
         "findings": [
-            "Non-strict provider fallback is required for long-form reporting; otherwise real chat timeouts can lose a completed run.",
-            "Deterministic indexing kept the local context pack repeatable, but graph entity extraction needs stopword filtering to avoid noisy entities.",
-            "The lab can complete with hybrid web plus vector retrieval even when MCP is disabled, but that means GitHub MCP evidence still needs a dedicated smoke path later.",
+            "Real report synthesis must use compact section drafts and evidence indexes; unbounded prompts make timeout failures likely.",
+            "Budgeted local indexing keeps the team context pack fast while preserving real model/search/report execution.",
+            "GitHub MCP is only counted as enabled when an auth token is configured and GitHub MCP tools are actually allowlisted.",
         ],
     }
 
@@ -394,6 +469,7 @@ def _render_analysis(run: ResearchRun, settings: AppSettings, summary: dict[str,
         f"- Faithfulness proxy: {headline['faithfulness_proxy']}",
         f"- Expected term recall: {headline['expected_term_recall']}",
         f"- Team constraint recall: {headline['constraint_recall']}",
+        f"- Constraint coverage passed: `{headline['constraint_coverage_passed']}`",
         f"- Expected source recall: {labeled['expected_source_recall']}",
         "",
         "## Routing And Trace",
@@ -437,14 +513,14 @@ def _render_analysis(run: ResearchRun, settings: AppSettings, summary: dict[str,
         "",
         "1. The strongest real use case is a repeatable adoption memo, not a generic chatbot. The local team context pack removes the need to paste the same constraints into every prompt.",
         "2. The current runtime already has a real graph: planner, research supervisor, parallel research, reporter, verifier/evaluator, revision, and finalize. In this scenario the graph is conceptually appropriate because evidence sufficiency and citation gates can change the path.",
-        "3. The configured MCP tools should be checked before a GitHub-heavy demo. If they are local memory/workbench tools instead of GitHub repository tools, the run can still use Web evidence but cannot prove GitHub MCP value.",
+        "3. GitHub MCP is a separate source-of-truth evidence channel. In real MCP mode the lab now forces the GitHub read-only endpoint and fails fast when auth is missing, so web-only evidence cannot be mistaken for MCP evidence.",
         "4. The next product surface should be a first-class adoption memo preset: repo, decision question, team context pack, generated report, trace, and metrics in one bundle.",
         "",
         "## Issues Found And Fixed",
         "",
-            "1. Real provider timeouts could abort the run during long reporter/verifier calls. The lab now defaults to deterministic mode for reproducibility and keeps real provider mode as an explicit integration test.",
-        "2. Deterministic graph extraction was over-collecting structure words such as `The` and `Input`. A small stopword filter makes graph signal more trustworthy.",
-        "3. MCP is still not part of this lab run, so GitHub source-of-truth evidence remains a separate future smoke test rather than part of the current proof.",
+            "1. Real provider timeouts could abort the run during long reporter/verifier calls. The reporter input is now compacted and the real lab is the default run mode.",
+        "2. Budgeted indexing graph extraction was over-collecting structure words such as `The` and `Input`. A small stopword filter makes graph signal more trustworthy while keeping the real research/report path on real providers.",
+        "3. MCP configuration used to inherit stale local workbench tools. Real MCP lab runs now force the GitHub read-only endpoint and GitHub tool allowlist.",
         "",
         "## Provider Snapshot",
         "",
@@ -452,6 +528,7 @@ def _render_analysis(run: ResearchRun, settings: AppSettings, summary: dict[str,
             f"- Embedding: `{settings.embedding_provider}` / `{settings.embedding_model}`",
             f"- Search: `{settings.search_provider}`",
             f"- MCP enabled for this run: `{settings.mcp_enabled}`",
+            f"- MCP auth token configured: `{bool(settings.mcp_auth_token)}`",
             f"- Rerank: `{settings.rerank_provider}`",
         ]
     )
@@ -466,10 +543,23 @@ def _clean_lab_artifacts() -> None:
             raise RuntimeError(f"Refusing to clean outside workspace: {resolved}")
         if not resolved.exists():
             continue
-        if resolved.is_dir():
-            shutil.rmtree(resolved)
-        else:
-            resolved.unlink()
+        try:
+            if resolved.is_dir():
+                shutil.rmtree(resolved)
+            else:
+                resolved.unlink()
+        except PermissionError as exc:
+            print(
+                json.dumps(
+                    {
+                        "warning": "skip_locked_artifact",
+                        "path": str(resolved),
+                        "error": str(exc),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            continue
 
 
 def _title_from_markdown(content: str) -> str:

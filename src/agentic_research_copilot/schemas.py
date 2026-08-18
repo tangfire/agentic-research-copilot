@@ -238,6 +238,11 @@ class ResearcherToolDecisionContract(BaseModel):
     completion_reason: str | None = None
     confidence: float = 0.0
 
+    @field_validator("rationale", "reflection", mode="before")
+    @classmethod
+    def _normalize_optional_strings(cls, value: Any) -> Any:
+        return "" if value is None else value
+
 
 class VerificationContract(BaseModel):
     issues: list[str] = Field(default_factory=list)
@@ -382,3 +387,302 @@ class ResearchRun(BaseModel):
     started_at: str | None = None
     finished_at: str | None = None
     duration_ms: int | None = None
+
+
+AgentSessionStatus = Literal[
+    "collecting",
+    "planning",
+    "awaiting_confirmation",
+    "researching",
+    "completed",
+    "failed",
+]
+AgentMessageRole = Literal["user", "assistant", "system", "tool"]
+AgentMessageIntent = Literal["chat", "clarify", "plan", "confirm", "research", "follow_up"]
+MemoryScope = Literal["user", "project", "session"]
+MemoryKind = Literal["preference", "constraint", "decision", "fact", "todo"]
+AgentRunStepKind = Literal[
+    "message",
+    "planning",
+    "approval",
+    "tool_call",
+    "retrieval",
+    "research",
+    "report",
+    "verification",
+    "evaluation",
+    "failure",
+    "heartbeat",
+]
+AgentRunStepStatus = Literal["pending", "running", "completed", "failed", "skipped"]
+AgentToolChannel = Literal["web", "vector", "mcp", "local"]
+AgentToolRiskLevel = Literal["low", "medium", "high"]
+ToolInvocationStatus = Literal["pending_approval", "running", "completed", "failed", "skipped"]
+ApprovalStatus = Literal["pending", "approved", "rejected", "expired"]
+AgentEventKind = Literal[
+    "message",
+    "planning",
+    "approval",
+    "tool_call",
+    "retrieval",
+    "research",
+    "report",
+    "verification",
+    "evaluation",
+    "failure",
+    "heartbeat",
+]
+
+
+class WorkspaceProfile(BaseModel):
+    workspace_id: str
+    name: str
+    team_context: str = ""
+    default_stack: list[str] = Field(default_factory=list)
+    deployment_constraints: list[str] = Field(default_factory=list)
+    risk_policy: str = ""
+    preferred_sources: list[str] = Field(default_factory=list)
+    disabled_tools: list[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=_utc_now)
+    updated_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SkillScript(BaseModel):
+    name: str
+    path: str
+    description: str = ""
+    enabled: bool = True
+    auto: bool = False
+    timeout_seconds: float = 10.0
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    output_schema: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResearchSkill(BaseModel):
+    skill_id: str
+    name: str
+    scenario: str
+    trigger_keywords: list[str] = Field(default_factory=list)
+    required_inputs: list[str] = Field(default_factory=list)
+    plan_template: list[str] = Field(default_factory=list)
+    evaluation_focus: list[str] = Field(default_factory=list)
+    skill_type: Literal["builtin", "pack"] = "builtin"
+    version: str = "1.0.0"
+    source_path: str = ""
+    instruction_path: str = ""
+    instructions_excerpt: str = ""
+    scripts: list[SkillScript] = Field(default_factory=list)
+    created_at: str = Field(default_factory=_utc_now)
+    updated_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryItem(BaseModel):
+    memory_id: str
+    scope: MemoryScope
+    kind: MemoryKind = "fact"
+    content: str = Field(min_length=1)
+    session_id: str | None = None
+    source_message_id: str | None = None
+    confidence: float = 0.0
+    created_at: str = Field(default_factory=_utc_now)
+    updated_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class MemoryExtractionResult(BaseModel):
+    source_message_id: str
+    session_id: str
+    candidates: list[MemoryItem] = Field(default_factory=list)
+    accepted: list[MemoryItem] = Field(default_factory=list)
+    rejected: list[MemoryItem] = Field(default_factory=list)
+    reason: str = ""
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConstraintCoverage(BaseModel):
+    constraint_id: str
+    run_id: str | None = None
+    session_id: str | None = None
+    content: str
+    covered: bool = False
+    matched_sections: list[str] = Field(default_factory=list)
+    matched_evidence: list[str] = Field(default_factory=list)
+    confidence: float = 0.0
+    reason: str = ""
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentEvent(BaseModel):
+    event_id: str
+    session_id: str
+    run_id: str | None = None
+    job_id: str | None = None
+    type: Literal["message", "step", "approval", "tool_invocation"]
+    kind: AgentEventKind
+    status: str = "completed"
+    title: str
+    summary: str = ""
+    actor: str = "agent"
+    tool_name: str | None = None
+    created_at: str = Field(default_factory=_utc_now)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentRunStep(BaseModel):
+    step_id: str
+    session_id: str
+    run_id: str | None = None
+    job_id: str | None = None
+    kind: AgentRunStepKind
+    status: AgentRunStepStatus = "pending"
+    title: str
+    summary: str = ""
+    actor: str = "agent"
+    tool_name: str | None = None
+    input_preview: str = ""
+    output_preview: str = ""
+    evidence_count: int = 0
+    created_at: str = Field(default_factory=_utc_now)
+    updated_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentToolDefinition(BaseModel):
+    name: str
+    channel: AgentToolChannel
+    description: str = ""
+    input_schema: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool = True
+    requires_auth: bool = False
+    auth_configured: bool = True
+    risk_level: AgentToolRiskLevel = "low"
+    approval_required: bool = False
+    failure_mode: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolInvocation(BaseModel):
+    invocation_id: str
+    session_id: str
+    run_id: str | None = None
+    tool_name: str
+    status: ToolInvocationStatus = "running"
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    result_preview: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+    latency_ms: int = 0
+    error: str = ""
+    created_at: str = Field(default_factory=_utc_now)
+    updated_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ApprovalRequest(BaseModel):
+    approval_id: str
+    session_id: str
+    invocation_id: str
+    reason: str
+    requested_action: str
+    status: ApprovalStatus = "pending"
+    created_at: str = Field(default_factory=_utc_now)
+    resolved_at: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentPlanDraft(BaseModel):
+    session_id: str
+    workspace_id: str | None = None
+    skill_id: str | None = None
+    skill_name: str = ""
+    skill_reason: str = ""
+    research_request: ResearchRequest
+    research_brief: str
+    plan_items: list[PlanItem] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    success_criteria: list[str] = Field(default_factory=list)
+    required_confirmation: bool = True
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentMessage(BaseModel):
+    message_id: str
+    session_id: str
+    role: AgentMessageRole
+    content: str
+    intent: AgentMessageIntent = "chat"
+    created_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentSession(BaseModel):
+    session_id: str
+    title: str
+    session_key: str | None = None
+    workspace_id: str | None = None
+    selected_skill_id: str | None = None
+    context_summary: str = ""
+    status: AgentSessionStatus = "collecting"
+    created_at: str = Field(default_factory=_utc_now)
+    updated_at: str = Field(default_factory=_utc_now)
+    active_run_id: str | None = None
+    last_heartbeat_at: str | None = None
+    memory_scope_ids: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentSessionBundle(BaseModel):
+    session: AgentSession
+    workspace: WorkspaceProfile | None = None
+    selected_skill: ResearchSkill | None = None
+    skill_catalog: list[ResearchSkill] = Field(default_factory=list)
+    messages: list[AgentMessage] = Field(default_factory=list)
+    plan_draft: AgentPlanDraft | None = None
+    memory: list[MemoryItem] = Field(default_factory=list)
+    steps: list[AgentRunStep] = Field(default_factory=list)
+    tool_registry: list[AgentToolDefinition] = Field(default_factory=list)
+    tool_invocations: list[ToolInvocation] = Field(default_factory=list)
+    approval_requests: list[ApprovalRequest] = Field(default_factory=list)
+    memory_extraction_results: list[MemoryExtractionResult] = Field(default_factory=list)
+    memory_evaluation: dict[str, Any] = Field(default_factory=dict)
+    constraint_coverage: list[ConstraintCoverage] = Field(default_factory=list)
+    active_job: ResearchJob | None = None
+    active_run: ResearchRun | None = None
+    mcp_status: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentTurnResponse(BaseModel):
+    session: AgentSession
+    workspace: WorkspaceProfile | None = None
+    selected_skill: ResearchSkill | None = None
+    user_message: AgentMessage | None = None
+    assistant_message: AgentMessage | None = None
+    plan_draft: AgentPlanDraft | None = None
+    memory_updates: list[MemoryItem] = Field(default_factory=list)
+    steps: list[AgentRunStep] = Field(default_factory=list)
+    tool_invocations: list[ToolInvocation] = Field(default_factory=list)
+    approval_requests: list[ApprovalRequest] = Field(default_factory=list)
+    memory_extraction_result: MemoryExtractionResult | None = None
+    active_job: ResearchJob | None = None
+    active_run: ResearchRun | None = None
+    status_url: str | None = None
+    result_url: str | None = None
+    mcp_status: dict[str, Any] = Field(default_factory=dict)
+
+
+class SkillExecutionResult(BaseModel):
+    skill_id: str
+    script_name: str
+    status: Literal["completed", "failed"]
+    exit_code: int = 0
+    stdout: str = ""
+    stderr: str = ""
+    output: dict[str, Any] = Field(default_factory=dict)
+    started_at: str = Field(default_factory=_utc_now)
+    finished_at: str = Field(default_factory=_utc_now)
+    metadata: dict[str, Any] = Field(default_factory=dict)

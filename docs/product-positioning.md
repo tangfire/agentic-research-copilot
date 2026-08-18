@@ -2,7 +2,7 @@
 
 ## One Sentence
 
-AI Research Copilot is best presented as an **Agentic Research Runtime**: a single-node AI engineering experiment that turns an open-ended technical question into a planned, citation-backed, traceable research run using web search, GitHub MCP, and local Agentic RAG evidence.
+AI Research Copilot is best presented as a **Conversational Research Agent Runtime**: a single-node AI engineering experiment that turns a chat session, saved team constraints, and an open-ended technical question into a confirmed, citation-backed, traceable research run using web search, GitHub MCP, and local Agentic RAG evidence.
 
 ## Honest Framing
 
@@ -11,6 +11,7 @@ This is not a strong commercial product thesis yet. A mature agent such as Codex
 The credible value of this repo is different:
 
 - it implements the runtime mechanics behind a research agent
+- it adds the product-facing agent layer: sessions, memory, plan confirmation, and job binding
 - it exposes plans, tool decisions, routes, evidence, citations, evaluation, and trace artifacts
 - it gives the author concrete engineering material to discuss in interviews
 - it keeps features narrow enough that implementation quality can be inspected
@@ -74,7 +75,7 @@ This makes repository research a concrete workflow inside the runtime. It is not
 
 ## Non-Goals
 
-- It is not a private-data assistant or long-term personalization memory product.
+- It is not a private-data assistant or enterprise long-term personalization memory product.
 - It is not a generic CRUD backend.
 - It is not a complete agent platform or agent SDK.
 - It is not a GitHub-only analyzer; GitHub MCP is one evidence channel inside a broader research workflow.
@@ -86,7 +87,7 @@ This makes repository research a concrete workflow inside the runtime. It is not
 
 Use this answer:
 
-> Codex is a mature end-user product and is obviously stronger as a general assistant. My project is not trying to replace it. I built a smaller inspectable runtime to understand and demonstrate how this class of systems works internally: stateful planning, structured tool calls, bounded researcher loops, evidence contracts, local RAG, citation grounding, verification, evaluation, and trace replay.
+> Codex is a mature end-user product and is obviously stronger as a general assistant. My project is not trying to replace it. I built a smaller inspectable runtime to understand and demonstrate how this class of systems works internally: session state, memory, interactive planning, structured tool calls, bounded researcher loops, evidence contracts, local RAG, citation grounding, verification, evaluation, and trace replay.
 
 This turns the comparison from product capability into engineering understanding.
 
@@ -94,6 +95,6 @@ This turns the comparison from product capability into engineering understanding
 
 The strongest framing is:
 
-> I built an Agentic Research Runtime inspired by Open Deep Research. The core work is a supervised LangGraph workflow: structured planning, bounded tool routing, GitHub MCP developer evidence, local Agentic RAG, citation-locked synthesis, verification, evaluation, and trace replay.
+> I built a Conversational Research Agent Runtime inspired by Open Deep Research. The core work is a session and memory layer in front of a supervised LangGraph workflow: interactive planning, bounded tool routing, GitHub MCP developer evidence, local Agentic RAG, citation-locked synthesis, verification, evaluation, and trace replay.
 
 This positioning keeps the project specific enough to be credible while still showing a complete large-model application stack.

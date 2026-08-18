@@ -4,27 +4,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Research Copilot · 深度研究工作台</title>
+  <title>AI Research Copilot · Agent Workbench</title>
   <link rel="icon" href="data:," />
   <style>
     :root {
       color-scheme: light;
-      --bg: #f4f6f8;
-      --ink: #182033;
-      --muted: #657089;
-      --line: #dbe1ea;
+      --bg: #f5f7fa;
+      --ink: #152033;
+      --muted: #647084;
+      --line: #d9e0ea;
       --surface: #ffffff;
-      --soft: #eef3f8;
-      --soft-blue: #eaf2ff;
-      --soft-amber: #fff7e6;
+      --soft: #eef3f7;
       --accent: #0f766e;
       --accent-strong: #0b5d56;
-      --blue: #2563eb;
-      --blue-strong: #1d4ed8;
       --warn: #a16207;
       --bad: #b91c1c;
       --good: #15803d;
-      --shadow: 0 14px 36px rgba(24, 32, 51, 0.08);
+      --shadow: 0 14px 32px rgba(21, 32, 51, 0.08);
     }
 
     * {
@@ -34,13 +30,10 @@
     body {
       margin: 0;
       min-height: 100vh;
-      background:
-        linear-gradient(180deg, #f8fafc 0, #f4f6f8 220px),
-        var(--bg);
+      background: var(--bg);
       color: var(--ink);
-      font-family:
-        Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-        sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
     }
 
     button,
@@ -51,41 +44,94 @@
     }
 
     button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--ink);
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 12px;
+      white-space: nowrap;
     }
 
-    .app-shell {
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    button.primary:hover {
+      background: var(--accent-strong);
+    }
+
+    button.danger {
+      border-color: #fecaca;
+      color: var(--bad);
+      background: #fff7f7;
+    }
+
+    button.compact {
+      min-height: 28px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+    }
+
+    textarea,
+    input,
+    select {
+      width: 100%;
+      border: 1px solid #cfd8e3;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      outline: none;
+    }
+
+    textarea:focus,
+    input:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+    }
+
+    .shell {
       min-height: 100vh;
       display: grid;
       grid-template-rows: auto 1fr;
     }
 
     .topbar {
-      min-height: 64px;
-      padding: 12px clamp(16px, 3vw, 32px);
+      min-height: 62px;
+      padding: 12px clamp(14px, 3vw, 28px);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
+      gap: 18px;
       border-bottom: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.92);
-      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.94);
       position: sticky;
       top: 0;
-      z-index: 5;
-      box-shadow: 0 1px 0 rgba(24, 32, 51, 0.03);
+      z-index: 10;
     }
 
     .brand {
-      display: flex;
-      flex-direction: column;
+      display: grid;
       gap: 2px;
       min-width: 0;
     }
 
     .brand strong {
       font-size: 17px;
-      letter-spacing: 0;
     }
 
     .brand span {
@@ -94,724 +140,259 @@
       overflow-wrap: anywhere;
     }
 
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .top-actions a,
-    .button,
-    button {
-      min-height: 36px;
-      border: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--ink);
-      padding: 8px 12px;
-      border-radius: 8px;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 7px;
-      white-space: nowrap;
-    }
-
-    .button.primary,
-    button.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #ffffff;
-    }
-
-    .button.primary:hover,
-    button.primary:hover {
-      background: var(--accent-strong);
-    }
-
-    .button.ghost,
-    button.ghost {
-      background: transparent;
-    }
-
-    .button.danger,
-    button.danger {
-      border-color: #fecaca;
-      color: var(--bad);
-    }
-
-    .button.mini,
-    button.mini {
-      min-height: 28px;
-      padding: 4px 8px;
-      font-size: 12px;
-    }
-
-    button:disabled {
-      cursor: not-allowed;
-      opacity: 0.65;
-    }
-
     .layout {
-      display: grid;
-      grid-template-columns: 232px minmax(0, 1fr);
-      gap: 20px;
-      width: min(1540px, 100%);
+      width: min(1580px, 100%);
       margin: 0 auto;
-      padding: 20px clamp(14px, 3vw, 32px) 32px;
-    }
-
-    .rail {
-      position: sticky;
-      top: 84px;
-      align-self: start;
+      padding: 18px clamp(12px, 3vw, 28px) 28px;
       display: grid;
-      align-content: start;
-      gap: 6px;
-      min-height: calc(100vh - 116px);
-      padding: 12px;
-      border: 1px solid #d6dee7;
-      background: #17211f;
-      box-shadow: 0 18px 42px rgba(24, 32, 51, 0.12);
-      border-radius: 8px;
+      grid-template-columns: 260px minmax(0, 1fr) 380px;
+      gap: 16px;
+      min-height: calc(100vh - 62px);
     }
 
-    .tab-button {
-      justify-content: flex-start;
-      width: 100%;
-      border-color: transparent;
-      background: transparent;
-      color: #bfd0cb;
-      min-height: 42px;
-    }
-
-    .tab-button.active {
-      background: #f6fbfa;
-      color: #0d4f49;
-      border-color: rgba(255, 255, 255, 0.18);
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-    }
-
-    main {
+    .panel {
       min-width: 0;
-    }
-
-    .tab-panel {
-      display: none;
-    }
-
-    .tab-panel.active {
-      display: grid;
-      gap: 18px;
-    }
-
-    .workspace-header {
-      display: grid;
-      gap: 14px;
-      padding: 20px;
       border: 1px solid var(--line);
-      border-left: 4px solid var(--accent);
       border-radius: 8px;
       background: var(--surface);
       box-shadow: var(--shadow);
     }
 
-    .workspace-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 14px;
-      min-width: 0;
-    }
-
-    .workspace-title h1 {
-      font-size: clamp(24px, 3vw, 34px);
-      line-height: 1.08;
-    }
-
-    .workspace-title p {
-      margin-top: 6px;
-      color: var(--muted);
-      max-width: 780px;
-    }
-
-    .research-console {
-      overflow: hidden;
-      border: 1px solid #d4dde7;
-      border-radius: 8px;
-      background: var(--surface);
-      box-shadow: 0 20px 48px rgba(24, 32, 51, 0.1);
-    }
-
-    .console-header {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 18px;
-      align-items: start;
-      padding: 22px 24px;
-      border-bottom: 1px solid var(--line);
-      background: #f8fbfb;
-    }
-
-    .console-title {
-      display: grid;
-      gap: 5px;
-      min-width: 0;
-    }
-
-    .console-title h1 {
-      font-size: clamp(24px, 2.6vw, 32px);
-      line-height: 1.08;
-    }
-
-    .console-title p {
-      color: var(--muted);
-      max-width: 780px;
-    }
-
-    .research-command {
-      display: grid;
-      gap: 14px;
-      padding: 18px 24px;
-      border-bottom: 1px solid var(--line);
-      background: #ffffff;
-    }
-
-    .command-main {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      align-items: end;
-    }
-
-    .topic-box {
-      padding: 12px;
-      border: 1px solid #cfd9e4;
-      border-radius: 8px;
-      background: #f8fafc;
-    }
-
-    .topic-box textarea {
-      min-height: 90px;
-      border-color: transparent;
-      background: #ffffff;
-      box-shadow: inset 0 0 0 1px #edf1f6;
-    }
-
-    .command-actions {
-      display: grid;
-      gap: 10px;
-      justify-items: start;
-      min-width: 142px;
-    }
-
-    .clarify-panel {
-      display: grid;
-      gap: 10px;
-      padding: 14px 16px;
-      border: 1px solid var(--line);
-      border-left: 4px solid var(--blue);
-      border-radius: 8px;
-      background: #fbfcfe;
-    }
-
-    .clarify-panel.ok {
-      border-left-color: var(--good);
-      background: #f2fbf6;
-    }
-
-    .clarify-panel.warn {
-      border-left-color: var(--warn);
-      background: #fffaf0;
-    }
-
-    .clarify-panel h4 {
-      margin: 0;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .clarify-panel p {
-      margin: 0;
-      color: #2c3648;
-      line-height: 1.55;
-      overflow-wrap: anywhere;
-    }
-
-    .clarify-panel ul {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.65;
-    }
-
-    .clarify-panel .clarify-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .console-body {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(310px, 350px);
-      min-height: 720px;
-      background: #ffffff;
-    }
-
-    .workspace-pane {
-      display: grid;
-      align-content: start;
-      gap: 18px;
-      min-width: 0;
-      padding: 20px 24px 24px;
-      background: #ffffff;
-    }
-
-    .pane-toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    .pane-block {
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #ffffff;
-      padding: 16px;
-    }
-
-    .thread-grid {
-      display: grid;
-      grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
-      gap: 16px;
-      align-items: start;
-    }
-
-    .report-block {
-      background: #ffffff;
-      padding: 0;
+    .side,
+    .chat,
+    .inspector {
+      min-height: 0;
       overflow: hidden;
     }
 
-    .inspector-pane {
+    .side {
       display: grid;
-      align-content: start;
-      gap: 16px;
-      min-width: 0;
-      padding: 20px;
-      border-left: 1px solid var(--line);
-      background: #f6f8fb;
+      grid-template-rows: auto 1fr;
     }
 
-    .inspector-section {
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #ffffff;
-      padding: 14px;
-    }
-
-    .inspector-section .section-title {
-      margin-bottom: 12px;
-    }
-
-    .research-grid {
+    .chat {
       display: grid;
-      grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-      gap: 18px;
-      align-items: start;
+      grid-template-rows: auto 1fr auto;
     }
 
-    .ask-card {
-      position: sticky;
-      top: 84px;
-    }
-
-    .research-sidebar {
+    .inspector {
       display: grid;
-      grid-column: 1 / -1;
-      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
-      gap: 18px;
+      grid-template-rows: auto 1fr;
     }
 
-    .section-heading {
-      display: grid;
-      gap: 4px;
-      min-width: 0;
-    }
-
-    .section-heading p {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .thread-panel {
-      display: grid;
-      gap: 16px;
-    }
-
-    .brief-card {
-      display: grid;
-      gap: 10px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfcfe;
-    }
-
-    .brief-card strong,
-    .brief-card p {
-      overflow-wrap: anywhere;
-    }
-
-    .stage-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .stage-step {
-      display: grid;
-      grid-template-columns: 32px minmax(0, 1fr);
-      gap: 12px;
-      align-items: start;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .stage-step:last-child {
-      border-bottom: 0;
-    }
-
-    .stage-marker {
-      width: 32px;
-      height: 32px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      border: 1px solid var(--line);
-      background: var(--soft);
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 800;
-    }
-
-    .stage-step.done .stage-marker {
-      background: #e9f7ee;
-      border-color: #b9e5c8;
-      color: var(--good);
-    }
-
-    .stage-step.running .stage-marker {
-      background: var(--soft-amber);
-      border-color: #fed7aa;
-      color: var(--warn);
-    }
-
-    .stage-step.failed .stage-marker {
-      background: #fef2f2;
-      border-color: #fecaca;
-      color: var(--bad);
-    }
-
-    .stage-body {
-      display: grid;
-      gap: 5px;
-      min-width: 0;
-    }
-
-    .stage-title {
+    .panel-head {
+      min-height: 54px;
+      padding: 12px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-    }
-
-    .stage-title strong,
-    .stage-body p {
-      overflow-wrap: anywhere;
-    }
-
-    .plan-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .plan-row {
-      display: grid;
-      gap: 6px;
-      padding: 10px 0;
       border-bottom: 1px solid var(--line);
     }
 
-    .plan-row:last-child {
-      border-bottom: 0;
-      padding-bottom: 0;
-    }
-
-    .plan-row header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .quality-grid {
-      display: grid;
-      gap: 10px;
-    }
-
-    .quality-row {
-      display: grid;
-      gap: 5px;
-    }
-
-    .quality-row header {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .quality-bar {
-      height: 8px;
-      border-radius: 999px;
-      background: var(--soft);
-      overflow: hidden;
-    }
-
-    .quality-bar span {
-      display: block;
-      height: 100%;
-      background: var(--accent);
-    }
-
-    .source-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .source-row {
-      display: grid;
-      gap: 4px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .source-row:last-child {
-      border-bottom: 0;
-      padding-bottom: 0;
-    }
-
-    .source-row strong,
-    .source-row p {
-      overflow-wrap: anywhere;
-    }
-
-    .technical-panel details {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fbfcfe;
-      padding: 12px;
-    }
-
-    .technical-panel summary {
-      cursor: pointer;
-      font-weight: 700;
-    }
-
-    .technical-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 18px;
-      margin-top: 14px;
-      align-items: start;
-    }
-
-    .inspector-pane .technical-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .workbench-grid {
-      display: grid;
-      grid-template-columns: minmax(360px, 0.78fr) minmax(0, 1.22fr);
-      gap: 18px;
-      align-items: start;
-    }
-
-    .side-stack {
-      display: grid;
-      gap: 18px;
-      position: sticky;
-      top: 84px;
-    }
-
-    .split {
-      display: grid;
-      grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
-      gap: 18px;
-      align-items: start;
-    }
-
-    .surface {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      padding: 18px;
-      min-width: 0;
-    }
-
-    .section-title {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-
-    h1,
-    h2,
-    h3 {
+    .panel-head h2,
+    .panel-head h3 {
       margin: 0;
-      letter-spacing: 0;
-    }
-
-    h2 {
-      font-size: 18px;
-    }
-
-    h3 {
       font-size: 15px;
     }
 
-    p {
-      margin: 0;
-      line-height: 1.55;
+    .session-list,
+    .timeline,
+    .inspector-body {
+      overflow: auto;
     }
 
-    a {
-      color: var(--blue-strong);
+    .session-list {
+      padding: 10px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+    }
+
+    .session-row {
+      width: 100%;
+      display: grid;
+      gap: 5px;
+      text-align: left;
+      border-color: transparent;
+      background: #f8fafc;
+      min-height: 68px;
+      white-space: normal;
+      justify-content: stretch;
+    }
+
+    .session-row.active {
+      border-color: #9bd2ca;
+      background: #edf9f6;
+    }
+
+    .session-row strong,
+    .session-row span {
       overflow-wrap: anywhere;
     }
 
-    .muted {
+    .session-row span {
       color: var(--muted);
+      font-size: 12px;
     }
 
-    .form-grid {
-      display: grid;
-      gap: 12px;
+    .status-strip {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      background: #f8fafc;
     }
 
-    label {
-      display: grid;
-      gap: 6px;
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 3px 9px;
+      background: var(--soft);
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
 
-    input,
-    select,
-    textarea {
-      width: 100%;
+    .pill.good {
+      color: var(--good);
+      background: #e9f7ee;
+    }
+
+    .pill.warn {
+      color: var(--warn);
+      background: #fff7e6;
+    }
+
+    .pill.bad {
+      color: var(--bad);
+      background: #fef2f2;
+    }
+
+    .timeline {
+      padding: 18px;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+    }
+
+    .message {
+      width: min(760px, 92%);
+      display: grid;
+      gap: 7px;
+      padding: 13px 14px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fbfcfe;
-      color: var(--ink);
-      padding: 10px 11px;
-      min-height: 40px;
+      background: #fff;
     }
 
-    textarea {
-      min-height: 108px;
+    .message.user {
+      justify-self: end;
+      background: #eef6ff;
+      border-color: #c8ddff;
+    }
+
+    .message.assistant {
+      justify-self: start;
+    }
+
+    .message header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .message pre {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: inherit;
+      line-height: 1.55;
+    }
+
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      background: #fff;
+    }
+
+    .composer textarea {
+      min-height: 90px;
       resize: vertical;
     }
 
-    .segmented {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
-      padding: 4px;
-      border: 1px solid var(--line);
-      background: var(--soft);
-      border-radius: 8px;
-    }
-
-    .segmented label {
-      color: var(--ink);
-      display: block;
-    }
-
-    .segmented input {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .segmented span {
-      min-height: 32px;
+    .composer-actions,
+    .settings {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-      padding: 6px 8px;
-    }
-
-    .segmented input:checked+span {
-      background: var(--surface);
-      border: 1px solid #b7d8d3;
-      color: var(--accent-strong);
-    }
-
-    .toggle-row {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
-    .toggle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 40px;
+    .composer-actions {
+      justify-content: space-between;
+    }
+
+    .settings select,
+    .settings input {
+      width: auto;
+      min-width: 94px;
+    }
+
+    .inspector-body {
+      padding: 14px;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+    }
+
+    .block {
+      display: grid;
+      gap: 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 8px 10px;
-      color: var(--ink);
-      background: #fbfcfe;
+      padding: 12px;
+      background: #fff;
     }
 
-    .toggle input {
-      width: 18px;
-      min-height: 18px;
+    .block h3 {
+      margin: 0;
+      font-size: 14px;
     }
 
-    .helper-text {
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
+    .block p,
+    .block li {
+      color: #2a3547;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+
+    .block p,
+    .block ul,
+    .block ol {
+      margin: 0;
     }
 
     .metric-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
     }
 
     .metric {
-      background: var(--soft);
       border: 1px solid var(--line);
       border-radius: 8px;
-      padding: 12px;
-      min-width: 0;
+      padding: 9px;
+      background: #f8fafc;
     }
 
     .metric span {
@@ -822,1782 +403,894 @@
 
     .metric strong {
       display: block;
-      margin-top: 4px;
-      font-size: 20px;
-      overflow-wrap: anywhere;
+      margin-top: 3px;
     }
 
-    .status-line {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      min-width: 0;
-      max-width: 100%;
-    }
-
-    .report-header {
+    .memory-form,
+    .workspace-form {
       display: grid;
       gap: 8px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      background: #fbfcfe;
-      border-radius: 8px;
     }
 
-    .report-section {
-      border-left: 3px solid #b7d8d3;
+    .workspace-form textarea {
+      min-height: 70px;
+      resize: vertical;
     }
 
-    .report-document {
-      display: grid;
-      background: #ffffff;
-    }
-
-    .report-document .report-header {
-      border: 0;
-      border-bottom: 1px solid var(--line);
-      border-radius: 0;
-      background: #ffffff;
-      padding: 20px 22px 16px;
-    }
-
-    .report-document .report-header h3 {
-      font-size: 18px;
-      line-height: 1.25;
-    }
-
-    .report-meta-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 12px 22px;
-      border-bottom: 1px solid var(--line);
-      background: #fbfcfe;
-    }
-
-    .report-content {
-      display: grid;
-    }
-
-    .report-document .report-section {
-      display: grid;
-      gap: 10px;
-      padding: 18px 22px;
-      border: 0;
-      border-bottom: 1px solid var(--line);
-      background: #ffffff;
-    }
-
-    .report-document .report-section header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      margin: 0;
-    }
-
-    .report-document .report-section h3 {
-      font-size: 16px;
-      line-height: 1.35;
-    }
-
-    .report-document .report-section p {
-      color: #2c3648;
-    }
-
-    .report-document .citation-details {
-      margin-top: 6px;
-    }
-
-    .report-document>.citation-details {
-      margin: 14px 22px 20px;
-    }
-
-    .source-card {
-      background: #ffffff;
-    }
-
-    .source-index-line {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      line-height: 1.5;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    .citation-list {
-      display: grid;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .citation-row {
+    .memory-row,
+    .source-row,
+    .trace-row,
+    .step-row,
+    .tool-row,
+    .approval-row,
+    .coverage-row,
+    .extraction-row,
+    .quality-row {
       display: grid;
       gap: 4px;
-      padding-top: 8px;
-      border-top: 1px solid var(--line);
-    }
-
-    .citation-row header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .citation-details {
-      margin-top: 10px;
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
-    }
-
-    .citation-details summary {
-      cursor: pointer;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .progress {
-      width: 100%;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--soft);
-      overflow: hidden;
-    }
-
-    .progress span {
-      display: block;
-      height: 100%;
-      width: 0%;
-      background: var(--blue);
-      transition: width 180ms ease;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 26px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: var(--soft);
-      color: var(--muted);
-      padding: 3px 9px;
-      font-size: 12px;
-      max-width: 100%;
-      overflow-wrap: anywhere;
-      text-align: center;
-      white-space: normal;
-    }
-
-    .pill.good {
-      background: #e9f7ee;
-      border-color: #b9e5c8;
-      color: var(--good);
-    }
-
-    .pill.warn {
-      background: #fff7ed;
-      border-color: #fed7aa;
-      color: var(--warn);
-    }
-
-    .pill.bad {
-      background: #fef2f2;
-      border-color: #fecaca;
-      color: var(--bad);
-    }
-
-    .stack {
-      display: grid;
-      gap: 12px;
-      min-width: 0;
-    }
-
-    .item {
-      border: 1px solid var(--line);
-      background: #fbfcfe;
-      border-radius: 8px;
-      padding: 12px;
-      min-width: 0;
-    }
-
-    .item+.item {
-      margin-top: 10px;
-    }
-
-    .item header {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 7px;
-      align-items: flex-start;
-    }
-
-    .item header strong {
-      overflow-wrap: anywhere;
-    }
-
-    .item-actions {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-    .table-wrap {
-      width: 100%;
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      min-width: 620px;
-    }
-
-    th,
-    td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: top;
-      overflow-wrap: anywhere;
-    }
-
-    th {
-      color: var(--muted);
-      background: #f8fafc;
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    tr:last-child td {
-      border-bottom: 0;
-    }
-
-    code,
-    pre {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    }
-
-    code {
-      white-space: normal;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    pre {
-      max-height: 360px;
-      overflow: auto;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #111827;
-      color: #f8fafc;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-    }
-
-    .empty {
-      min-height: 120px;
-      display: grid;
-      place-items: center;
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      color: var(--muted);
-      text-align: center;
-      padding: 20px;
-    }
-
-    .run-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .timeline {
-      display: grid;
-      gap: 10px;
-    }
-
-    .timeline-item {
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr);
-      gap: 10px;
-      align-items: start;
-    }
-
-    .timeline-dot {
-      width: 24px;
-      height: 24px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: var(--soft-blue);
-      border: 1px solid #bdd4ff;
-      color: var(--blue-strong);
-      font-size: 12px;
-      font-weight: 700;
-    }
-
-    .timeline-body {
-      min-width: 0;
-      padding-bottom: 10px;
+      padding-bottom: 8px;
       border-bottom: 1px solid var(--line);
     }
 
-    .timeline-body strong,
-    .timeline-body p {
-      overflow-wrap: anywhere;
-    }
-
-    .timeline-item:last-child .timeline-body {
+    .memory-row:last-child,
+    .source-row:last-child,
+    .trace-row:last-child,
+    .step-row:last-child,
+    .tool-row:last-child,
+    .approval-row:last-child,
+    .coverage-row:last-child,
+    .extraction-row:last-child,
+    .quality-row:last-child {
       border-bottom: 0;
       padding-bottom: 0;
     }
 
-    details.route-details {
-      border: 1px solid var(--line);
-      background: #fbfcfe;
-      border-radius: 8px;
-      padding: 10px 12px;
-    }
-
-    details.route-details+details.route-details {
-      margin-top: 10px;
-    }
-
-    details.route-details summary {
-      cursor: pointer;
-      list-style: none;
-    }
-
-    details.route-details summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .route-summary {
-      display: grid;
+    .row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 8px;
     }
 
-    .run-button,
-    .job-button {
-      width: 100%;
-      min-height: 56px;
-      justify-content: space-between;
-      background: #fbfcfe;
-      white-space: normal;
-      text-align: left;
+    .row-head strong,
+    .row-head span,
+    .tool-row span,
+    .step-row span,
+    .approval-row span,
+    .coverage-row span,
+    .extraction-row span,
+    .quality-row span {
+      overflow-wrap: anywhere;
     }
 
-    .run-button.active,
-    .job-button.active {
-      border-color: #76b7af;
-      background: #eef9f7;
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
     }
 
-    .two-col {
+    .report {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
-      align-items: start;
+      gap: 12px;
+    }
+
+    .report-section {
+      display: grid;
+      gap: 6px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .empty {
+      color: var(--muted);
+      background: #f8fafc;
+      border: 1px dashed #cfd8e3;
+      border-radius: 8px;
+      padding: 14px;
+      line-height: 1.5;
     }
 
     .error {
       color: var(--bad);
     }
 
-    .success {
-      color: var(--good);
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 230px minmax(0, 1fr);
+      }
+
+      .inspector {
+        grid-column: 1 / -1;
+      }
     }
 
-    .hidden {
-      display: none !important;
-    }
-
-    @media (max-width: 980px) {
+    @media (max-width: 820px) {
       .layout {
         grid-template-columns: 1fr;
       }
 
-      .rail {
-        position: static;
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        min-height: 0;
-        overflow-x: hidden;
+      .side {
+        min-height: 220px;
       }
 
-      .tab-button {
+      .message {
         width: 100%;
-        justify-content: center;
-      }
-
-      .ask-card,
-      .research-sidebar {
-        position: static;
-      }
-
-      .console-header,
-      .command-main,
-      .console-body,
-      .thread-grid,
-      .split,
-      .workbench-grid,
-      .research-grid,
-      .technical-grid,
-      .two-col {
-        grid-template-columns: 1fr;
-      }
-
-      .console-body {
-        min-height: 0;
-      }
-
-      .inspector-pane {
-        border-left: 0;
-        border-top: 1px solid var(--line);
-      }
-
-      .research-sidebar {
-        grid-template-columns: 1fr;
-      }
-
-      .side-stack {
-        position: static;
-      }
-
-    }
-
-    @media (max-width: 640px) {
-      .topbar {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .metric-grid,
-      .toggle-row,
-      .console-header,
-      .research-command,
-      .workspace-pane,
-      .inspector-pane {
-        padding-left: 14px;
-        padding-right: 14px;
-      }
-
-      .segmented {
-        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 
 <body>
-  <div class="app-shell">
+  <div class="shell">
     <header class="topbar">
       <div class="brand">
         <strong>AI Research Copilot</strong>
-        <span>复杂问题研究工作台：规划、检索、验证、生成带引用的研究报告。</span>
+        <span>Conversational research agent with memory, planning, tools, trace, and evaluation</span>
       </div>
-      <div class="top-actions">
-        <a href="/docs">API 文档</a>
-        <button id="refresh-button" class="ghost" type="button">刷新</button>
-        <span id="health-pill" class="pill">检查中</span>
+      <div class="settings">
+        <a class="pill" href="/docs">API Docs</a>
+        <a class="pill" href="/v1/research/runs">/v1/research/runs</a>
+        <button id="exportBtn" class="compact" title="Export active session" disabled>Export</button>
+        <span id="apiStatus" class="pill warn">checking</span>
       </div>
     </header>
 
     <div class="layout">
-      <nav class="rail" aria-label="工作台视图">
-        <button class="tab-button active" type="button" data-tab="portal">工作台</button>
-        <button class="tab-button" type="button" data-tab="runs">任务记录</button>
-        <button class="tab-button" type="button" data-tab="sources">资料库</button>
-        <button class="tab-button" type="button" data-tab="traces">轨迹</button>
-        <button class="tab-button" type="button" data-tab="config">配置</button>
-      </nav>
+      <aside class="panel side">
+        <div class="panel-head">
+          <h2>Sessions</h2>
+          <button id="newSessionBtn" title="New session">New</button>
+        </div>
+        <div id="sessionList" class="session-list"></div>
+      </aside>
 
-      <main>
-        <section id="portal" class="tab-panel active">
-          <section class="research-console">
-            <header class="console-header">
-              <div class="console-title">
-                <h1>AI Research Copilot</h1>
-                <p id="workspace-subtitle">提交一个复杂问题，系统会生成研究计划并产出带引用的报告。</p>
-              </div>
-            </header>
-
-            <form id="run-form" class="research-command">
-              <div class="command-main">
-                <label class="topic-box">
-                  研究问题
-                  <textarea id="topic" name="topic" required
-                    minlength="3">这个 AI Research Copilot 应该如何写进 AI 工程岗位简历，并在面试中讲清楚价值？</textarea>
-                </label>
-                <div class="command-actions">
-                  <div class="status-line">
-                    <button id="run-button" class="primary" type="submit">开始研究</button>
-                    <button id="clarify-button" class="ghost" type="button" title="先检查提问是否足够具体，不提交研究">预检提问</button>
-                    <button id="cancel-job-button" class="ghost hidden" type="button">取消任务</button>
-                    <span id="form-status" class="muted"></span>
-                  </div>
-                  <div id="job-progress" class="progress hidden" aria-hidden="true"><span></span></div>
-                </div>
-              </div>
-              <div id="clarify-panel" class="clarify-panel hidden" role="status" aria-live="polite"></div>
-            </form>
-
-            <div class="console-body">
-              <section class="workspace-pane">
-                <div class="pane-toolbar">
-                  <div class="section-heading">
-                    <h2>研究运行</h2>
-                    <p>从研究简报、执行阶段到最终报告的完整过程。</p>
-                  </div>
-                  <span id="selected-run-pill" class="pill">未选择运行</span>
-                </div>
-                <div id="research-brief"></div>
-                <div class="thread-grid">
-                  <section class="pane-block">
-                    <div class="section-title">
-                      <h3>执行阶段</h3>
-                      <span class="pill">LangGraph</span>
-                    </div>
-                    <div id="stage-list" class="stage-list"></div>
-                  </section>
-                  <section class="pane-block">
-                    <div class="section-title">
-                      <h3>研究计划</h3>
-                      <span class="pill">Planner</span>
-                    </div>
-                    <div id="plan-summary"></div>
-                  </section>
-                </div>
-                <section class="pane-block report-block">
-                  <div class="section-title">
-                    <h2>研究报告</h2>
-                    <span class="pill">带引用输出</span>
-                  </div>
-                  <div id="report-output"></div>
-                </section>
-              </section>
-
-              <aside class="inspector-pane">
-                <section class="inspector-section">
-                  <div class="section-title">
-                    <h2>质量门禁</h2>
-                    <span class="pill">Evaluator</span>
-                  </div>
-                  <div id="run-metrics" class="quality-grid"></div>
-                </section>
-                <section class="inspector-section">
-                  <div class="section-title">
-                    <h2>证据来源</h2>
-                    <span class="pill">Sources</span>
-                  </div>
-                  <div id="source-summary"></div>
-                </section>
-                <section class="inspector-section technical-panel">
-                  <details>
-                    <summary>技术细节：检索路由和 Agent trace</summary>
-                    <div class="technical-grid">
-                      <section>
-                        <div class="section-title">
-                          <h3>检索路由</h3>
-                          <span class="pill">Router</span>
-                        </div>
-                        <div id="route-table" class="stack"></div>
-                      </section>
-                      <section>
-                        <div class="section-title">
-                          <h3>Agent 时间线</h3>
-                          <span class="pill">Trace</span>
-                        </div>
-                        <div id="timeline-output"></div>
-                      </section>
-                    </div>
-                  </details>
-                </section>
-              </aside>
+      <section class="panel chat">
+        <div class="status-strip">
+          <span id="sessionStatus" class="pill">no session</span>
+          <span id="workspaceStatus" class="pill">workspace unknown</span>
+          <span id="skillStatus" class="pill">skill unknown</span>
+          <span id="mcpStatus" class="pill">MCP unknown</span>
+          <span id="jobStatus" class="pill">no job</span>
+        </div>
+        <div id="timeline" class="timeline"></div>
+        <div class="composer">
+          <textarea id="messageInput" placeholder="输入研究目标、团队约束或补充信息"></textarea>
+          <div class="composer-actions">
+            <div class="settings">
+              <select id="depthSelect" title="Depth">
+                <option value="quick">quick</option>
+                <option value="standard" selected>standard</option>
+                <option value="deep">deep</option>
+              </select>
+              <input id="maxSectionsInput" type="number" min="1" max="8" value="4" title="Max sections" />
             </div>
-          </section>
-        </section>
-
-        <section id="runs" class="tab-panel">
-          <div class="split">
-            <section class="surface">
-              <div class="section-title">
-                <h2>任务队列</h2>
-                <span class="pill">GET /v1/research/jobs</span>
-              </div>
-              <div id="job-list" class="run-list"></div>
-              <div class="section-title" style="margin-top: 16px;">
-                <h2>历史运行</h2>
-                <button id="clear-history-button" class="ghost danger mini" type="button">清空历史</button>
-              </div>
-              <div id="run-list" class="run-list"></div>
-            </section>
-            <section class="surface">
-              <div class="section-title">
-                <h2>研究计划</h2>
-                <span class="pill">状态 / 结果</span>
-              </div>
-              <div id="plan-table"></div>
-            </section>
-          </div>
-        </section>
-
-        <section id="sources" class="tab-panel">
-          <div class="two-col">
-            <form id="document-form" class="surface form-grid">
-              <div class="section-title">
-                <h2>添加资料</h2>
-                <span class="pill">POST /v1/documents</span>
-              </div>
-              <label>
-                标题
-                <input id="doc-title" required minlength="2" value="面试定位笔记" />
-              </label>
-              <label>
-                来源
-                <input id="doc-source" required minlength="2" value="notes/interview-positioning.md" />
-              </label>
-              <label>
-                URL
-                <input id="doc-url" placeholder="可选" />
-              </label>
-              <label>
-                摘要
-                <textarea id="doc-snippet">这个项目应该被呈现为聚焦复杂问题研究的 AI Research Copilot，而不是泛泛的 Agent 框架。</textarea>
-              </label>
-              <label>
-                内容
-                <textarea
-                  id="doc-content">项目结合 Open Deep Research 风格的 LangGraph 编排和证据收集，以及 PraisonAI 启发的持久化、可观测和 replay 设计。核心价值是围绕复杂问题生成带引用、可追溯、可评估的研究报告。</textarea>
-              </label>
-              <button class="primary" type="submit">添加资料</button>
-            </form>
-            <section class="surface">
-              <div class="section-title">
-                <h2>资料清单</h2>
-                <button id="clear-documents-button" class="ghost danger mini" type="button">清空资料库</button>
-              </div>
-              <div id="document-list"></div>
-            </section>
-          </div>
-        </section>
-
-        <section id="traces" class="tab-panel">
-          <div class="split">
-            <section class="surface">
-              <div class="section-title">
-                <h2>遥测事件</h2>
-                <span class="pill">GET /v1/telemetry</span>
-              </div>
-              <div id="telemetry-list"></div>
-            </section>
-            <section class="surface">
-              <div class="section-title">
-                <h2>运行轨迹</h2>
-                <span class="pill">GET /v1/research/runs/{run_id}/trace</span>
-              </div>
-              <div id="checkpoint-list"></div>
-            </section>
-          </div>
-        </section>
-
-        <section id="config" class="tab-panel">
-          <section class="surface">
-            <div class="section-title">
-              <h2>运行配置</h2>
-              <span class="pill">GET /v1/runtime/config</span>
+            <div class="settings">
+              <button id="confirmBtn" class="primary" disabled>确认并开始研究</button>
+              <button id="sendBtn" class="primary">开始研究</button>
             </div>
-            <pre id="config-json">加载中...</pre>
-          </section>
-        </section>
-      </main>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel inspector">
+        <div class="panel-head">
+          <h2>Inspector</h2>
+          <button id="refreshBtn" title="Refresh">Refresh</button>
+        </div>
+        <div id="inspector" class="inspector-body"></div>
+      </aside>
     </div>
   </div>
 
   <script>
     const state = {
-      jobs: [],
-      runs: [],
-      documents: [],
-      telemetry: [],
-      config: null,
-      activeJob: null,
-      selectedRun: null,
+      sessions: [],
+      workspaces: [],
+      activeSessionId: null,
+      activeWorkspaceId: null,
+      bundle: null,
+      pollTimer: null,
     };
 
-    const $ = (selector) => document.querySelector(selector);
-    const $$ = (selector) => Array.from(document.querySelectorAll(selector));
-
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    const statusText = {
-      queued: "排队中",
-      running: "运行中",
-      completed: "已完成",
-      complete: "已完成",
-      done: "已完成",
-      pending: "待处理",
-      blocked: "受阻",
-      failed: "失败",
-      cancelled: "已取消",
+    const el = {
+      apiStatus: document.getElementById("apiStatus"),
+      sessionList: document.getElementById("sessionList"),
+      timeline: document.getElementById("timeline"),
+      inspector: document.getElementById("inspector"),
+      sessionStatus: document.getElementById("sessionStatus"),
+      workspaceStatus: document.getElementById("workspaceStatus"),
+      skillStatus: document.getElementById("skillStatus"),
+      mcpStatus: document.getElementById("mcpStatus"),
+      jobStatus: document.getElementById("jobStatus"),
+      messageInput: document.getElementById("messageInput"),
+      depthSelect: document.getElementById("depthSelect"),
+      maxSectionsInput: document.getElementById("maxSectionsInput"),
+      sendBtn: document.getElementById("sendBtn"),
+      confirmBtn: document.getElementById("confirmBtn"),
+      newSessionBtn: document.getElementById("newSessionBtn"),
+      refreshBtn: document.getElementById("refreshBtn"),
+      exportBtn: document.getElementById("exportBtn"),
     };
-
-    const routeText = {
-      external: "外部搜索",
-      internal: "资料检索",
-      hybrid: "混合检索",
-    };
-
-    const toolText = {
-      web_search: "外部搜索",
-      vector_retrieval: "向量检索",
-      mcp_tool: "MCP 工具",
-    };
-
-    const kindText = {
-      web: "网页",
-      document: "资料",
-      "document-chunk": "资料片段",
-      mcp: "MCP 证据",
-      "run-artifact": "运行证据",
-      run: "运行",
-      evidence: "证据",
-    };
-
-    const eventText = {
-      handoff: "交接",
-      tool_call: "工具调用",
-      step: "步骤",
-      verification: "验证",
-      checkpoint: "检查点",
-      failure: "失败",
-      evaluation: "评估",
-    };
-
-    function zhStatus(value) {
-      return statusText[value] || value || "未知";
-    }
-
-    function zhRoute(value) {
-      return routeText[value] || value || "未知路由";
-    }
-
-    function zhTool(value) {
-      return value ? toolText[value] || value : "";
-    }
-
-    function zhKind(value) {
-      return kindText[value] || value || "证据";
-    }
-
-    function zhEvent(value) {
-      return eventText[value] || value || "事件";
-    }
-
-    function formatTime(value) {
-      if (!value) return "";
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return value;
-      return date.toLocaleString("zh-CN", { hour12: false });
-    }
 
     async function api(path, options = {}) {
       const response = await fetch(path, {
-        headers: { "content-type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         ...options,
       });
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(`${response.status} ${response.statusText}: ${body}`);
+        let detail = response.statusText;
+        try {
+          detail = (await response.json()).detail || detail;
+        } catch (_) {
+          detail = response.statusText;
+        }
+        throw new Error(detail);
       }
       return response.json();
     }
 
-    async function loadAll() {
-      await checkHealth();
-      const [jobs, runs, documents, telemetry, config] = await Promise.all([
-        api("/v1/research/jobs"),
-        api("/v1/research/runs"),
-        api("/v1/documents"),
-        api("/v1/telemetry"),
-        api("/v1/runtime/config"),
-      ]);
-      state.jobs = jobs;
-      state.runs = runs;
-      state.documents = documents;
-      state.telemetry = telemetry;
-      state.config = config;
-      if (state.activeJob) {
-        state.activeJob = jobs.find((job) => job.job_id === state.activeJob.job_id) || state.activeJob;
-      } else {
-        state.activeJob = jobs.find((job) => ["queued", "running"].includes(job.status)) || null;
-      }
-      if (state.selectedRun) {
-        const fresh = runs.find((run) => run.run_id === state.selectedRun.run_id);
-        state.selectedRun = fresh || state.selectedRun;
-      }
-      renderAll();
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
     }
 
-    async function checkHealth() {
-      const pill = $("#health-pill");
-      try {
-        const result = await api("/health", { headers: {} });
-        pill.textContent = result.status === "ok" ? "服务正常" : "状态未知";
-        pill.className = result.status === "ok" ? "pill good" : "pill warn";
-      } catch (error) {
-        pill.textContent = "服务离线";
-        pill.className = "pill bad";
+    function short(value, limit = 90) {
+      const text = String(value || "").replace(/\s+/g, " ").trim();
+      return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
+    }
+
+    async function loadWorkspaces() {
+      state.workspaces = await api("/v1/agent/workspaces");
+      if (!state.activeWorkspaceId && state.workspaces.length) {
+        state.activeWorkspaceId = state.workspaces[0].workspace_id;
       }
+    }
+
+    async function loadSessions() {
+      await loadWorkspaces();
+      state.sessions = await api("/v1/agent/sessions");
+      if (!state.activeSessionId && state.sessions.length) {
+        state.activeSessionId = state.sessions[0].session_id;
+      }
+      if (!state.activeWorkspaceId && state.sessions.length && state.sessions[0].workspace_id) {
+        state.activeWorkspaceId = state.sessions[0].workspace_id;
+      }
+      renderSessions();
+      if (state.activeSessionId) {
+        await loadBundle(state.activeSessionId);
+      } else {
+        renderAll();
+      }
+    }
+
+    async function loadBundle(sessionId) {
+      state.bundle = await api(`/v1/agent/sessions/${sessionId}`);
+      state.activeSessionId = sessionId;
+      if (state.bundle.workspace && state.bundle.workspace.workspace_id) {
+        state.activeWorkspaceId = state.bundle.workspace.workspace_id;
+      }
+      renderAll();
+      syncPolling();
+    }
+
+    function renderSessions() {
+      if (!state.sessions.length) {
+        el.sessionList.innerHTML = '<div class="empty">No sessions yet.</div>';
+        return;
+      }
+      const workspaceMap = new Map((state.workspaces || []).map((workspace) => [workspace.workspace_id, workspace]));
+      el.sessionList.innerHTML = state.sessions.map((session) => `
+        <button class="session-row ${session.session_id === state.activeSessionId ? "active" : ""}" data-session="${session.session_id}">
+          <strong>${escapeHtml(session.title)}</strong>
+          <span>${escapeHtml(session.status)} · ${escapeHtml(workspaceMap.get(session.workspace_id || "")?.name || session.workspace_id || "default workspace")} · ${escapeHtml(short(session.updated_at, 28))}</span>
+        </button>
+      `).join("");
+      el.sessionList.querySelectorAll("[data-session]").forEach((button) => {
+        button.addEventListener("click", () => loadBundle(button.dataset.session));
+      });
     }
 
     function renderAll() {
-      renderWorkspaceHeader();
-      renderResearchThread();
-      renderMetrics();
-      renderSourceSummary();
-      renderReport();
-      renderTimeline();
-      renderJobs();
-      renderRuns();
-      renderPlan();
-      renderDocuments();
-      renderTelemetry();
-      renderCheckpoints();
-      renderConfig();
-      renderMaintenanceControls();
+      const bundle = state.bundle;
+      renderStatus(bundle);
+      renderTimeline(bundle);
+      renderInspector(bundle);
     }
 
-    function renderMaintenanceControls() {
-      $("#clear-history-button").disabled = !state.runs.length && !state.jobs.length && !state.telemetry.length;
-      $("#clear-documents-button").disabled = !state.documents.length;
-    }
-
-    function renderWorkspaceHeader() {
-      const selectedRun = state.selectedRun;
-      const activeJob = state.activeJob;
-      $("#workspace-subtitle").textContent = activeJob && ["queued", "running"].includes(activeJob.status)
-        ? `${zhStatus(activeJob.status)} · 任务 ${shortId(activeJob.job_id)}`
-        : selectedRun
-          ? `${zhStatus(selectedRun.status)} · 运行 ${shortId(selectedRun.run_id)}`
-          : "可以开始一次带引用、可追溯、可复查的研究任务。";
-    }
-
-    function currentSubject() {
-      const activeJob = state.activeJob;
-      if (activeJob && ["queued", "running"].includes(activeJob.status)) {
-        return { job: activeJob, run: null };
-      }
-      return { job: activeJob, run: state.selectedRun };
-    }
-
-    function renderResearchThread() {
-      renderResearchBrief();
-      renderStages();
-      renderPlanSummary();
-    }
-
-    function renderResearchBrief() {
-      const target = $("#research-brief");
-      const { job, run } = currentSubject();
-      const request = run?.request || job?.request || {};
-      if (!run && !job) {
-        target.innerHTML = empty("输入研究问题后，这里会显示研究简报。");
+    function renderStatus(bundle) {
+      if (!bundle) {
+        el.sessionStatus.textContent = "no session";
+        el.sessionStatus.className = "pill";
+        el.workspaceStatus.textContent = "workspace unknown";
+        el.workspaceStatus.className = "pill";
+        el.skillStatus.textContent = "skill unknown";
+        el.skillStatus.className = "pill";
+        el.mcpStatus.textContent = "MCP unknown";
+        el.jobStatus.textContent = "no job";
+        el.confirmBtn.disabled = true;
+        el.exportBtn.disabled = true;
         return;
       }
-      const title = request.topic || job?.topic || "未命名研究";
-      const brief = run?.research_brief || "研究简报生成中。";
-      const meta = [
-        request.depth ? `深度：${request.depth}` : "",
-        run?.run_id ? `运行：${shortId(run.run_id)}` : job?.job_id ? `任务：${shortId(job.job_id)}` : "",
-      ].filter(Boolean);
-      target.innerHTML = `
-          <div class="brief-card">
-            <div class="status-line">
-              <span class="${statusClass(run?.status || job?.status || "pending")}">${escapeHtml(zhStatus(run?.status || job?.status || "pending"))}</span>
-              ${meta.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("")}
-            </div>
-            <strong>${escapeHtml(title)}</strong>
-            <p class="muted">${escapeHtml(brief)}</p>
-          </div>
-        `;
+      const status = bundle.session.status;
+      el.sessionStatus.textContent = status;
+      el.sessionStatus.className = `pill ${status === "completed" ? "good" : status === "failed" ? "bad" : "warn"}`;
+      const mcp = bundle.mcp_status || {};
+      el.mcpStatus.textContent = mcp.label || (mcp.available ? "MCP available" : "MCP not configured");
+      el.mcpStatus.className = `pill ${mcp.available ? "good" : "warn"}`;
+      const workspace = bundle.workspace || {};
+      el.workspaceStatus.textContent = workspace.name || workspace.workspace_id || "workspace unknown";
+      el.workspaceStatus.className = `pill ${workspace.name ? "good" : ""}`;
+      const skill = bundle.selected_skill || {};
+      el.skillStatus.textContent = skill.name || skill.skill_id || "skill unknown";
+      el.skillStatus.className = `pill ${skill.name ? "good" : ""}`;
+      const job = bundle.active_job;
+      el.jobStatus.textContent = job ? `${job.status} · ${short(job.job_id, 10)}` : "no job";
+      el.jobStatus.className = `pill ${job && job.status === "completed" ? "good" : job && job.status === "failed" ? "bad" : ""}`;
+      el.confirmBtn.disabled = status !== "awaiting_confirmation" || !bundle.plan_draft;
+      el.exportBtn.disabled = false;
     }
 
-    function renderStages() {
-      const target = $("#stage-list");
-      const { job, run } = currentSubject();
-      const stages = buildStages(run, job);
-      target.innerHTML = stages.length
-        ? stages.map((stage, index) => stageItem(stage, index)).join("")
-        : empty("研究开始后，这里会显示每个 Agent 阶段。");
+    function renderTimeline(bundle) {
+      if (!bundle) {
+        el.timeline.innerHTML = '<div class="empty">Create a session to start.</div>';
+        return;
+      }
+      if (!bundle.messages.length) {
+        el.timeline.innerHTML = '<div class="empty">Send a research goal or team constraint.</div>';
+        return;
+      }
+      el.timeline.innerHTML = bundle.messages.map((message) => `
+        <article class="message ${message.role}">
+          <header>
+            <strong>${escapeHtml(message.role)}</strong>
+            <span>${escapeHtml(message.intent)} · ${escapeHtml(short(message.created_at, 24))}</span>
+          </header>
+          <pre>${escapeHtml(message.content)}</pre>
+        </article>
+      `).join("");
+      el.timeline.scrollTop = el.timeline.scrollHeight;
     }
 
-    function buildStages(run, job) {
-      if (!run && !job) return [];
-      const status = run?.status || job?.status;
-      const isFailed = ["failed", "cancelled"].includes(status);
-      const isActive = ["queued", "running"].includes(job?.status);
-      const hasPlan = Boolean(run?.plan?.length);
-      const hasRoutes = Boolean(run?.retrieval_routes?.length);
-      const evidenceCount = run?.evidence?.length || 0;
-      const hasReport = Boolean(run?.report);
-      const hasEvaluation = Boolean(run?.evaluation);
-      const activeAfter = (condition) => (isFailed ? "failed" : condition ? "done" : isActive ? "running" : "pending");
-      return [
-        {
-          title: "理解问题",
-          label: "Supervisor",
-          status: activeAfter(Boolean(run?.research_brief) || Boolean(job)),
-          detail: run?.research_brief ? "已生成研究简报。" : "等待生成研究简报。",
-        },
-        {
-          title: "制定计划",
-          label: "Planner",
-          status: activeAfter(hasPlan && hasRoutes),
-          detail: hasPlan ? `${run.plan.length} 个研究子问题。` : "等待 Planner 拆解问题。",
-        },
-        {
-          title: "检索证据",
-          label: "Researcher",
-          status: activeAfter(evidenceCount > 0),
-          detail: evidenceCount ? `已收集 ${evidenceCount} 条证据。` : "等待搜索、向量检索和 MCP 工具证据。",
-        },
-        {
-          title: "整理发现",
-          label: "Compressor",
-          status: activeAfter(evidenceCount > 0 && (hasReport || hasEvaluation)),
-          detail: evidenceCount ? "已去重并保留可引用证据。" : "等待研究结果沉淀。",
-        },
-        {
-          title: "生成报告",
-          label: "Reporter",
-          status: activeAfter(hasReport),
-          detail: hasReport ? `${run.report?.sections?.length || 0} 个章节，${run.report?.source_count || 0} 个来源。` : "等待生成最终报告。",
-        },
-        {
-          title: "验证评估",
-          label: "Verifier",
-          status: activeAfter(hasEvaluation),
-          detail: hasEvaluation ? (run.evaluation?.passed ? "引用和证据评估通过。" : "有指标需要复查。") : "等待引用和质量评估。",
-        },
-        {
-          title: "沉淀运行证据",
-          label: "Run Artifact",
-          status: activeAfter(Boolean((run?.evidence || []).some((item) => item.kind === "run-artifact"))),
-          detail: (run?.evidence || []).some((item) => item.kind === "run-artifact") ? "已保存计划、路由、证据和评估摘要。" : "等待生成可复盘运行证据。",
-        },
-      ];
+    function renderInspector(bundle) {
+      if (!bundle) {
+        el.inspector.innerHTML = '<div class="empty">No active session.</div>';
+        return;
+      }
+      el.inspector.innerHTML = [
+        renderWorkspace(bundle),
+        renderSkills(bundle),
+        renderPlan(bundle.plan_draft),
+        renderMemory(bundle),
+        renderTools(bundle),
+        renderQuality(bundle),
+        renderRun(bundle.active_run),
+      ].join("");
+      bindInspectorActions();
     }
 
-    function stageItem(stage, index) {
-      const statusLabel = {
-        done: "完成",
-        running: "进行中",
-        pending: "等待",
-        failed: "失败",
-      }[stage.status] || "等待";
-      const pillClass = stage.status === "done"
-        ? "pill good"
-        : stage.status === "failed"
-          ? "pill bad"
-          : stage.status === "running"
-            ? "pill warn"
-            : "pill";
+    function renderPlan(plan) {
+      if (!plan) {
+        return '<section class="block"><h3>Plan</h3><p>No draft yet.</p></section>';
+      }
       return `
-          <div class="stage-step ${escapeHtml(stage.status)}">
-            <div class="stage-marker">${index + 1}</div>
-            <div class="stage-body">
-              <div class="stage-title">
-                <strong>${escapeHtml(stage.title)}</strong>
-                <span class="${pillClass}">${escapeHtml(statusLabel)}</span>
-              </div>
-              <p class="muted">${escapeHtml(stage.label)} · ${escapeHtml(stage.detail)}</p>
+        <section class="block">
+          <h3>Plan Draft</h3>
+          <p>${escapeHtml(plan.research_brief)}</p>
+          <ol>${plan.plan_items.map((item) => `<li>${escapeHtml(item.question)}</li>`).join("")}</ol>
+          <div class="settings">
+            <button id="confirmPlanInline" class="primary">确认并开始研究</button>
+            <button id="continueConstraintsBtn">继续补充约束</button>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderWorkspace(bundle) {
+      const workspace = bundle.workspace || {};
+      const workspaceId = workspace.workspace_id || state.activeWorkspaceId || "";
+      const stackValue = (workspace.default_stack || []).join(", ");
+      const deploymentValue = (workspace.deployment_constraints || []).join(", ");
+      const sourcesValue = (workspace.preferred_sources || []).join(", ");
+      const disabledValue = (workspace.disabled_tools || []).join(", ");
+      return `
+        <section class="block">
+          <h3>Workspace</h3>
+          <p>${escapeHtml(workspace.name || "No workspace")}</p>
+          <div class="workspace-form">
+            <input id="workspaceName" value="${escapeHtml(workspace.name || "")}" placeholder="Workspace name" />
+            <textarea id="workspaceTeamContext" placeholder="Team context">${escapeHtml(workspace.team_context || "")}</textarea>
+            <textarea id="workspaceRiskPolicy" placeholder="Risk policy">${escapeHtml(workspace.risk_policy || "")}</textarea>
+            <input id="workspaceDefaultStack" value="${escapeHtml(stackValue)}" placeholder="Default stack, comma separated" />
+            <input id="workspaceDeployment" value="${escapeHtml(deploymentValue)}" placeholder="Deployment constraints, comma separated" />
+            <input id="workspaceSources" value="${escapeHtml(sourcesValue)}" placeholder="Preferred sources, comma separated" />
+            <input id="workspaceDisabled" value="${escapeHtml(disabledValue)}" placeholder="Disabled tools, comma separated" />
+            <div class="settings">
+              <button id="saveWorkspaceBtn" class="primary" data-workspace-id="${escapeHtml(workspaceId)}">Save Workspace</button>
             </div>
           </div>
-        `;
-    }
-
-    function renderPlanSummary() {
-      const target = $("#plan-summary");
-      const run = state.selectedRun;
-      if (!run || !run.plan?.length) {
-        target.innerHTML = empty("Planner 生成计划后，这里会显示子问题和所选工具。");
-        return;
-      }
-      const routes = run.retrieval_routes || [];
-      target.innerHTML = `
-          <div class="plan-list">
-            ${run.plan.map((item) => {
-        const route = routes.find((entry) => entry.plan_item_id === item.id) || {};
-        const tools = (route.selected_tools || []).map(zhTool).filter(Boolean).join(" / ") || zhRoute(route.mode);
-        return `
-                <div class="plan-row">
-                  <header>
-                    <strong>${escapeHtml(item.question)}</strong>
-                    <span class="${statusClass(item.status)}">${escapeHtml(zhStatus(item.status))}</span>
-                  </header>
-                  <p class="muted">${escapeHtml(item.purpose || "")}</p>
-                  <div class="status-line">
-                    <span class="pill">${escapeHtml(item.id)}</span>
-                    <span class="pill">${escapeHtml(tools || "待选择工具")}</span>
-                    <span class="pill">证据 ${escapeHtml(item.evidence_count || 0)}</span>
-                  </div>
-                </div>
-              `;
-      }).join("")}
+          <div class="metric-grid">
+            ${metric("workspace id", workspaceId || "default")}
+            ${metric("session key", bundle.session.session_key || bundle.session.session_id)}
+            ${metric("updated", short(workspace.updated_at, 24))}
+            ${metric("source prefs", (workspace.preferred_sources || []).length)}
           </div>
-        `;
+        </section>
+      `;
     }
 
-    function renderMetrics() {
-      const run = state.selectedRun;
-      const job = state.activeJob;
-      $("#selected-run-pill").textContent = job ? `任务 ${zhStatus(job.status)}` : run ? zhStatus(run.status) : "未选择运行";
-      if (!run) {
-        $("#run-metrics").innerHTML = empty("完成研究后，这里会显示质量指标。");
-        $("#route-table").innerHTML = "";
-        return;
+    function renderSkills(bundle) {
+      const selected = bundle.selected_skill || {};
+      const catalog = bundle.skill_catalog || [];
+      const scripts = selected.scripts || [];
+      return `
+        <section class="block">
+          <h3>Skills</h3>
+          <p>${escapeHtml(selected.name || "No skill selected")}</p>
+          <div class="metric-grid">
+            ${metric("skill id", selected.skill_id || "n/a")}
+            ${metric("type", selected.skill_type || "builtin")}
+            ${metric("version", selected.version || "n/a")}
+            ${metric("scenario", short(selected.scenario || "", 44))}
+            ${metric("required inputs", (selected.required_inputs || []).length)}
+            ${metric("focus", (selected.evaluation_focus || []).length)}
+            ${metric("scripts", scripts.length)}
+          </div>
+          ${selected.source_path ? `<p class="subtle">pack: ${escapeHtml(selected.source_path)}${selected.instruction_path ? ` · ${escapeHtml(selected.instruction_path)}` : ""}</p>` : ""}
+          ${selected.instructions_excerpt ? `<p class="subtle">${escapeHtml(short(selected.instructions_excerpt, 240))}</p>` : ""}
+          ${scripts.length ? `
+            <div class="settings">
+              ${scripts.map((script) => `
+                <button class="compact" data-run-skill="${escapeHtml(selected.skill_id)}" data-script-name="${escapeHtml(script.name)}">${escapeHtml(script.name)}</button>
+              `).join("")}
+            </div>
+          ` : ""}
+          ${catalog.length ? catalog.map((skill) => `
+            <div class="quality-row">
+              <span><strong>${escapeHtml(skill.name)}</strong> · ${escapeHtml(skill.skill_id)}</span>
+              <span>${escapeHtml(short(skill.scenario, 140))}${skill.scripts && skill.scripts.length ? ` · ${skill.scripts.length} script(s)` : ""}</span>
+            </div>
+          `).join("") : '<p>No skill catalog yet.</p>'}
+        </section>
+      `;
+    }
+
+    function renderMemory(bundle) {
+      const items = bundle.memory || [];
+      const evaluation = bundle.memory_evaluation || {};
+      const extractionResults = bundle.memory_extraction_results || [];
+      return `
+        <section class="block">
+          <h3>Memory</h3>
+          <div class="metric-grid">
+            ${metric("precision", evaluation.memory_precision)}
+            ${metric("recall proxy", evaluation.memory_recall)}
+            ${metric("accepted", evaluation.accepted_count)}
+            ${metric("project constraints", evaluation.project_constraint_count)}
+          </div>
+          <div class="memory-form">
+            <textarea id="memoryInput" placeholder="保存团队约束、偏好或决策"></textarea>
+            <div class="settings">
+              <select id="memoryScope">
+                <option value="project">project</option>
+                <option value="user">user</option>
+                <option value="session">session</option>
+              </select>
+              <select id="memoryKind">
+                <option value="constraint">constraint</option>
+                <option value="preference">preference</option>
+                <option value="decision">decision</option>
+                <option value="fact">fact</option>
+                <option value="todo">todo</option>
+              </select>
+              <button id="saveMemoryBtn">Save</button>
+            </div>
+          </div>
+          ${items.length ? items.slice(0, 12).map((item) => `
+            <div class="memory-row">
+              <div class="row-head">
+                <strong>${escapeHtml(item.scope)} / ${escapeHtml(item.kind)}</strong>
+                <button class="compact danger" data-delete-memory="${escapeHtml(item.memory_id)}">Delete</button>
+              </div>
+              <span>${escapeHtml(item.content)}</span>
+              <span class="subtle">${escapeHtml(item.metadata && item.metadata.hard_constraint ? "hard constraint" : "memory")} · ${escapeHtml(short(item.updated_at, 24))}</span>
+            </div>
+          `).join("") : '<p>No memory yet.</p>'}
+          ${extractionResults.length ? `
+            <h3>Extraction</h3>
+            ${extractionResults.slice(-4).reverse().map((result) => `
+              <div class="extraction-row">
+                <strong>${escapeHtml(result.accepted.length)} accepted / ${escapeHtml(result.rejected.length)} rejected</strong>
+                <span>${escapeHtml(short(result.reason, 180))}</span>
+              </div>
+            `).join("")}
+          ` : ""}
+        </section>
+      `;
+    }
+
+    function renderRun(run) {
+      if (!run || !run.report) {
+        return '<section class="block"><h3>Run Result</h3><p>No completed report yet.</p></section>';
       }
-      const report = run.report || {};
       const evaluation = run.evaluation || {};
-      const primaryRows = [
-        ["证据充分", evaluation.evidence_sufficiency],
-        ["来源质量", evaluation.source_quality_score],
-        ["上下文召回", evaluation.context_recall],
-        ["引用精度", evaluation.citation_precision],
-      ];
-      const extraRows = [
-        ["计划覆盖", evaluation.plan_coverage],
-        ["上下文精度", evaluation.context_precision],
-        ["事实一致", evaluation.faithfulness_proxy],
-      ];
-      $("#run-metrics").innerHTML = `
-          <div class="status-line">
-            <span class="${evaluation.passed ? "pill good" : "pill warn"}">${evaluation.passed ? "评估通过" : "需要复查"}</span>
-            <span class="pill">计划 ${escapeHtml(run.plan?.length || 0)}</span>
-            <span class="pill">证据 ${escapeHtml(run.evidence?.length || 0)}</span>
-            <span class="pill">来源 ${escapeHtml(report.source_count || 0)}</span>
+      return `
+        <section class="block report">
+          <h3>${escapeHtml(run.report.title)}</h3>
+          <p>${escapeHtml(run.report.summary)}</p>
+          <div class="metric-grid">
+            ${metric("citation", evaluation.citation_precision)}
+            ${metric("faithfulness", evaluation.faithfulness_proxy)}
+            ${metric("context recall", evaluation.context_recall)}
+            ${metric("sources", run.report.source_count)}
           </div>
-          ${primaryRows.map(([label, value]) => qualityMetric(label, value)).join("")}
-          <details class="citation-details">
-            <summary>查看完整评估指标</summary>
-            <div class="quality-grid" style="margin-top: 10px;">
-              ${extraRows.map(([label, value]) => qualityMetric(label, value)).join("")}
-              <div class="status-line">
-                <span class="pill">并发 ${escapeHtml(state.config?.job_execution?.research_max_workers || 1)}</span>
-                <span class="pill">查询改写 ${escapeHtml(evaluation.query_rewrite_count || 0)}</span>
-                <span class="pill">来源多样性 ${escapeHtml(evaluation.source_diversity || 0)}</span>
-              </div>
+          ${run.report.sections.map((section) => `
+            <div class="report-section">
+              <strong>${escapeHtml(section.heading)}</strong>
+              <p>${escapeHtml(section.content)}</p>
             </div>
-          </details>
-        `;
-      $("#route-table").innerHTML = renderRoutes(run.retrieval_routes || []);
+          `).join("")}
+        </section>
+      `;
     }
 
-    function qualityMetric(label, value) {
-      const percent = Math.round((Number(value) || 0) * 100);
+    function renderTools(bundle) {
+      const run = bundle.active_run;
+      const routes = run ? run.retrieval_routes || [] : [];
+      const trace = run ? run.trace || [] : [];
+      const registry = bundle.tool_registry || [];
+      const invocations = bundle.tool_invocations || [];
+      const approvals = bundle.approval_requests || [];
+      const steps = bundle.steps || [];
       return `
-          <div class="quality-row">
-            <header>
-              <span>${escapeHtml(label)}</span>
-              <strong>${percent}%</strong>
-            </header>
-            <div class="quality-bar"><span style="width: ${Math.max(0, Math.min(100, percent))}%"></span></div>
+        <section class="block">
+          <h3>Tools</h3>
+          <p>${escapeHtml((bundle.mcp_status || {}).reason || "Tool registry is ready.")}</p>
+          ${registry.length ? registry.map((tool) => `
+            <div class="tool-row">
+              <div class="row-head">
+                <strong>${escapeHtml(tool.name)} · ${escapeHtml(tool.channel)}</strong>
+                <span class="pill ${tool.enabled ? "good" : tool.requires_auth ? "warn" : "bad"}">${tool.enabled ? "enabled" : "unavailable"}</span>
+              </div>
+              <span>${escapeHtml(short(tool.description, 180))}</span>
+              <span class="subtle">risk ${escapeHtml(tool.risk_level)} · approval ${tool.approval_required ? "required" : "not required"} · auth ${tool.auth_configured ? "ok" : "missing"}</span>
+            </div>
+          `).join("") : '<p>No tool registry yet.</p>'}
+          ${approvals.length ? `
+            <h3>Approvals</h3>
+            ${approvals.slice(-6).reverse().map((approval) => `
+              <div class="approval-row">
+                <div class="row-head">
+                  <strong>${escapeHtml(approval.status)} · ${escapeHtml(short(approval.requested_action, 60))}</strong>
+                  ${approval.status === "pending" ? `
+                    <span class="settings">
+                      <button class="compact primary" data-approve="${escapeHtml(approval.approval_id)}">Approve</button>
+                      <button class="compact danger" data-reject="${escapeHtml(approval.approval_id)}">Reject</button>
+                    </span>
+                  ` : ""}
+                </div>
+                <span>${escapeHtml(short(approval.reason, 180))}</span>
+              </div>
+            `).join("")}
+          ` : ""}
+          ${invocations.length ? `
+            <h3>Invocations</h3>
+            ${invocations.slice(-8).reverse().map((invocation) => `
+              <div class="tool-row">
+                <div class="row-head">
+                  <strong>${escapeHtml(invocation.tool_name)}</strong>
+                  <span class="pill ${invocation.status === "completed" ? "good" : invocation.status === "failed" || invocation.status === "skipped" ? "bad" : "warn"}">${escapeHtml(invocation.status)}</span>
+                </div>
+                <span>${escapeHtml(short(invocation.result_preview || invocation.error || JSON.stringify(invocation.arguments || {}), 180))}</span>
+              </div>
+            `).join("")}
+          ` : ""}
+          ${steps.length ? `
+            <h3>Steps</h3>
+            ${steps.slice(-12).reverse().map((step) => `
+              <div class="step-row">
+                <div class="row-head">
+                  <strong>${escapeHtml(step.kind)} · ${escapeHtml(step.actor)}</strong>
+                  <span class="pill ${step.status === "completed" ? "good" : step.status === "failed" ? "bad" : "warn"}">${escapeHtml(step.status)}</span>
+                </div>
+                <span>${escapeHtml(short(step.title, 120))}</span>
+                <span class="subtle">${escapeHtml(step.tool_name || "no tool")} · evidence ${escapeHtml(step.evidence_count || 0)}</span>
+              </div>
+            `).join("")}
+          ` : ""}
+          ${routes.length ? `<h3>Routes</h3>` : ""}
+          ${routes.length ? routes.slice(0, 8).map((route) => `
+            <div class="source-row">
+              <strong>${escapeHtml(route.mode)} · ${escapeHtml((route.selected_tools || []).join(", ") || "no tool")}</strong>
+              <span>${escapeHtml(short(route.reason, 180))}</span>
+            </div>
+          `).join("") : '<p>No route decisions yet.</p>'}
+          ${trace.length ? trace.slice(-8).map((event) => `
+            <div class="trace-row">
+              <strong>${escapeHtml(event.actor)} · ${escapeHtml(event.kind)}</strong>
+              <span>${escapeHtml(short(event.message, 180))}</span>
+            </div>
+          `).join("") : ""}
+        </section>
+      `;
+    }
+
+    function renderQuality(bundle) {
+      const run = bundle.active_run;
+      const evaluation = run && run.evaluation ? run.evaluation : {};
+      const coverage = bundle.constraint_coverage || [];
+      const coveredCount = coverage.filter((item) => item.covered).length;
+      const coverageScore = coverage.length ? coveredCount / coverage.length : null;
+      return `
+        <section class="block">
+          <h3>Quality</h3>
+          <div class="metric-grid">
+            ${metric("citation", evaluation.citation_precision)}
+            ${metric("faithfulness", evaluation.faithfulness_proxy)}
+            ${metric("context recall", evaluation.context_recall)}
+            ${metric("constraint coverage", coverageScore === null ? "n/a" : coverageScore.toFixed(2))}
           </div>
-        `;
+          ${coverage.length ? coverage.map((item) => `
+            <div class="coverage-row">
+              <div class="row-head">
+                <strong>${escapeHtml(item.covered ? "covered" : "missing")}</strong>
+                <span class="pill ${item.covered ? "good" : "warn"}">${escapeHtml(item.confidence)}</span>
+              </div>
+              <span>${escapeHtml(item.content)}</span>
+              <span class="subtle">${escapeHtml(item.reason)} · ${escapeHtml((item.matched_sections || []).join(", ") || "no matched section")}</span>
+            </div>
+          `).join("") : '<p>No constraint coverage yet.</p>'}
+          ${(evaluation.notes || []).length ? `
+            <h3>Notes</h3>
+            ${(evaluation.notes || []).slice(-5).map((note) => `<div class="quality-row"><span>${escapeHtml(note)}</span></div>`).join("")}
+          ` : ""}
+        </section>
+      `;
     }
 
     function metric(label, value) {
-      return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+      return `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value ?? "n/a")}</strong></div>`;
     }
 
-    function shortId(value) {
-      return String(value || "").slice(0, 8);
-    }
-
-    function renderSourceSummary() {
-      const target = $("#source-summary");
-      const run = state.selectedRun;
-      if (!run) {
-        target.innerHTML = empty("完成研究后，这里会显示报告引用的来源。");
-        return;
-      }
-      const evidence = run.evidence || [];
-      const report = run.report || {};
-      const sourceIndex = report.source_index || [];
-      const kindCounts = evidence.reduce((acc, item) => {
-        const kind = zhKind(item.kind || "evidence");
-        acc[kind] = (acc[kind] || 0) + 1;
-        return acc;
-      }, {});
-      const countPills = Object.entries(kindCounts)
-        .map(([kind, count]) => `<span class="pill">${escapeHtml(kind)} ${escapeHtml(count)}</span>`)
-        .join("");
-      const sourceRows = sourceIndex.length
-        ? sourceIndex.map(sourceIndexRow)
-        : evidence.map(evidenceSourceRow);
-      target.innerHTML = `
-          <div class="stack">
-            <div class="status-line">
-              <span class="pill">引用来源 ${escapeHtml(report.source_count || sourceIndex.length || 0)}</span>
-              <span class="pill">证据 ${escapeHtml(evidence.length)}</span>
-            </div>
-            <div class="source-list">${sourceRows.slice(0, 3).join("") || empty("暂无可展示来源。")}</div>
-            ${sourceRows.length > 3 || countPills ? `
-              <details class="citation-details">
-                <summary>查看全部来源和类型</summary>
-                <div class="stack" style="margin-top: 10px;">
-                  <div class="status-line">${countPills}</div>
-                  <div class="source-list">${sourceRows.slice(3).join("")}</div>
-                </div>
-              </details>
-            ` : ""}
-          </div>
-        `;
-    }
-
-    function sourceIndexRow(line) {
-      const raw = String(line || "");
-      const urlMatch = raw.match(/https?:\/\/\S+/);
-      const url = urlMatch ? urlMatch[0] : "";
-      const title = raw.replace(/^\[\d+\]\s*/, "").replace(url, "").replace(/[:\s]+$/, "").trim() || raw;
-      return `
-          <div class="source-row">
-            <strong>${escapeHtml(title)}</strong>
-            ${url ? `<p><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(url)}</a></p>` : ""}
-          </div>
-        `;
-    }
-
-    function evidenceSourceRow(item) {
-      const url = item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a>` : "";
-      return `
-          <div class="source-row">
-            <div class="status-line">
-              <strong>${escapeHtml(item.title || item.source || "来源")}</strong>
-              <span class="pill">${escapeHtml(zhKind(item.kind || "evidence"))}</span>
-            </div>
-            <p class="muted">${escapeHtml(item.source || "")} ${url}</p>
-          </div>
-        `;
-    }
-
-    function renderReport() {
-      const run = state.selectedRun;
-      const output = $("#report-output");
-      if (!run || !run.report) {
-        output.innerHTML = empty("完成研究后，这里会生成带引用的报告。");
-        return;
-      }
-      const report = run.report;
-      const issues = (run.issues || []).map((issue) => `<span class="pill warn">${escapeHtml(issue)}</span>`).join("");
-      const failureReason = run.failure_reason ? `<span class="pill bad">${escapeHtml(run.failure_reason)}</span>` : "";
-      const evaluation = run.evaluation || {};
-      const evalNotes = (evaluation.notes || []).map((note) => `<span class="pill warn">${escapeHtml(note)}</span>`).join("");
-      const sections = (report.sections || [])
-        .map((section) => {
-          const citations = (section.citations || [])
-            .map((item) => sourceLine(item))
-            .join("");
-          return `
-              <section class="report-section">
-                <header>
-                  <h3>${escapeHtml(section.heading)}</h3>
-                  <span class="pill">${section.evidence_count || 0} 条引用</span>
-                </header>
-                <p>${escapeHtml(section.content)}</p>
-                <details class="citation-details">
-                  <summary>查看本节引用</summary>
-                  <div class="citation-list">${citations || '<span class="muted">本节暂无引用。</span>'}</div>
-                </details>
-              </section>
-            `;
-        })
-        .join("");
-      const sourceIndex = (report.source_index || [])
-        .map((line) => `<div class="item source-index-line">${escapeHtml(line)}</div>`)
-        .join("");
-      output.innerHTML = `
-          <article class="report-document">
-            <div class="report-header">
-              <h3>${escapeHtml(report.title)}</h3>
-              <p class="muted" style="margin-top: 6px;">${escapeHtml(report.summary)}</p>
-            </div>
-            <div class="report-meta-row">${failureReason || issues || '<span class="pill good">已通过引用校验</span>'}</div>
-            <div class="report-meta-row">
-              <span class="${evaluation.passed ? "pill good" : "pill warn"}">${evaluation.passed ? "评估通过" : "需要复查"}</span>
-              <span class="pill">充分 ${Math.round((evaluation.evidence_sufficiency || 0) * 100)}%</span>
-              <span class="pill">来源 ${Math.round((evaluation.source_quality_score || 0) * 100)}%</span>
-              <span class="pill">上下文召回 ${Math.round((evaluation.context_recall || 0) * 100)}%</span>
-              <span class="pill">引用 ${Math.round((evaluation.citation_precision || 0) * 100)}%</span>
-            </div>
-            ${evalNotes ? `<details class="citation-details"><summary>查看评估备注</summary><div class="status-line" style="margin-top: 10px;">${evalNotes}</div></details>` : ""}
-            <div class="report-content">${sections}</div>
-            <details class="citation-details">
-              <summary>查看完整来源索引</summary>
-              <div class="stack" style="margin-top: 10px;">${sourceIndex || empty("暂无来源索引。")}</div>
-            </details>
-          </article>
-        `;
-    }
-
-    function renderTimeline() {
-      const target = $("#timeline-output");
-      const run = state.selectedRun;
-      const job = state.activeJob;
-      if (!run && !job) {
-        target.innerHTML = empty("任务开始后，这里会展示 Agent 交接、工具调用和评估事件。");
-        return;
-      }
-      const jobItems = job
-        ? [
-          {
-            label: "任务",
-            title: zhStatus(job.status || "queued"),
-            message: job.request?.topic || job.topic || "",
-            meta: [job.queued_at, job.started_at, job.finished_at].filter(Boolean).map(formatTime).join(" / "),
-          },
-        ]
-        : [];
-      const traceItems = (run?.trace || [])
-        .filter((event) => ["handoff", "tool_call", "step", "verification", "evaluation"].includes(event.kind))
-        .slice(-8)
-        .map((event) => ({
-          label: event.kind === "tool_call" ? "工具" : event.actor || event.kind,
-          title: event.handoff
-            ? `${event.handoff.from_agent} -> ${event.handoff.to_agent}`
-            : zhTool(event.tool_name) || event.step || zhEvent(event.kind),
-          message: event.message || "",
-          meta: [event.provider, event.model, event.latency_ms ? `${event.latency_ms}ms` : ""].filter(Boolean).join(" / "),
-        }));
-      const items = [...jobItems, ...traceItems];
-      target.innerHTML = items.length
-        ? `<div class="timeline">${items.map(timelineItem).join("")}</div>`
-        : empty("这个运行还没有可展示的轨迹事件。");
-    }
-
-    function timelineItem(item) {
-      const initial = String(item.label || "R").trim().slice(0, 1).toUpperCase();
-      return `
-          <div class="timeline-item">
-            <div class="timeline-dot">${escapeHtml(initial)}</div>
-            <div class="timeline-body">
-              <strong>${escapeHtml(item.title || item.label)}</strong>
-              <p class="muted">${escapeHtml(item.message || "")}</p>
-              ${item.meta ? `<p class="muted" style="margin-top: 4px;">${escapeHtml(item.meta)}</p>` : ""}
-            </div>
-          </div>
-        `;
-    }
-
-    function sourceLine(item) {
-      const url = item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a>` : "";
-      return `
-          <div class="citation-row">
-            <header>
-              <strong>${escapeHtml(item.title)}</strong>
-              <span class="pill">${escapeHtml(zhKind(item.kind || "evidence"))}</span>
-            </header>
-            <p class="muted">${escapeHtml(item.source)} ${url}</p>
-            <p style="margin-top: 6px;">${escapeHtml(item.snippet || item.content || "")}</p>
-          </div>
-        `;
-    }
-
-    function renderRoutes(routes) {
-      if (!routes.length) {
-        return empty("暂无检索路由。");
-      }
-      return routes
-        .map(
-          (route) => {
-            const tools = (route.selected_tools || []).map((tool) => `<span class="pill">${escapeHtml(zhTool(tool))}</span>`).join("");
-            const queries = [
-              ...(route.web_queries || []).map((query) => `<div><span class="pill">外部搜索</span> ${escapeHtml(query)}</div>`),
-              ...(route.internal_queries || []).map((query) => `<div><span class="pill">向量检索</span> ${escapeHtml(query)}</div>`),
-            ].filter(Boolean).join("");
-            const criteria = (route.sufficiency_criteria || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-            return `
-              <details class="route-details">
-                <summary>
-                  <div class="route-summary">
-                    <div class="status-line">
-                      <strong><code>${escapeHtml(route.plan_item_id)}</code></strong>
-                      <span class="pill">${escapeHtml(zhRoute(route.mode))}</span>
-                      <span class="pill">证据 ${escapeHtml(route.min_evidence || 1)}</span>
-                      <span class="pill">来源 ${escapeHtml(route.min_sources || 1)}</span>
-                    </div>
-                    <div class="status-line">${tools}</div>
-                  </div>
-                </summary>
-                <div class="stack" style="margin-top: 10px;">
-                  <p>${escapeHtml(route.reason)}</p>
-                  ${queries ? `<div class="stack">${queries}</div>` : ""}
-                  ${criteria ? `<ul class="muted">${criteria}</ul>` : ""}
-                </div>
-              </details>
-            `;
-          },
-        )
-        .join("");
-    }
-
-    function statusClass(status) {
-      if (status === "completed") return "pill good";
-      if (status === "failed") return "pill bad";
-      if (status === "running") return "pill warn";
-      if (status === "cancelled") return "pill warn";
-      return "pill";
-    }
-
-    function renderJobs() {
-      const list = $("#job-list");
-      if (!state.jobs.length) {
-        list.innerHTML = empty("还没有提交过研究任务。");
-        return;
-      }
-      list.innerHTML = state.jobs
-        .map((job) => {
-          const active = state.activeJob?.job_id === job.job_id ? " active" : "";
-          const cancel = ["queued", "running"].includes(job.status)
-            ? `<button class="ghost cancel-job-inline" type="button" data-job-id="${escapeHtml(job.job_id)}">取消任务</button>`
-            : "";
-          return `
-              <div class="item">
-              <button class="job-button${active}" type="button" data-job-id="${escapeHtml(job.job_id)}">
-                <span>
-                  <strong>${escapeHtml(job.request.topic)}</strong><br />
-                  <span class="muted">${escapeHtml(formatTime(job.queued_at) || "")}</span>
-                </span>
-                <span class="${statusClass(job.status)}">${escapeHtml(zhStatus(job.status))}</span>
-              </button>
-              ${cancel ? `<div class="status-line" style="margin-top: 8px;">${cancel}</div>` : ""}
-              </div>
-            `;
-        })
-        .join("");
-      $$(".job-button").forEach((button) => {
-        button.addEventListener("click", async () => {
-          const job = await api(`/v1/research/jobs/${button.dataset.jobId}`);
-          state.activeJob = job;
-          if (job.status === "completed" && job.run_id) {
-            state.selectedRun = await api(`/v1/research/jobs/${job.job_id}/result`);
-            switchTab("portal");
-          }
-          renderAll();
-        });
+    function bindInspectorActions() {
+      const inlineConfirm = document.getElementById("confirmPlanInline");
+      if (inlineConfirm) inlineConfirm.addEventListener("click", confirmPlan);
+      const continueBtn = document.getElementById("continueConstraintsBtn");
+      if (continueBtn) continueBtn.addEventListener("click", () => el.messageInput.focus());
+      const saveBtn = document.getElementById("saveMemoryBtn");
+      if (saveBtn) saveBtn.addEventListener("click", saveMemory);
+      const saveWorkspaceBtn = document.getElementById("saveWorkspaceBtn");
+      if (saveWorkspaceBtn) saveWorkspaceBtn.addEventListener("click", saveWorkspace);
+      el.inspector.querySelectorAll("[data-run-skill]").forEach((button) => {
+        button.addEventListener("click", () => runSkillScript(button.dataset.runSkill, button.dataset.scriptName));
       });
-      $$(".cancel-job-inline").forEach((button) => {
-        button.addEventListener("click", async (event) => {
-          event.stopPropagation();
-          await cancelJob(button.dataset.jobId);
-        });
+      el.inspector.querySelectorAll("[data-delete-memory]").forEach((button) => {
+        button.addEventListener("click", () => deleteMemory(button.dataset.deleteMemory));
+      });
+      el.inspector.querySelectorAll("[data-approve]").forEach((button) => {
+        button.addEventListener("click", () => resolveApproval(button.dataset.approve, true));
+      });
+      el.inspector.querySelectorAll("[data-reject]").forEach((button) => {
+        button.addEventListener("click", () => resolveApproval(button.dataset.reject, false));
       });
     }
 
-    function renderRuns() {
-      const list = $("#run-list");
-      if (!state.runs.length) {
-        list.innerHTML = empty("还没有完成的运行记录。");
-        return;
-      }
-      list.innerHTML = state.runs
-        .map((run) => {
-          const active = state.selectedRun?.run_id === run.run_id ? " active" : "";
-          return `
-              <button class="run-button${active}" type="button" data-run-id="${escapeHtml(run.run_id)}">
-                <span>
-                  <strong>${escapeHtml(run.request.topic)}</strong><br />
-                  <span class="muted">${escapeHtml(formatTime(run.started_at) || "")}</span>
-                </span>
-                <span class="${statusClass(run.status)}">${escapeHtml(zhStatus(run.status))}</span>
-              </button>
-            `;
-        })
-        .join("");
-      $$(".run-button").forEach((button) => {
-        button.addEventListener("click", async () => {
-          state.selectedRun = await api(`/v1/research/runs/${button.dataset.runId}`);
-          renderAll();
-          switchTab("portal");
-        });
-      });
-    }
-
-    function renderPlan() {
-      const run = state.selectedRun;
-      const target = $("#plan-table");
-      if (!run || !run.plan?.length) {
-        target.innerHTML = empty("选择一个运行后，可以查看 Planner 拆解出的研究计划。");
-        return;
-      }
-      const rows = run.plan
-        .map(
-          (item) => `
-              <tr>
-                <td><code>${escapeHtml(item.id)}</code></td>
-                <td>${escapeHtml(item.question)}</td>
-                <td>${escapeHtml(item.purpose)}</td>
-                <td>${escapeHtml(zhStatus(item.status))}</td>
-                <td>${item.evidence_count || 0}</td>
-              </tr>
-            `,
-        )
-        .join("");
-      target.innerHTML = `
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>ID</th><th>子问题</th><th>研究目的</th><th>状态</th><th>证据</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        `;
-    }
-
-    function renderDocuments() {
-      const target = $("#document-list");
-      if (!state.documents.length) {
-        target.innerHTML = empty("还没有索引资料。可以先添加项目笔记、论文摘要或产品说明。");
-        return;
-      }
-      target.innerHTML = state.documents
-        .map(
-          (doc) => {
-            const documentId = doc.metadata?.document_id || "";
-            return `
-              <article class="item">
-                <header>
-                  <strong>${escapeHtml(doc.title)}</strong>
-                  <span class="item-actions">
-                    <span class="pill">${escapeHtml(zhKind(doc.kind))}</span>
-                    ${documentId ? `<button class="ghost danger mini delete-document-button" type="button" data-document-id="${escapeHtml(documentId)}">删除</button>` : ""}
-                  </span>
-                </header>
-                <p class="muted">${escapeHtml(doc.source)}</p>
-                <p style="margin-top: 6px;">${escapeHtml(doc.snippet || doc.content || "")}</p>
-              </article>
-            `;
-          },
-        )
-        .join("");
-      $$(".delete-document-button").forEach((button) => {
-        button.addEventListener("click", async () => {
-          await deleteDocument(button.dataset.documentId);
-        });
-      });
-    }
-
-    function renderTelemetry() {
-      const target = $("#telemetry-list");
-      if (!state.telemetry.length) {
-        target.innerHTML = empty("第一次运行后，这里会展示遥测事件。");
-        return;
-      }
-      target.innerHTML = state.telemetry
-        .slice()
-        .reverse()
-        .map(
-          (event) => `
-              <article class="item">
-                <header>
-                  <strong>${escapeHtml(zhEvent(event.kind))}</strong>
-                  <span class="pill">${escapeHtml(formatTime(event.ts))}</span>
-                </header>
-                <p>${escapeHtml(event.message)}</p>
-                <p class="muted" style="margin-top: 6px;">
-                  ${escapeHtml([event.actor, event.step, event.status].filter(Boolean).join(" / "))}
-                </p>
-                <pre>${escapeHtml(JSON.stringify(event.metadata || {}, null, 2))}</pre>
-              </article>
-            `,
-        )
-        .join("");
-    }
-
-    function renderCheckpoints() {
-      const run = state.selectedRun;
-      const target = $("#checkpoint-list");
-      if (!run || (!run.trace?.length && !run.checkpoints?.length)) {
-        target.innerHTML = empty("选择一个已完成运行后，可以查看 trace 和 checkpoint。");
-        return;
-      }
-      const traceItems = (run.trace || [])
-        .map(
-          (event) => `
-              <article class="item">
-                <header>
-                  <strong>${escapeHtml(zhEvent(event.kind))}${event.handoff ? ` / ${escapeHtml(event.handoff.from_agent)} -> ${escapeHtml(event.handoff.to_agent)}` : ""}</strong>
-                  <span class="pill">${escapeHtml(formatTime(event.created_at))}</span>
-                </header>
-                <p>${escapeHtml(event.message)}</p>
-                <p class="muted" style="margin-top: 6px;">
-                  ${escapeHtml([event.actor, event.step, event.status, event.tool_name].filter(Boolean).join(" / "))}
-                </p>
-                <pre>${escapeHtml(JSON.stringify(event.metadata || {}, null, 2))}</pre>
-              </article>
-            `,
-        )
-        .join("");
-      const checkpoints = (run.checkpoints || [])
-        .map(
-          (checkpoint) => `
-              <article class="item">
-                <header>
-                  <strong>${escapeHtml(checkpoint.stage)}</strong>
-                  <span class="pill">${escapeHtml(formatTime(checkpoint.created_at))}</span>
-                </header>
-                <pre>${escapeHtml(JSON.stringify(checkpoint.payload || {}, null, 2))}</pre>
-              </article>
-            `,
-        )
-        .join("");
-      target.innerHTML = `
-          <div class="stack">
-            <div>
-              <h3>Trace 事件</h3>
-              <div class="stack" style="margin-top: 10px;">${traceItems || empty("暂无 trace 事件。")}</div>
-            </div>
-            <div>
-              <h3>检查点</h3>
-              <div class="stack" style="margin-top: 10px;">${checkpoints || empty("暂无检查点。")}</div>
-            </div>
-          </div>
-        `;
-    }
-
-    function renderConfig() {
-      $("#config-json").textContent = JSON.stringify(state.config || {}, null, 2);
-    }
-
-    function empty(message) {
-      return `<div class="empty">${escapeHtml(message)}</div>`;
-    }
-
-    function switchTab(tab) {
-      $$(".tab-button").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
-      $$(".tab-panel").forEach((panel) => panel.classList.toggle("active", panel.id === tab));
-    }
-
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    function setProgress(visible, percent = 0) {
-      const progress = $("#job-progress");
-      progress.classList.toggle("hidden", !visible);
-      progress.querySelector("span").style.width = `${Math.max(0, Math.min(100, percent))}%`;
-    }
-
-    async function waitForJob(jobId, statusElement) {
-      for (let attempt = 0; attempt < 120; attempt += 1) {
-        const jobStatus = await api(`/v1/research/jobs/${jobId}/status`);
-        state.activeJob = { ...(state.activeJob || {}), ...jobStatus };
-        state.jobs = state.jobs.map((job) => (job.job_id === jobId ? { ...job, ...jobStatus } : job));
-        statusElement.textContent = `${zhStatus(jobStatus.status)} · ${jobId}`;
-        setProgress(true, jobStatus.status === "running" ? Math.min(92, 12 + attempt * 2) : 8);
-        renderJobs();
-        renderResearchThread();
-        renderMetrics();
-        renderSourceSummary();
-        renderWorkspaceHeader();
-        renderTimeline();
-        if (jobStatus.status === "completed") {
-          setProgress(true, 100);
-          return api(`/v1/research/jobs/${jobId}/result`);
-        }
-        if (jobStatus.status === "failed") {
-          throw new Error(jobStatus.error || "研究任务失败。");
-        }
-        if (jobStatus.status === "cancelled") {
-          throw new Error(jobStatus.error || "研究任务已取消。");
-        }
-        await sleep(500);
-      }
-      throw new Error("研究任务轮询超时。");
-    }
-
-    function renderClarifyResult(result) {
-      const panel = $("#clarify-panel");
-      panel.classList.remove("hidden", "ok", "warn");
-      delete panel.dataset.stale;
-      const confidence = Math.round((result.confidence || 0) * 100);
-      if (result.need_clarification) {
-        panel.classList.add("warn");
-        const missing = (result.missing_dimensions || [])
-          .map((item) => `<li>${escapeHtml(item)}</li>`)
-          .join("");
-        panel.innerHTML = `
-            <h4>⚠️ 提问还不够具体</h4>
-            ${result.question ? `<p><strong>建议先补充：</strong>${escapeHtml(result.question)}</p>` : ""}
-            ${missing ? `<ul>${missing}</ul>` : ""}
-            <p class="muted">可以在上方补充内容后重新预检，或直接开始研究（预检只是参考，不会拦截提交）。</p>`;
-      } else {
-        panel.classList.add("ok");
-        panel.innerHTML = `
-            <h4>✅ 提问已达标，可以直接开始研究</h4>
-            ${result.verification ? `<p>${escapeHtml(result.verification)}</p>` : ""}
-            <div class="clarify-meta">
-              <span class="pill good">预检通过</span>
-              ${confidence ? `<span class="pill">置信度 ${confidence}%</span>` : ""}
-            </div>`;
-      }
-    }
-
-    async function checkClarification() {
-      const panel = $("#clarify-panel");
-      const button = $("#clarify-button");
-      const topic = $("#topic").value.trim();
-      if (topic.length < 3) {
-        renderClarifyResult({
-          need_clarification: true,
-          question: "研究问题太短了，请至少输入 3 个字符，并说明研究目标、对比对象或期望产出。",
-          missing_dimensions: [],
-          verification: "",
-          confidence: 0,
-        });
-        return;
-      }
-      button.disabled = true;
-      panel.classList.remove("hidden", "ok", "warn");
-      panel.innerHTML = `<p class="muted">正在预检提问，请稍候...</p>`;
-      try {
-        const result = await api("/v1/research/clarify", {
-          method: "POST",
-          body: JSON.stringify({ topic }),
-        });
-        renderClarifyResult(result);
-      } catch (error) {
-        panel.classList.add("warn");
-        panel.innerHTML = `<h4>⚠️ 预检失败</h4><p class="error">${escapeHtml(error.message)}</p>`;
-      } finally {
-        button.disabled = false;
-      }
-    }
-
-    async function createRun(event) {
-      event.preventDefault();
-      const status = $("#form-status");
-      const button = $("#run-button");
-      const cancelButton = $("#cancel-job-button");
-      const clarifyPanel = $("#clarify-panel");
-      clarifyPanel.classList.add("hidden");
-      clarifyPanel.classList.remove("ok", "warn");
-      button.disabled = true;
-      cancelButton.classList.add("hidden");
-      status.textContent = "正在提交...";
-      setProgress(true, 4);
-      try {
-        const body = {
-          topic: $("#topic").value.trim(),
-        };
-        const result = await api("/v1/research/jobs", {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-        state.activeJob = result.job;
-        state.selectedRun = null;
-        status.textContent = `已入队 · ${result.job_id}`;
-        cancelButton.classList.remove("hidden");
-        renderAll();
-        state.selectedRun = await waitForJob(result.job_id, status);
-        status.textContent = `已完成 · ${state.selectedRun.run_id}`;
-        await loadAll();
-      } catch (error) {
-        status.innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
-      } finally {
-        button.disabled = false;
-        cancelButton.classList.add("hidden");
-        setTimeout(() => setProgress(false, 0), 900);
-      }
-    }
-
-    async function cancelJob(jobId) {
-      if (!jobId) return;
-      const status = $("#form-status");
-      status.textContent = `正在取消 · ${jobId}`;
-      const job = await api(`/v1/research/jobs/${jobId}/cancel`, { method: "POST" });
-      state.activeJob = job;
-      await loadAll();
-    }
-
-    async function addDocument(event) {
-      event.preventDefault();
-      await api("/v1/documents", {
+    async function createSession() {
+      const session = await api("/v1/agent/sessions", {
         method: "POST",
-        body: JSON.stringify({
-          title: $("#doc-title").value.trim(),
-          source: $("#doc-source").value.trim(),
-          url: $("#doc-url").value.trim() || null,
-          snippet: $("#doc-snippet").value.trim() || null,
-          content: $("#doc-content").value.trim() || null,
-          metadata: { added_from: "web_console" },
-        }),
+        body: JSON.stringify({ title: "Research session", workspace_id: state.activeWorkspaceId }),
       });
-      await loadAll();
+      state.activeSessionId = session.session_id;
+      await loadSessions();
+      await loadBundle(session.session_id);
     }
 
-    async function deleteDocument(documentId) {
-      if (!documentId) return;
-      if (!window.confirm("确定删除这条资料吗？相关向量索引也会一起删除。")) return;
-      await api(`/v1/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
-      await loadAll();
+    async function sendMessage() {
+      const content = el.messageInput.value.trim();
+      if (!content) return;
+      if (!state.activeSessionId) {
+        await createSession();
+      }
+      el.sendBtn.disabled = true;
+      let turnPollTimer = null;
+      let turnPollBusy = false;
+      try {
+        const turnRequest = api(`/v1/agent/sessions/${state.activeSessionId}/messages`, {
+          method: "POST",
+          body: JSON.stringify({
+            content,
+            depth: el.depthSelect.value,
+            max_sections: Number(el.maxSectionsInput.value || 4),
+          }),
+        });
+        turnPollTimer = setInterval(async () => {
+          if (!state.activeSessionId || turnPollBusy) return;
+          turnPollBusy = true;
+          try {
+            await loadBundle(state.activeSessionId);
+          } catch (_) {
+            // The final request handler will surface the user-visible error.
+          } finally {
+            turnPollBusy = false;
+          }
+        }, 2000);
+        await turnRequest;
+        el.messageInput.value = "";
+        await loadSessions();
+        await loadBundle(state.activeSessionId);
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        if (turnPollTimer) clearInterval(turnPollTimer);
+        el.sendBtn.disabled = false;
+      }
     }
 
-    async function clearDocuments() {
-      if (!state.documents.length) return;
-      if (!window.confirm("确定清空资料库吗？所有本地资料和向量索引都会删除。")) return;
-      await api("/v1/documents", { method: "DELETE" });
-      state.selectedRun = null;
-      await loadAll();
+    async function confirmPlan() {
+      if (!state.activeSessionId) return;
+      el.confirmBtn.disabled = true;
+      try {
+        await api(`/v1/agent/sessions/${state.activeSessionId}/confirm-plan`, { method: "POST" });
+        await loadSessions();
+        await loadBundle(state.activeSessionId);
+      } catch (error) {
+        showError(error.message);
+      }
     }
 
-    async function clearHistory() {
-      if (!state.runs.length && !state.jobs.length && !state.telemetry.length) return;
-      if (!window.confirm("确定清空历史运行、任务队列和轨迹事件吗？资料库不会被删除。")) return;
-      await api("/v1/research/history", { method: "DELETE" });
-      state.activeJob = null;
-      state.selectedRun = null;
-      await loadAll();
+    async function saveMemory() {
+      const input = document.getElementById("memoryInput");
+      const scope = document.getElementById("memoryScope");
+      const kind = document.getElementById("memoryKind");
+      const content = input.value.trim();
+      if (!content) return;
+      try {
+        await api("/v1/memory", {
+          method: "POST",
+          body: JSON.stringify({
+            content,
+            scope: scope.value,
+            kind: kind.value,
+            session_id: state.activeSessionId,
+          }),
+        });
+        await loadBundle(state.activeSessionId);
+      } catch (error) {
+        showError(error.message);
+      }
     }
 
-    $$(".tab-button").forEach((button) => {
-      button.addEventListener("click", () => switchTab(button.dataset.tab));
+    async function saveWorkspace() {
+      if (!state.bundle || !state.bundle.workspace) return;
+      const workspaceId = document.getElementById("saveWorkspaceBtn")?.dataset.workspaceId || state.bundle.workspace.workspace_id;
+      try {
+        await api("/v1/agent/workspaces", {
+          method: "POST",
+          body: JSON.stringify({
+            workspace_id: workspaceId,
+            name: document.getElementById("workspaceName").value.trim() || "Workspace",
+            team_context: document.getElementById("workspaceTeamContext").value.trim(),
+            risk_policy: document.getElementById("workspaceRiskPolicy").value.trim(),
+            default_stack: document.getElementById("workspaceDefaultStack").value.split(",").map((item) => item.trim()).filter(Boolean),
+            deployment_constraints: document.getElementById("workspaceDeployment").value.split(",").map((item) => item.trim()).filter(Boolean),
+            preferred_sources: document.getElementById("workspaceSources").value.split(",").map((item) => item.trim()).filter(Boolean),
+            disabled_tools: document.getElementById("workspaceDisabled").value.split(",").map((item) => item.trim()).filter(Boolean),
+          }),
+        });
+        await loadSessions();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    async function runSkillScript(skillId, scriptName) {
+      if (!state.activeSessionId || !skillId || !scriptName) return;
+      const bundle = state.bundle || {};
+      const lastUserMessage = [...(bundle.messages || [])].reverse().find((message) => message.role === "user");
+      try {
+        await api(`/v1/agent/skills/${skillId}/scripts/${scriptName}/run`, {
+          method: "POST",
+          body: JSON.stringify({
+            payload: {
+              content: lastUserMessage ? lastUserMessage.content : "",
+              workspace: bundle.workspace || {},
+              selected_skill: bundle.selected_skill || {},
+              session_summary: bundle.session ? bundle.session.context_summary : "",
+            },
+          }),
+        });
+        await loadBundle(state.activeSessionId);
+        await loadSessions();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    async function deleteMemory(memoryId) {
+      if (!memoryId || !state.activeSessionId) return;
+      try {
+        await api(`/v1/memory/${memoryId}`, { method: "DELETE" });
+        await loadBundle(state.activeSessionId);
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    async function resolveApproval(approvalId, approve) {
+      if (!approvalId || !state.activeSessionId) return;
+      const action = approve ? "approve" : "reject";
+      try {
+        await api(`/v1/agent/sessions/${state.activeSessionId}/approvals/${approvalId}/${action}`, { method: "POST" });
+        await loadBundle(state.activeSessionId);
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    async function exportSession() {
+      if (!state.activeSessionId) return;
+      try {
+        const bundle = await api(`/v1/agent/sessions/${state.activeSessionId}/export`);
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `agent-session-${state.activeSessionId}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function syncPolling() {
+      if (state.pollTimer) {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+      }
+      const status = state.bundle && state.bundle.session.status;
+      if (status === "planning" || status === "researching") {
+        state.pollTimer = setInterval(async () => {
+          try {
+            await loadBundle(state.activeSessionId);
+          } catch (_) {
+            clearInterval(state.pollTimer);
+            state.pollTimer = null;
+          }
+        }, 2000);
+      }
+    }
+
+    function showError(message) {
+      const node = document.createElement("article");
+      node.className = "message assistant";
+      node.innerHTML = `<header><strong>error</strong></header><pre class="error">${escapeHtml(message)}</pre>`;
+      el.timeline.appendChild(node);
+    }
+
+    el.newSessionBtn.addEventListener("click", createSession);
+    el.sendBtn.addEventListener("click", sendMessage);
+    el.confirmBtn.addEventListener("click", confirmPlan);
+    el.exportBtn.addEventListener("click", exportSession);
+    el.refreshBtn.addEventListener("click", () => state.activeSessionId ? loadBundle(state.activeSessionId) : loadSessions());
+    el.messageInput.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        sendMessage();
+      }
     });
-    $("#run-form").addEventListener("submit", createRun);
-    $("#clarify-button").addEventListener("click", checkClarification);
-    $("#topic").addEventListener("input", () => {
-      const panel = $("#clarify-panel");
-      if (panel.classList.contains("hidden") || panel.dataset.stale) return;
-      panel.dataset.stale = "1";
-      panel.classList.remove("hidden", "ok");
-      panel.classList.add("warn");
-      panel.innerHTML = `<h4>✏️ 提问已修改</h4><p class="muted">内容有变动，请重新点击"预检提问"刷新结果。</p>`;
-    });
-    $("#cancel-job-button").addEventListener("click", () => cancelJob(state.activeJob?.job_id));
-    $("#document-form").addEventListener("submit", addDocument);
-    $("#clear-documents-button").addEventListener("click", clearDocuments);
-    $("#clear-history-button").addEventListener("click", clearHistory);
-    $("#refresh-button").addEventListener("click", loadAll);
 
-    loadAll().catch((error) => {
-      $("#health-pill").textContent = "error";
-      $("#health-pill").className = "pill bad";
-      $("#report-output").innerHTML = empty(error.message);
-    });
+    api("/health")
+      .then(() => {
+        el.apiStatus.textContent = "API ok";
+        el.apiStatus.className = "pill good";
+      })
+      .catch(() => {
+        el.apiStatus.textContent = "API offline";
+        el.apiStatus.className = "pill bad";
+      });
+
+    loadSessions().catch((error) => showError(error.message));
   </script>
 </body>
 

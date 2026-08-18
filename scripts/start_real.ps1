@@ -260,7 +260,8 @@ Configure-ExternalMcp
 $uvicornArgs = @(
   "-m",
   "uvicorn",
-  "agentic_research_copilot.server:app",
+  "agentic_research_copilot.server:create_app",
+  "--factory",
   "--host",
   "127.0.0.1",
   "--port",

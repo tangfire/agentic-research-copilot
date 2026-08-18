@@ -1,10 +1,10 @@
 # Agentic Research Runtime
 
-`AI Research Copilot` is the repository and API product name, but the project should be presented as an **Agentic Research Runtime**: a single-node AI engineering experiment for understanding how Deep Research / Codex-like systems can be built, inspected, evaluated, and replayed.
+`AI Research Copilot` is the repository and API product name, but the project should now be presented as a **Conversational Research Agent Runtime with HITL, tool policy, memory evaluation, workspace control, and constraint coverage**: a single-node AI engineering experiment for understanding how Deep Research / Codex-like systems can be built, configured with local knowledge, inspected, evaluated, and replayed.
 
-The goal is not to beat mature general-purpose agents. The goal is to implement the engineering skeleton behind a citation-grounded research agent: planning, supervised tool use, evidence routing, GitHub MCP integration, local Agentic RAG, report synthesis, verification, evaluation, and trace replay.
+The goal is not to beat mature general-purpose agents. The goal is to implement the engineering skeleton behind a citation-grounded research agent: session state, memory, interactive planning, human confirmation, step visibility, tool policy, approval artifacts, evidence routing, GitHub MCP integration, local Agentic RAG, report synthesis, constraint coverage, verification, evaluation, and trace replay.
 
-See [Product Positioning](docs/product-positioning.md), [Architecture](docs/architecture.md), [Hardening Roadmap](docs/hardening-roadmap.md), and [Chinese Interview Notes](docs/interview-notes.zh-CN.md) for the intended project boundary.
+See [Product Positioning](docs/product-positioning.md), [Architecture](docs/architecture.md), [Research Desk v3 Architecture](docs/research-desk-v3-architecture.zh-CN.md), [OpenClaw / Hermes Design Notes](docs/openclaw-hermes-design-notes.zh-CN.md), [Agent Maturity Pack](docs/agent-maturity-pack.zh-CN.md), [Tool Loop And HITL](docs/tool-loop-and-hitl.zh-CN.md), [Memory And Constraint Evaluation](docs/memory-and-constraint-eval.zh-CN.md), [Agent Reference Stack](docs/agent-reference-stack.zh-CN.md), [Autumn Recruiting Playbook](docs/autumn-recruiting-playbook.zh-CN.md), [Demo Script](docs/demo-script.zh-CN.md), [Hardening Roadmap](docs/hardening-roadmap.md), and [Chinese Interview Notes](docs/interview-notes.zh-CN.md) for the intended project boundary.
 
 ## Honest Positioning
 
@@ -15,7 +15,7 @@ This project is strongest when described as:
 Do not pitch it as:
 
 - a commercial replacement for Codex, ChatGPT Deep Research, or OpenAI Deep Research
-- a generic chatbot
+- a generic chatbot without research artifacts
 - a private-data assistant
 - a GitHub-only analyzer
 - an MCP marketplace or wrapper around another deep-research agent
@@ -28,23 +28,33 @@ The interview value is the runtime design and the observable artifacts, not the 
 The current core path is:
 
 ```text
-clarify -> plan -> supervise research -> search/read/retrieve -> synthesize -> verify/evaluate -> persist trace
+chat session -> memory -> clarify/plan -> confirm -> step stream -> tool policy/approval -> supervise research -> search/read/retrieve -> synthesize -> constraint gate -> verify/evaluate -> persist trace
 ```
 
-The core deliberately does **not** include a project memory module anymore. The previous layered memory store was removed because it made the story broader than the current experiments justified.
+The conversational layer owns `AgentSession`, `AgentMessage`, `AgentPlanDraft`, `AgentRunStep`, `AgentToolDefinition`, `ToolInvocation`, `ApprovalRequest`, `MemoryExtractionResult`, `ConstraintCoverage`, and SQLite-backed memory. The research runtime underneath stays focused on `ResearchRequest -> ResearchRun`: planning, tool loop, retrieval, report, evaluation, trace, and replay. This keeps the product boundary clean: the agent layer handles conversation, confirmation, policy, and session-visible observability, while the existing runtime handles research execution.
 
 The local research-workbench MCP server was also removed. MCP is now kept as an external tool boundary through `mcp_tools.py`: when `ARC_MCP_SERVER_URL` and `ARC_MCP_TOOLS` are configured, the researcher may call allowlisted external tools with structured arguments and convert their results into evidence. The recommended demo integration is GitHub MCP for repository, code, issue, pull request, and release evidence.
 
+The conversational layer now also carries a workspace control plane and a small skill/playbook catalog. That lets the product explain not only "what research is running" but also "which team context, which playbook, and which guardrails shaped this run."
+
+The skill layer is now backed by local skill packs under `skills/`: each pack can ship a `skill.json` manifest, a `SKILL.md` instruction file, and optional whitelist-only scripts that run through a controlled JSON stdin/stdout boundary. This is intentionally smaller than a full plugin marketplace, but it is real enough to demonstrate discoverable skills, instruction loading, preflight hooks, and safe local execution.
+
 ## What The System Does
 
-1. `Clarifier` checks whether the user request is specific enough.
-2. `Planner` writes a research brief and decomposes the topic into focused plan items.
-3. `ResearchSupervisor` emits ODR-style `think_tool`, `ConductResearch`, and `ResearchComplete` tool calls.
-4. `Researcher` runs a bounded tool loop for each delegated unit: `web_search`, optional external `mcp_tool`, or completion.
-5. `Retriever` grounds uploaded documents with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, graph signal fusion, and reranking.
-6. `Reporter` writes topic-specific sections from notes and evidence. It does not use fixed demo sections.
-7. `Verifier` and `RAGEvaluator` check citation coverage, evidence sufficiency, source diversity, context precision, and unsupported sections.
-8. `RunLedger`, SQLite storage, telemetry, and LangGraph checkpoints make the run inspectable and replayable.
+1. `ConversationalResearchAgent` stores chat sessions, extracts memory, loads relevant constraints, and decides whether to clarify or draft a plan.
+2. `AgentPlanDraft` presents a readable research brief, plan items, assumptions, and success criteria. It requires user confirmation.
+3. `AgentRunStep` records message, planning, approval, research, report, verification, evaluation, and failure stages so the workbench can inspect the run while it progresses.
+4. `AgentToolDefinition`, `ToolInvocation`, and `ApprovalRequest` make tool status, MCP auth gaps, and approval decisions explicit instead of hidden in code.
+5. `ResearchCopilot` starts only after confirmation and turns the plan into a `ResearchRequest`.
+6. `Clarifier` checks whether the user request is specific enough.
+7. `Planner` writes a research brief and decomposes the topic into focused plan items.
+8. `ResearchSupervisor` emits ODR-style `think_tool`, `ConductResearch`, and `ResearchComplete` tool calls.
+9. `Researcher` runs a bounded tool loop for each delegated unit: `web_search`, optional external `mcp_tool`, or completion.
+10. `Retriever` grounds uploaded documents and project memory with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, graph signal fusion, and reranking.
+11. `Reporter` writes topic-specific sections from notes and evidence. It does not use fixed demo sections.
+12. `ConstraintCoverage` checks hard project constraints against report sections and evidence, adding warnings or failing evaluation when coverage is too weak.
+13. `Verifier` and `RAGEvaluator` check citation coverage, evidence sufficiency, source diversity, context precision, and unsupported sections.
+14. `RunLedger`, SQLite storage, telemetry, and LangGraph checkpoints make the run inspectable and replayable.
 
 ## Best Demo Modes
 
@@ -71,22 +81,40 @@ Run:
 python scripts/run_adoption_memo_experiment.py --clean
 ```
 
-The default lab run is deterministic so the report, trace, and metrics are repeatable. Use `--mode real` when you want to exercise the configured real model/search/provider stack.
+The default lab run now uses the configured real provider stack: real chat model, external search, real embeddings, real rerank, local persistent Qdrant, trace, and evaluation. Deterministic mode is kept only for offline regression tests:
+
+```powershell
+python scripts/run_adoption_memo_experiment.py --clean --mode deterministic
+```
+
+For GitHub MCP evidence, add `--use-mcp`. The run will fail fast when GitHub MCP auth is missing instead of silently falling back to web-only evidence:
+
+```powershell
+python scripts/run_adoption_memo_experiment.py --clean --mode real --use-mcp
+```
+
+Smoke-test GitHub MCP before a full run:
+
+```powershell
+python scripts/check_github_mcp.py
+```
 
 The lab seeds fictional but realistic small-team constraints from `examples/adoption-lab/team-context/`, reviews `langchain-ai/langgraph` for a Python/FastAPI platform team, and writes report, trace, evaluation, and analysis artifacts to `examples/adoption-lab/outputs/`.
 
 See [Adoption Memo Lab](docs/adoption-memo-lab.zh-CN.md) for the Chinese walkthrough.
 
-## What Still Needs To Be Added
+## What Still Needs To Be Hardened
 
-The next useful work is not more agent "features". The project needs stronger proof artifacts:
+The agent session, memory, confirmation gate, step stream, tool policy, approval artifacts, memory quality view, constraint coverage gate, static workbench, and public APIs now exist. The next useful work is stronger proof artifacts and deeper real-provider demos:
 
 1. Build 2-3 repeatable demo corpora and topics.
 2. Generate saved report, trace, route, source-index, and evaluation bundles for each demo.
 3. Add a stable GitHub MCP smoke demo with a documented fallback when auth or network access is unavailable.
 4. Expand the eval dataset with labeled retrieval/citation expectations.
 5. Add or document a run-bundle export command for resume and interview review.
-6. Polish the web UI around report, evidence, quality gates, and trace replay rather than adding new product surfaces.
+6. Improve memory extraction with an LLM-backed extractor once there is a small evaluation set.
+7. Upgrade approval from observable HITL to durable graph interrupt/resume if the project later needs true paused tool execution.
+8. Polish report, evidence, quality gates, and trace replay rather than adding unrelated product surfaces.
 
 These items are tracked in [Hardening Roadmap](docs/hardening-roadmap.md).
 
@@ -94,6 +122,7 @@ These items are tracked in [Hardening Roadmap](docs/hardening-roadmap.md).
 
 - `LangGraph`: fits the conditional research workflow: plan, delegate, run tools, verify, revise, and finalize.
 - `FastAPI`: provides a small local API for jobs, documents, runs, traces, evaluation, replay, and runtime config.
+- `SQLite`: persists sessions, messages, plan drafts, memory, jobs, runs, and trace metadata for a single-user local workbench.
 - `Qdrant`: stores dense vectors for contextual grounding.
 - `SQLite FTS5/BM25`: adds lexical recall for exact terms, paper names, component names, and metrics.
 - `LightRAG-inspired graph signal`: extracts entities and relationships, then fuses graph hits with dense/BM25 candidates before rerank.
@@ -116,12 +145,30 @@ Future direction: this project itself is a reasonable MCP Server candidate, but 
 
 ## API Surface
 
+- `POST /v1/agent/sessions`
+- `GET /v1/agent/sessions`
+- `GET /v1/agent/sessions/{session_id}`
+- `POST /v1/agent/sessions/{session_id}/messages`
+- `POST /v1/agent/sessions/{session_id}/confirm-plan`
+- `POST /v1/agent/sessions/{session_id}/cancel`
+- `GET /v1/agent/sessions/{session_id}/memory`
+- `GET /v1/agent/sessions/{session_id}/memory/evaluation`
+- `GET /v1/agent/sessions/{session_id}/steps`
+- `GET /v1/agent/sessions/{session_id}/events`
+- `GET /v1/agent/sessions/{session_id}/tool-invocations`
+- `POST /v1/agent/sessions/{session_id}/approvals/{approval_id}/approve`
+- `POST /v1/agent/sessions/{session_id}/approvals/{approval_id}/reject`
+- `GET /v1/agent/tools`
+- `POST /v1/memory`
+- `GET /v1/memory`
+- `DELETE /v1/memory/{memory_id}`
 - `POST /v1/research/clarify`
 - `POST /v1/research/runs`
 - `GET /v1/research/runs`
 - `GET /v1/research/runs/{run_id}`
 - `GET /v1/research/runs/{run_id}/trace`
 - `GET /v1/research/runs/{run_id}/evaluation`
+- `GET /v1/research/runs/{run_id}/constraint-coverage`
 - `POST /v1/research/runs/{run_id}/replay`
 - `POST /v1/research/jobs`
 - `GET /v1/research/jobs/{job_id}/status`
@@ -133,7 +180,7 @@ Future direction: this project itself is a reasonable MCP Server candidate, but 
 - `GET /v1/runtime/provider-check`
 - `DELETE /v1/research/history`
 
-There are no `/v1/memory` endpoints in the current core.
+The `/v1/research/*` APIs remain the lower-level runtime. The `/v1/agent/*` and `/v1/memory` APIs are the conversational workbench layer on top.
 
 ## Configuration
 
@@ -167,6 +214,8 @@ ARC_MCP_AUTH_TOKEN=<github-token>
 ARC_MCP_PROMPT=Use GitHub MCP for repository, code, issue, pull request, and release evidence; use Tavily for broader web context.
 ```
 
+`ARC_MCP_AUTH_TOKEN` may also be supplied through `GH_TOKEN`, `GITHUB_TOKEN`, or `GITHUB_PERSONAL_ACCESS_TOKEN`. The adoption memo runner forces the GitHub read-only endpoint and GitHub tool allowlist when `--mode real --use-mcp` is used, so stale local MCP tools are not counted as GitHub evidence.
+
 ## Run And Test
 
 Install:
@@ -187,20 +236,26 @@ Start API:
 uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
+Open the local workbench at `http://127.0.0.1:8000/`.
+
 ## Study Path
 
 Read in this order:
 
 1. `docs/product-positioning.md`
 2. `docs/architecture.md`
-3. `docs/source-map.md`
-4. `docs/learning/zh/ai_research_copilot_learning_guide_zh.md`
-5. `src/agentic_research_copilot/schemas.py`
-6. `src/agentic_research_copilot/providers.py`
-7. `src/agentic_research_copilot/graph_runtime.py`
-8. `src/agentic_research_copilot/pipeline.py`
-9. `src/agentic_research_copilot/agents`
-10. `src/agentic_research_copilot/retrieval/store.py`
+3. `docs/agent-maturity-pack.zh-CN.md`
+4. `docs/tool-loop-and-hitl.zh-CN.md`
+5. `docs/memory-and-constraint-eval.zh-CN.md`
+6. `docs/source-map.md`
+7. `docs/learning/zh/ai_research_copilot_learning_guide_zh.md`
+8. `src/agentic_research_copilot/agent.py`
+9. `src/agentic_research_copilot/schemas.py`
+10. `src/agentic_research_copilot/providers.py`
+11. `src/agentic_research_copilot/graph_runtime.py`
+12. `src/agentic_research_copilot/pipeline.py`
+13. `src/agentic_research_copilot/agents`
+14. `src/agentic_research_copilot/retrieval/store.py`
 
 ## Interview Framing
 
@@ -208,8 +263,12 @@ The strongest story is:
 
 > I built a single-node Agentic Research Runtime inspired by Open Deep Research. The core difficulty is not CRUD or chat; it is turning an open-ended technical question into a supervised research graph with structured planning, bounded tool use, hybrid retrieval, citation-locked report generation, verifier/evaluator quality gates, and replayable trace artifacts.
 
+After the agent maturity upgrade:
+
+> I added the missing agent product layer: sessions, memory, human confirmation, step visibility, tool policy, approval artifacts, memory evaluation, constraint coverage, and a workbench UI. A user can save team constraints once, discuss a technical adoption question, inspect the generated plan, confirm it, then receive the report, evidence, trace, quality gates, and evaluation in the same session.
+
 If asked "why not just use Codex?", answer:
 
-> Mature products are absolutely stronger as end-user assistants. This project is not trying to replace them. It is a learning-by-building implementation of the mechanisms behind that class of systems: stateful orchestration, tool routing, evidence contracts, local retrieval, citation grounding, evaluation, and replay.
+> Mature products are absolutely stronger as end-user assistants. This project is not trying to replace them. It is a learning-by-building implementation of the mechanisms behind that class of systems: stateful orchestration, tool routing, approval boundaries, evidence contracts, local retrieval, citation grounding, constraint coverage, evaluation, and replay.
 
-Do not overclaim distributed execution, enterprise memory, browser automation, or a general agent platform. The project is strongest when described as an inspectable research runtime with a credible Agentic RAG stack.
+Do not overclaim distributed execution, enterprise memory, browser automation, multi-user SaaS, or a general agent platform. The project is strongest when described as an inspectable conversational research runtime with a credible Agentic RAG stack.

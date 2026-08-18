@@ -117,9 +117,17 @@ $env:ARC_MCP_AUTH_REQUIRED="true"
 $env:ARC_MCP_AUTH_TOKEN="<github-token>"
 ```
 
+`ARC_MCP_AUTH_TOKEN` can also come from `GH_TOKEN`, `GITHUB_TOKEN`, or `GITHUB_PERSONAL_ACCESS_TOKEN`. For the adoption memo lab, run:
+
+```powershell
+python scripts/run_adoption_memo_experiment.py --clean --mode real --use-mcp
+```
+
+If auth is missing, the runner fails fast and says so. It should not be presented as an MCP-backed run.
+
 Use an explicit repository target when demonstrating this path. The provider extracts the repository target as structured `owner` and `repo` hints. The researcher can then select direct repository tools instead of treating the entire request as a generic web query. For a broad topic without a named repository, it may first use `search_repositories` or `search_code` to discover candidates.
 
-If GitHub MCP auth or network access is unavailable during an interview, say so directly and show a saved run bundle or deterministic fallback instead of debugging live credentials.
+If GitHub MCP auth or network access is unavailable during an interview, say so directly and show a saved web+local real run bundle or deterministic fallback instead of debugging live credentials.
 
 ## What To Capture
 
@@ -140,12 +148,14 @@ For each demo run, be ready to show:
 Use this flow:
 
 1. Start with the narrow experiment: "I implemented an inspectable research-agent runtime."
-2. Show the plan and supervisor decisions.
-3. Show one external evidence path and one local RAG path.
-4. Show the final report citations.
-5. Show verifier/evaluator output.
-6. Show trace replay.
-7. Explain what you intentionally removed: project memory and local self-calling MCP.
+2. Show the session memory and the generated plan draft.
+3. Confirm the plan before starting the research job.
+4. Show the plan and supervisor decisions.
+5. Show one external evidence path and one local RAG path.
+6. Show the final report citations.
+7. Show verifier/evaluator output.
+8. Show trace replay.
+9. Explain the honest boundary: SQLite memory is local single-user agent memory, while the former self-calling local MCP demo remains removed.
 
 ## Interview Talking Points
 
@@ -154,5 +164,6 @@ Use this flow:
 - The retriever searches precise child chunks but returns expanded surrounding context for synthesis.
 - GitHub MCP is useful for repository facts, not as a replacement for the whole agent.
 - The report is generated from existing evidence, then verified and evaluated.
-- Memory and the local workbench MCP were removed to keep the project honest and less toy-like.
+- Memory is now a thin agent/session layer over SQLite, not an enterprise personalization system.
+- The local self-calling MCP workbench remains removed to keep the MCP boundary clean.
 - Codex is stronger as a product; this repo is valuable as an implementation and inspection of the underlying runtime ideas.

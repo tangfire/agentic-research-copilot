@@ -2,14 +2,18 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
+import uuid
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from .agent import ConversationalResearchAgent
+from .constraint_evaluation import extract_constraint_coverage_from_run
 from .document_reader import DocumentReadError
 from .pipeline import ResearchCopilot
-from .schemas import ResearchRequest
+from .schemas import ResearchRequest, WorkspaceProfile
 
 
 WEB_INDEX_PATH = Path(__file__).resolve().parents[2] / "apps" / "web" / "index.html"
@@ -32,8 +36,49 @@ class DocumentIngestInput(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class AgentSessionInput(BaseModel):
+    title: str | None = None
+    workspace_id: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class AgentMessageInput(BaseModel):
+    content: str = Field(min_length=1)
+    depth: Literal["quick", "standard", "deep"] = "standard"
+    include_private_docs: bool = True
+    max_sections: int = Field(default=4, ge=1, le=8)
+    max_revisions: int = Field(default=1, ge=0, le=4)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class MemoryInput(BaseModel):
+    content: str = Field(min_length=1)
+    scope: Literal["user", "project", "session"] = "project"
+    kind: Literal["preference", "constraint", "decision", "fact", "todo"] = "fact"
+    session_id: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class WorkspaceInput(BaseModel):
+    workspace_id: str | None = None
+    name: str = Field(min_length=2)
+    team_context: str = ""
+    default_stack: list[str] = Field(default_factory=list)
+    deployment_constraints: list[str] = Field(default_factory=list)
+    risk_policy: str = ""
+    preferred_sources: list[str] = Field(default_factory=list)
+    disabled_tools: list[str] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class SkillScriptRunInput(BaseModel):
+    payload: dict[str, object] = Field(default_factory=dict)
+    timeout_seconds: float | None = None
+
+
 def create_app() -> FastAPI:
     copilot = ResearchCopilot()
+    agent = ConversationalResearchAgent(copilot)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -98,6 +143,210 @@ def create_app() -> FastAPI:
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/v1/agent/tools")
+    def list_agent_tools():
+        return agent.tool_definitions()
+
+    @app.post("/v1/agent/sessions")
+    def create_agent_session(payload: AgentSessionInput | None = None):
+        payload = payload or AgentSessionInput()
+        try:
+            return agent.create_session(title=payload.title, workspace_id=payload.workspace_id, metadata=payload.metadata)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Workspace not found") from exc
+
+    @app.get("/v1/agent/sessions")
+    def list_agent_sessions():
+        return agent.list_sessions()
+
+    @app.get("/v1/agent/sessions/{session_id}")
+    def get_agent_session(session_id: str):
+        bundle = agent.get_session_bundle(session_id)
+        if bundle is None:
+            raise HTTPException(status_code=404, detail="Agent session not found")
+        return bundle
+
+    @app.get("/v1/agent/sessions/{session_id}/export")
+    def export_agent_session(session_id: str):
+        try:
+            return agent.export_session_bundle(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.post("/v1/agent/sessions/{session_id}/messages")
+    def post_agent_message(session_id: str, payload: AgentMessageInput):
+        try:
+            return agent.receive_message(
+                session_id,
+                payload.content,
+                depth=payload.depth,
+                include_private_docs=payload.include_private_docs,
+                max_sections=payload.max_sections,
+                max_revisions=payload.max_revisions,
+                metadata=payload.metadata,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.post("/v1/agent/sessions/{session_id}/confirm-plan")
+    def confirm_agent_plan(session_id: str):
+        try:
+            return agent.confirm_plan(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/v1/agent/sessions/{session_id}/cancel")
+    def cancel_agent_session(session_id: str):
+        try:
+            return agent.cancel_session(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.get("/v1/agent/sessions/{session_id}/steps")
+    def list_agent_steps(session_id: str):
+        try:
+            return agent.list_steps(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.get("/v1/agent/sessions/{session_id}/events")
+    def list_agent_events(session_id: str, limit: int = Query(default=80, ge=1, le=500)):
+        try:
+            return agent.list_events(session_id, limit=limit)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.get("/v1/agent/sessions/{session_id}/tool-invocations")
+    def list_agent_tool_invocations(session_id: str):
+        try:
+            return agent.list_tool_invocations(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.post("/v1/agent/sessions/{session_id}/approvals/{approval_id}/approve")
+    def approve_agent_action(session_id: str, approval_id: str):
+        try:
+            return agent.resolve_approval(session_id, approval_id, approve=True)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Approval request not found") from exc
+
+    @app.post("/v1/agent/sessions/{session_id}/approvals/{approval_id}/reject")
+    def reject_agent_action(session_id: str, approval_id: str):
+        try:
+            return agent.resolve_approval(session_id, approval_id, approve=False)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Approval request not found") from exc
+
+    @app.get("/v1/agent/sessions/{session_id}/memory")
+    def get_agent_session_memory(session_id: str):
+        if agent.get_session_bundle(session_id) is None:
+            raise HTTPException(status_code=404, detail="Agent session not found")
+        return agent.list_memory(session_id=session_id)
+
+    @app.get("/v1/agent/sessions/{session_id}/memory/evaluation")
+    def get_agent_memory_evaluation(session_id: str):
+        try:
+            return agent.memory_evaluation(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Agent session not found") from exc
+
+    @app.post("/v1/memory")
+    def add_memory(payload: MemoryInput):
+        return agent.add_memory(
+            content=payload.content,
+            scope=payload.scope,
+            kind=payload.kind,
+            session_id=payload.session_id,
+            metadata=payload.metadata,
+        )
+
+    @app.get("/v1/memory")
+    def list_memory(
+        scope: Literal["user", "project", "session"] | None = None,
+        session_id: str | None = None,
+    ):
+        return agent.list_memory(scope=scope, session_id=session_id)
+
+    @app.delete("/v1/memory/{memory_id}")
+    def delete_memory(memory_id: str):
+        if not agent.delete_memory(memory_id):
+            raise HTTPException(status_code=404, detail="Memory item not found")
+        return {"deleted": True, "memory_id": memory_id}
+
+    @app.get("/v1/agent/workspaces")
+    def list_agent_workspaces():
+        return agent.list_workspaces()
+
+    @app.get("/v1/agent/workspaces/{workspace_id}")
+    def get_agent_workspace(workspace_id: str):
+        try:
+            return agent.get_workspace(workspace_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Workspace not found") from exc
+
+    @app.post("/v1/agent/workspaces")
+    def upsert_agent_workspace(payload: WorkspaceInput):
+        workspace_id = payload.workspace_id or str(uuid.uuid4())
+        existing = None
+        try:
+            existing = agent.get_workspace(workspace_id)
+        except KeyError:
+            existing = None
+        if existing is not None:
+            workspace = existing.model_copy(
+                update={
+                    "name": payload.name,
+                    "team_context": payload.team_context,
+                    "default_stack": payload.default_stack,
+                    "deployment_constraints": payload.deployment_constraints,
+                    "risk_policy": payload.risk_policy,
+                    "preferred_sources": payload.preferred_sources,
+                    "disabled_tools": payload.disabled_tools,
+                    "metadata": {**existing.metadata, **payload.metadata},
+                }
+            )
+        else:
+            workspace = WorkspaceProfile(
+                workspace_id=workspace_id,
+                name=payload.name,
+                team_context=payload.team_context,
+                default_stack=payload.default_stack,
+                deployment_constraints=payload.deployment_constraints,
+                risk_policy=payload.risk_policy,
+                preferred_sources=payload.preferred_sources,
+                disabled_tools=payload.disabled_tools,
+                metadata=payload.metadata,
+            )
+        return agent.save_workspace(workspace)
+
+    @app.get("/v1/agent/skills")
+    def list_agent_skills():
+        return agent.skill_catalog()
+
+    @app.get("/v1/agent/skills/{skill_id}")
+    def get_agent_skill(skill_id: str):
+        try:
+            return agent.describe_skill(skill_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill not found") from exc
+
+    @app.post("/v1/agent/skills/{skill_id}/scripts/{script_name}/run")
+    def run_agent_skill_script(skill_id: str, script_name: str, payload: SkillScriptRunInput | None = None):
+        payload = payload or SkillScriptRunInput()
+        try:
+            return agent.run_skill_script(
+                skill_id,
+                script_name,
+                payload=payload.payload,
+                timeout_seconds=payload.timeout_seconds,
+            ).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Skill or script not found") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/v1/research/runs")
     def create_run(request: ResearchRequest):
@@ -247,6 +496,18 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Evaluation not found")
         return run.evaluation
 
+    @app.get("/v1/research/runs/{run_id}/constraint-coverage")
+    def get_run_constraint_coverage(run_id: str):
+        run = copilot.get_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        coverage = copilot.storage.load_constraint_coverage(run_id)
+        if coverage:
+            return coverage
+        coverage = extract_constraint_coverage_from_run(run)
+        copilot.storage.save_constraint_coverage(coverage)
+        return coverage
+
     @app.post("/v1/research/runs/{run_id}/replay")
     def replay_run(run_id: str):
         run = copilot.replay(run_id)
@@ -346,6 +607,3 @@ def create_app() -> FastAPI:
         return copilot.runtime_config()["provider_readiness"]
 
     return app
-
-
-app = create_app()

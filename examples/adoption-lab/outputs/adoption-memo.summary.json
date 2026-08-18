@@ -1,26 +1,27 @@
 {
   "headline": {
-    "run_id": "48902a91-188b-49fa-8763-d400770ec025",
+    "run_id": "120eca55-8419-4697-963c-178cf4378ab0",
     "status": "completed",
     "evaluation_passed": true,
     "source_count": 3,
     "context_recall": 1.0,
-    "faithfulness_proxy": 0.8722,
+    "faithfulness_proxy": 0.897,
     "citation_precision": 1.0,
-    "expected_term_recall": 0.5833,
+    "expected_term_recall": 0.5,
     "constraint_recall": 0.625,
-    "graph_signal_hits": 10
+    "constraint_coverage_passed": true,
+    "graph_signal_hits": 7
   },
   "labeled_expectations": {
-    "expected_term_recall": 0.5833,
+    "expected_term_recall": 0.5,
     "constraint_recall": 0.625,
+    "constraint_coverage_passed": true,
     "expected_source_recall": 0.0,
     "matched_terms": [
       "LangGraph",
       "langchain-ai/langgraph",
       "trace",
       "FastAPI",
-      "citation",
       "pilot",
       "rollback"
     ],
@@ -34,19 +35,19 @@
     "matched_source_patterns": []
   },
   "route_counts": {
-    "internal": 3
+    "internal": 2
   },
   "tool_counts": {
-    "vector_retrieval": 3
+    "vector_retrieval": 2
   },
   "evidence_channels": {
     "document-chunk": 4,
     "run-artifact": 1
   },
   "graph": {
-    "document_hits": 10,
-    "graph_enabled_hits": 10,
-    "graph_signal_hits": 10,
+    "document_hits": 7,
+    "graph_enabled_hits": 7,
+    "graph_signal_hits": 7,
     "matched_entities_sample": [
       [
         "FastAPI",
@@ -80,10 +81,10 @@
     ]
   },
   "trace": {
-    "event_count": 37,
-    "checkpoint_count": 11,
-    "handoff_count": 9,
-    "model_event_count": 4,
+    "event_count": 61,
+    "checkpoint_count": 19,
+    "handoff_count": 15,
+    "model_event_count": 8,
     "actors": [
       "evaluator",
       "planner",
@@ -102,6 +103,7 @@
     "embedding_model": "hashed-embedding",
     "search_provider": "none",
     "mcp_enabled": false,
+    "mcp_auth_token_configured": false,
     "mcp_tools": [],
     "rerank_provider": "rule",
     "qdrant": "local-path",
@@ -113,11 +115,11 @@
     "private_retrieval_hit_rate": 1.0,
     "evidence_sufficiency": 1.0,
     "tool_selection_coverage": 1.0,
-    "query_rewrite_count": 6,
+    "query_rewrite_count": 4,
     "source_quality_score": 0.67,
-    "context_precision": 0.6348,
+    "context_precision": 0.7057,
     "context_recall": 1.0,
-    "faithfulness_proxy": 0.8722,
+    "faithfulness_proxy": 0.897,
     "citation_precision": 1.0,
     "citation_source_coverage": 1.0,
     "source_diversity": 3,
@@ -128,8 +130,8 @@
     "notes": []
   },
   "findings": [
-    "Non-strict provider fallback is required for long-form reporting; otherwise real chat timeouts can lose a completed run.",
-    "Deterministic indexing kept the local context pack repeatable, but graph entity extraction needs stopword filtering to avoid noisy entities.",
-    "The lab can complete with hybrid web plus vector retrieval even when MCP is disabled, but that means GitHub MCP evidence still needs a dedicated smoke path later."
+    "Real report synthesis must use compact section drafts and evidence indexes; unbounded prompts make timeout failures likely.",
+    "Budgeted local indexing keeps the team context pack fast while preserving real model/search/report execution.",
+    "GitHub MCP is only counted as enabled when an auth token is configured and GitHub MCP tools are actually allowlisted."
   ]
 }

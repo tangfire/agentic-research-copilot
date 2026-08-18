@@ -105,5 +105,5 @@ def test_strict_mcp_auth_required_without_token_fails_fast():
         mcp_auth_token="",
     )
 
-    with pytest.raises(RuntimeError, match="ARC_MCP_AUTH_REQUIRED=true"):
+    with pytest.raises(RuntimeError, match="GITHUB_PERSONAL_ACCESS_TOKEN"):
         build_mcp_tool(settings)

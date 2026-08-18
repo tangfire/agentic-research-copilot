@@ -1,0 +1,76 @@
+{
+  "skill_id": "open_source_adoption_review",
+  "name": "Open Source Adoption Review",
+  "scenario": "Evaluate whether a repository or open-source project fits a small team's technical and deployment constraints.",
+  "trigger_keywords": [
+    "repo",
+    "github",
+    "repository",
+    "开源",
+    "采用",
+    "引入",
+    "适合",
+    "adoption",
+    "review"
+  ],
+  "required_inputs": [
+    "目标 repo / 项目",
+    "团队约束",
+    "决策问题"
+  ],
+  "plan_template": [
+    "确认目标仓库、采用问题和团队约束",
+    "检查架构、维护活跃度、issue/release 信号和 license 风险",
+    "核对部署、运维、安全、合规和迁移成本",
+    "输出 adoption memo、证据索引、constraint coverage 和 evaluation"
+  ],
+  "evaluation_focus": [
+    "source quality",
+    "constraint coverage",
+    "citation precision",
+    "faithfulness",
+    "demo readiness"
+  ],
+  "skill_type": "pack",
+  "version": "1.0.0",
+  "scripts": [
+    {
+      "name": "preflight",
+      "path": "scripts/preflight.py",
+      "description": "Normalize an adoption-review request into repo, constraint, decision, and coverage hints before planning.",
+      "enabled": true,
+      "auto": true,
+      "timeout_seconds": 5.0,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "object"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "recognized_repo": {
+            "type": "string"
+          },
+          "missing_inputs": {
+            "type": "array"
+          },
+          "plan_hints": {
+            "type": "array"
+          }
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "default": true,
+    "authoring_model": "SKILL.md + skill.json + optional scripts",
+    "safe_execution": "read-only preflight script, JSON stdin/stdout"
+  }
+}

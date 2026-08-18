@@ -1,0 +1,36 @@
+{
+  "skill_id": "architecture_tradeoff_memo",
+  "name": "Architecture Tradeoff Memo",
+  "scenario": "Compare two or more libraries or architectures and explain the decision tradeoffs.",
+  "trigger_keywords": [
+    "对比",
+    "比较",
+    "选型",
+    "tradeoff",
+    "compare",
+    "vs",
+    "architecture"
+  ],
+  "required_inputs": [
+    "要比较的方案",
+    "决策标准",
+    "团队约束"
+  ],
+  "plan_template": [
+    "明确候选方案",
+    "对齐评估标准与约束",
+    "比较收益、复杂度、风险和迁移成本",
+    "输出可讲清楚的取舍结论"
+  ],
+  "evaluation_focus": [
+    "decision clarity",
+    "tradeoff coverage",
+    "evidence balance"
+  ],
+  "skill_type": "pack",
+  "version": "1.0.0",
+  "metadata": {
+    "default": false,
+    "authoring_model": "SKILL.md + skill.json"
+  }
+}

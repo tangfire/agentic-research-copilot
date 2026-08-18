@@ -1,0 +1,36 @@
+{
+  "skill_id": "demo_readiness_risk_review",
+  "name": "Demo Readiness Risk Review",
+  "scenario": "Check whether a project is ready for recruiting demos and where the main risks are.",
+  "trigger_keywords": [
+    "秋招",
+    "面试",
+    "展示",
+    "demo",
+    "risk",
+    "风险",
+    "presentation"
+  ],
+  "required_inputs": [
+    "演示 / 面试场景",
+    "风险点",
+    "需要验证的结论"
+  ],
+  "plan_template": [
+    "确定演示目标和受众",
+    "梳理最容易被质疑的风险点",
+    "检查可复盘证据、trace、evaluation 和指标",
+    "整理 5 分钟演示路径和问答材料"
+  ],
+  "evaluation_focus": [
+    "demo viability",
+    "risk coverage",
+    "storyline clarity"
+  ],
+  "skill_type": "pack",
+  "version": "1.0.0",
+  "metadata": {
+    "default": false,
+    "authoring_model": "SKILL.md + skill.json"
+  }
+}

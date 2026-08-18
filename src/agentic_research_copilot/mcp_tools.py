@@ -4,6 +4,7 @@ import asyncio
 import json
 import re
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -39,7 +40,7 @@ class MCPToolRegistry:
                 return []
             raise RuntimeError("MCP authentication is required but no token is configured.")
         try:
-            return asyncio.run(self._search_async(query, tool_name=tool_name, tool_args=tool_args))
+            return _run_async_sync(lambda: self._search_async(query, tool_name=tool_name, tool_args=tool_args))
         except Exception as exc:
             if self.allow_missing:
                 return []
@@ -55,7 +56,7 @@ class MCPToolRegistry:
                 return []
             raise RuntimeError("MCP authentication is required but no token is configured.")
         try:
-            tools = asyncio.run(self._load_tools_async())
+            tools = _run_async_sync(self._load_tools_async)
         except Exception as exc:
             if self.allow_missing:
                 return []
@@ -204,7 +205,10 @@ def build_mcp_tool(settings: Any) -> MCPToolRegistry | None:
     auth_token = getattr(settings, "mcp_auth_token", "")
     if auth_required and not auth_token:
         if getattr(settings, "strict_providers", False):
-            raise RuntimeError("ARC_MCP_AUTH_REQUIRED=true but ARC_MCP_AUTH_TOKEN is not configured.")
+            raise RuntimeError(
+                "ARC_MCP_AUTH_REQUIRED=true but no MCP auth token is configured. "
+                "Set ARC_MCP_AUTH_TOKEN, GH_TOKEN, GITHUB_TOKEN, or GITHUB_PERSONAL_ACCESS_TOKEN."
+            )
         return None
     return MCPToolRegistry(
         server_url=server_url,
@@ -215,6 +219,15 @@ def build_mcp_tool(settings: Any) -> MCPToolRegistry | None:
         auth_token=auth_token,
         allow_missing=not getattr(settings, "strict_providers", False),
     )
+
+
+def _run_async_sync(factory: Callable[[], Any]) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(factory())
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(lambda: asyncio.run(factory())).result()
 
 
 def _payload_for_tool(

@@ -1,0 +1,106 @@
+# Demo Script
+
+这份脚本对应 5 分钟演示。
+
+## 1. 开场
+
+一句话：
+
+> 这是一个面向开源引入评审的 conversational research agent workbench。它会先记住团队约束，再给计划，确认后才开始研究，最后输出可复盘的 memo、trace、evaluation 和 export bundle。
+
+## 2. 启动
+
+```powershell
+uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+```
+
+打开：
+
+```text
+http://127.0.0.1:8000/
+```
+
+## 3. 演示顺序
+
+### Step 1：看 Workspace
+
+先指给面试官看右侧 `Workspace`：
+
+- team context
+- stack
+- deployment constraints
+- risk policy
+- preferred sources
+- disabled tools
+
+讲法：
+
+> 我不想让团队约束每次都手工贴 prompt，所以把它做成 workspace profile。
+
+### Step 2：输入研究目标
+
+推荐输入：
+
+```text
+我们团队是 5 人 Python/FastAPI，单机 Docker Compose 部署，必须可回滚。
+请评估 langchain-ai/langgraph 是否适合作为研究型 agent 的 workflow runtime，
+输出 adoption memo，并关注可观测性、checkpoint、工具循环和秋招展示价值。
+```
+
+你可以解释：
+
+- memory 会抽取团队约束
+- skill 会选到 `open_source_adoption_review`
+- session 会先生成 plan draft，而不是直接跑
+
+### Step 3：看 Plan
+
+重点看：
+
+- research brief
+- plan items
+- assumptions
+- success criteria
+- selected skill
+
+讲法：
+
+> 我做的是 interactive planning。研究前先出 plan，再让用户确认，避免一上来就长跑。
+
+如果面试官问 skill，可以顺手点右侧 `Skills`：
+
+- 看 `Open Source Adoption Review` 的 manifest 和说明摘要
+- 点 `preflight` 脚本
+- 说明这不是 prompt 片段，而是一个受控 skill pack
+
+### Step 4：确认并开始研究
+
+点击 `确认并开始研究`。
+
+这时你可以说：
+
+- session 进入 researching
+- job 被创建
+- steps 开始流动
+- tool policy / approval 会可见
+
+### Step 5：看结果
+
+重点切右侧：
+
+- `Tools`：tool registry / invocation / approval
+- `Quality`：citation precision / context recall / constraint coverage
+- `Run Result`：report / source index / recommendation
+- `Export`：导出整个 session bundle
+
+### Step 6：收尾
+
+讲一句：
+
+> 这不是一个“能聊天的玩具”，而是一个能把研究过程结构化、可复盘、可解释的 agent runtime。
+
+## 4. 如果 GitHub MCP 没配置
+
+就直接说：
+
+> 现在 GitHub MCP 是 unavailable，但系统不会假装成功。它会把这件事写进 tool registry 和 approval artifact，保证证据边界诚实。

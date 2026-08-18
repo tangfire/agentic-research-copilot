@@ -1,0 +1,192 @@
+from __future__ import annotations
+
+import hashlib
+import re
+from dataclasses import dataclass
+from typing import Iterable
+
+from .schemas import ConstraintCoverage, EvidenceItem, MemoryItem, ResearchRun, ResearchReport
+
+
+@dataclass(frozen=True)
+class ConstraintTextSource:
+    content: str
+    source_id: str
+
+
+def extract_constraint_texts(value: str, *, fallback_to_full_text: bool = False) -> list[str]:
+    normalized = " ".join(value.split())
+    if not normalized:
+        return []
+    texts: list[str] = []
+    for line in value.splitlines():
+        line = line.strip(" -\t")
+        if not line:
+            continue
+        if "[project/constraint]" in line or "[session/constraint]" in line or "[user/preference]" in line:
+            texts.append(line.split("]", 1)[-1].strip())
+            continue
+        if any(keyword in line.lower() for keyword in ("constraint", "constraints", "team", "部署", "回滚", "fastapi", "docker", "mcp", "checkpoint", "memory")):
+            texts.append(line)
+    if fallback_to_full_text and not texts and len(normalized) > 18:
+        texts.append(normalized)
+    return _dedupe(texts)
+
+
+def derive_constraints_from_memories(memories: Iterable[MemoryItem]) -> list[ConstraintTextSource]:
+    items: list[ConstraintTextSource] = []
+    for memory in memories:
+        if memory.scope == "project" or memory.kind == "constraint":
+            for text in extract_constraint_texts(memory.content, fallback_to_full_text=True):
+                items.append(ConstraintTextSource(content=text, source_id=memory.memory_id))
+    return items
+
+
+def extract_constraints_from_run_topic(topic: str) -> list[ConstraintTextSource]:
+    extracted = []
+    for index, text in enumerate(extract_constraint_texts(topic)):
+        extracted.append(ConstraintTextSource(content=text, source_id=f"topic:{index}"))
+    return extracted
+
+
+def evaluate_constraint_coverage(
+    *,
+    run_id: str,
+    session_id: str | None,
+    constraints: Iterable[ConstraintTextSource],
+    report: ResearchReport,
+    evidence: Iterable[EvidenceItem],
+) -> list[ConstraintCoverage]:
+    report_sections = report.sections or []
+    evidence_text = " ".join(
+        " ".join(filter(None, [item.title, item.source, item.snippet or "", item.content or ""]))
+        for item in evidence
+    )
+    coverage: list[ConstraintCoverage] = []
+    for constraint in constraints:
+        content_tokens = _tokens(constraint.content)
+        matched_sections: list[str] = []
+        matched_evidence: list[str] = []
+        if content_tokens:
+            for section in report_sections:
+                section_tokens = _tokens(" ".join([section.heading, section.content]))
+                if len(content_tokens & section_tokens) >= max(1, min(3, len(content_tokens) // 3 or 1)):
+                    matched_sections.append(section.heading)
+            for item in evidence:
+                evidence_tokens = _tokens(" ".join([item.title, item.source, item.snippet or "", item.content or ""]))
+                if content_tokens & evidence_tokens:
+                    matched_evidence.append(item.title)
+        else:
+            for section in report_sections:
+                if constraint.content[:12] and constraint.content[:12].lower() in section.content.lower():
+                    matched_sections.append(section.heading)
+            for item in evidence:
+                haystack = " ".join([item.title, item.source, item.snippet or "", item.content or ""]).lower()
+                if constraint.content[:12].lower() in haystack:
+                    matched_evidence.append(item.title)
+
+        covered = bool(matched_sections or matched_evidence or _soft_match(constraint.content, evidence_text))
+        confidence = 0.0
+        if covered:
+            confidence = min(1.0, 0.45 + (0.2 * len(matched_sections)) + (0.15 * len(matched_evidence)))
+        reason = (
+            "Covered by report sections and/or evidence."
+            if covered
+            else "No strong match found in report sections or evidence."
+        )
+        coverage.append(
+            ConstraintCoverage(
+                constraint_id=_stable_constraint_id(run_id, session_id, constraint.source_id, constraint.content),
+                run_id=run_id,
+                session_id=session_id,
+                content=constraint.content,
+                covered=covered,
+                matched_sections=_dedupe(matched_sections),
+                matched_evidence=_dedupe(matched_evidence),
+                confidence=round(confidence, 4),
+                reason=reason,
+                metadata={"source_id": constraint.source_id},
+            )
+        )
+    return coverage
+
+
+def summarise_constraint_coverage(coverage: list[ConstraintCoverage]) -> dict[str, object]:
+    total = len(coverage)
+    covered = sum(1 for item in coverage if item.covered)
+    score = covered / total if total else 0.0
+    passed = score >= 0.6 if total else True
+    warnings: list[str] = []
+    if total and score < 0.6:
+        warnings.append("Constraint coverage is weak; some project constraints are not reflected in the report.")
+    if total and score < 0.4:
+        warnings.append("Constraint coverage is critically low; treat the run as evaluation failed.")
+    return {
+        "score": round(score, 4),
+        "covered": covered,
+        "total": total,
+        "passed": passed,
+        "warnings": warnings,
+    }
+
+
+def apply_constraint_coverage_gate(run: ResearchRun, coverage: list[ConstraintCoverage]) -> ResearchRun:
+    if not coverage:
+        return run
+    summary = summarise_constraint_coverage(coverage)
+    evaluation = run.evaluation
+    if evaluation is None:
+        return run
+    notes = list(evaluation.notes)
+    notes.extend(summary["warnings"])
+    passed = evaluation.passed and bool(summary["passed"])
+    if not summary["passed"] and summary["score"] < 0.4:
+        passed = False
+    return run.model_copy(
+        update={
+            "evaluation": evaluation.model_copy(update={"passed": passed, "notes": _dedupe(notes)}),
+        }
+    )
+
+
+def extract_constraint_coverage_from_run(run: ResearchRun) -> list[ConstraintCoverage]:
+    constraints = [
+        ConstraintTextSource(content=text, source_id=f"run:{index}")
+        for index, text in enumerate(extract_constraint_texts(run.request.topic))
+    ]
+    return evaluate_constraint_coverage(
+        run_id=run.run_id,
+        session_id=None,
+        constraints=constraints,
+        report=run.report or ResearchReport(title="", summary=""),
+        evidence=run.evidence,
+    )
+
+
+def _soft_match(needle: str, haystack: str) -> bool:
+    needle = " ".join(needle.split()).lower()
+    if not needle:
+        return False
+    head = needle[:20]
+    return head in haystack.lower()
+
+
+def _stable_constraint_id(*parts: str | None) -> str:
+    basis = "::".join(part or "" for part in parts)
+    digest = hashlib.sha1(basis.encode("utf-8")).hexdigest()
+    return f"constraint_{digest[:16]}"
+
+
+def _tokens(value: str) -> set[str]:
+    return {token for token in re.findall(r"[a-zA-Z0-9_]+|[\u4e00-\u9fff]+", value.lower()) if len(token) > 1}
+
+
+def _dedupe(values: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result

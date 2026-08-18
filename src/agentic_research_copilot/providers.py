@@ -6,6 +6,7 @@ import time
 from typing import Any, Callable, Sequence, TypeVar
 
 import httpx
+from pydantic import ValidationError
 
 from .provider_base import ModelUsage, ResearchModelProvider
 from .schemas import (
@@ -277,9 +278,31 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         revision_count: int = 0,
         max_revisions: int = 2,
     ) -> tuple[VerificationContract, ModelUsage]:
+        compact_report = report.model_dump()
+        compact_report["summary"] = _trim_text(str(compact_report.get("summary", "")), 900)
+        compact_report["sections"] = [
+            {
+                **section,
+                "heading": _trim_text(str(section.get("heading", "")), 180),
+                "content": _trim_text(str(section.get("content", "")), 1000),
+            }
+            for section in compact_report.get("sections", [])[:6]
+            if isinstance(section, dict)
+        ]
         payload = {
-            "report": report.model_dump(),
-            "evidence": [item.model_dump() for item in evidence[:20]],
+            "report": compact_report,
+            "evidence": [
+                {
+                    "title": _trim_text(item.title, 180),
+                    "source": _trim_text(item.source, 140),
+                    "kind": item.kind,
+                    "url": item.url,
+                    "snippet": _trim_text(item.snippet or "", 360),
+                    "content": _trim_text(item.content or "", 420),
+                    "score": item.score,
+                }
+                for item in evidence[:12]
+            ],
             "plan": [item.model_dump() for item in plan[:12]],
             "revision_count": revision_count,
             "max_revisions": max_revisions,
@@ -304,19 +327,32 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         evidence_index = [
             {
                 "index": index,
-                "title": item.title,
-                "source": item.source,
+                "title": _trim_text(item.title, 180),
+                "source": _trim_text(item.source, 140),
                 "kind": item.kind,
                 "url": item.url,
-                "snippet": item.snippet,
-                "content": (item.content or "")[:1200],
+                "snippet": _trim_text(item.snippet or "", 420),
+                "content": _trim_text(item.content or "", 520),
                 "score": item.score,
             }
-            for index, item in enumerate(evidence[:24], start=1)
+            for index, item in enumerate(evidence[:12], start=1)
+        ]
+        section_drafts = [
+            {
+                "heading": _trim_text(section.heading, 180),
+                "content": _trim_text(section.content, 1200),
+                "evidence_count": section.evidence_count,
+                "source_summary": [_trim_text(source, 120) for source in section.source_summary[:4]],
+                "citation_titles": [
+                    _trim_text(citation.title, 180)
+                    for citation in section.citations[:6]
+                ],
+            }
+            for section in sections[:6]
         ]
         payload = {
-            "topic": topic,
-            "sections": [section.model_dump() for section in sections[:8]],
+            "topic": _trim_text(topic, 1200),
+            "sections": section_drafts,
             "evidence_index": evidence_index,
             "confidence": confidence,
             "instructions": (
@@ -549,25 +585,75 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                     "role": "user",
                     "content": json.dumps(
                         {
-                            "schema": schema,
+                            "output_contract": _compact_schema_contract(schema),
                             "input": user_payload,
                         },
                         ensure_ascii=False,
-                        indent=2,
+                        separators=(",", ":"),
                     ),
                 },
             ],
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
+            "max_tokens": 4096,
         }
         with self._client() as client:
-            response = client.post("/chat/completions", json=payload)
-            response.raise_for_status()
-            body = response.json()
-        content = _extract_chat_content(body)
-        model = response_model.model_validate_json(_extract_json_object(content))
-        usage = self._usage_from_body(body, start, self.chat_model)
-        return model, usage
+            last_error: Exception | None = None
+            for attempt in range(2):
+                if attempt:
+                    payload["messages"].append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "The previous response was empty or invalid JSON. "
+                                "Return one complete JSON object matching output_contract, with no markdown."
+                            ),
+                        }
+                    )
+                response = self._post_chat_completion(client, payload)
+                body = response.json()
+                content = _extract_chat_content(body)
+                try:
+                    model = response_model.model_validate_json(_extract_json_object(content))
+                except (ValidationError, ValueError) as exc:
+                    normalized_content = _normalize_structured_output_content(content, response_model)
+                    if normalized_content is not None:
+                        try:
+                            model = response_model.model_validate_json(normalized_content)
+                            usage = self._usage_from_body(body, start, self.chat_model)
+                            return model, usage
+                        except (ValidationError, ValueError) as normalized_exc:
+                            last_error = normalized_exc
+                            exc = normalized_exc
+                    last_error = exc
+                    if content.strip():
+                        payload["messages"].append(
+                            {
+                                "role": "assistant",
+                                "content": _trim_text(content, 2000),
+                            }
+                        )
+                    continue
+                usage = self._usage_from_body(body, start, self.chat_model)
+                return model, usage
+        raise ValueError(
+            f"OpenAI-compatible provider returned invalid structured output for "
+            f"{response_model.__name__}: {last_error}"
+        )
+
+    def _post_chat_completion(self, client: httpx.Client, payload: dict[str, Any]) -> httpx.Response:
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = client.post("/chat/completions", json=payload)
+                response.raise_for_status()
+                return response
+            except (httpx.TimeoutException, httpx.TransportError, httpx.HTTPStatusError) as exc:
+                last_error = exc
+                if not _is_retryable_http_error(exc) or attempt == 2:
+                    raise
+                time.sleep(min(1.5 * (attempt + 1), 4.0))
+        raise RuntimeError(f"OpenAI-compatible chat request failed: {last_error}")
 
     def _client(self) -> httpx.Client:
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
@@ -588,6 +674,28 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
             cost_usd=0.0,
             latency_ms=latency_ms,
         )
+
+
+def _normalize_structured_output_content(content: str, response_model: type[Any]) -> str | None:
+    text = _extract_json_object(content)
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if response_model is ResearcherToolDecisionContract:
+        payload = dict(payload)
+        payload["rationale"] = "" if payload.get("rationale") is None else payload.get("rationale", "")
+        payload["reflection"] = "" if payload.get("reflection") is None else payload.get("reflection", "")
+        if payload.get("query") is None:
+            payload["query"] = None
+        if payload.get("mcp_tool_name") is None:
+            payload["mcp_tool_name"] = None
+        if payload.get("mcp_tool_args") is None:
+            payload["mcp_tool_args"] = None
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return None
 
 
 def build_model_provider(settings: Any) -> ResearchModelProvider:
@@ -1281,6 +1389,53 @@ def _extract_json_object(content: str) -> str:
 
 def _clean_text(value: object) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _compact_schema_contract(schema: dict[str, Any]) -> dict[str, Any]:
+    definitions = schema.get("$defs", {}) if isinstance(schema.get("$defs"), dict) else {}
+
+    def convert(node: Any, depth: int = 0) -> Any:
+        if depth > 8:
+            return "object"
+        if not isinstance(node, dict):
+            return node
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/$defs/"):
+            target = definitions.get(ref.rsplit("/", 1)[-1], {})
+            return convert(target, depth + 1)
+        if "anyOf" in node and isinstance(node["anyOf"], list):
+            variants = [convert(item, depth + 1) for item in node["anyOf"]]
+            return {"anyOf": variants[:4]}
+        if "enum" in node:
+            return {"enum": node["enum"]}
+        node_type = node.get("type")
+        if node_type == "object" or "properties" in node:
+            properties = node.get("properties", {}) if isinstance(node.get("properties"), dict) else {}
+            required = set(node.get("required", []) if isinstance(node.get("required"), list) else [])
+            return {
+                "type": "object",
+                "required": sorted(required),
+                "properties": {
+                    key: convert(value, depth + 1)
+                    for key, value in properties.items()
+                },
+            }
+        if node_type == "array":
+            return {"type": "array", "items": convert(node.get("items", {}), depth + 1)}
+        if isinstance(node_type, str):
+            return {"type": node_type}
+        return "value"
+
+    return convert(schema)
+
+
+def _is_retryable_http_error(exc: Exception) -> bool:
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        return status_code in {408, 409, 425, 429} or status_code >= 500
+    return False
 
 
 def _trim_text(text: str, max_chars: int) -> str:

@@ -105,6 +105,8 @@ class AppSettings(BaseModel):
     langgraph_checkpoint_path: str = ".arc/langgraph_checkpoints.sqlite"
     max_revisions: int = 2
     seed_reference_knowledge: bool = False
+    skill_paths: list[str] = Field(default_factory=lambda: ["skills"])
+    skill_script_timeout_seconds: float = 10.0
 
 
 def load_settings() -> AppSettings:
@@ -128,7 +130,13 @@ def load_settings() -> AppSettings:
         mcp_server_url=os.getenv("ARC_MCP_SERVER_URL", "").rstrip("/"),
         mcp_tools=_env_list("ARC_MCP_TOOLS"),
         mcp_auth_required=_env_bool("ARC_MCP_AUTH_REQUIRED", False),
-        mcp_auth_token=_first_env("ARC_MCP_AUTH_TOKEN", "MCP_AUTH_TOKEN"),
+        mcp_auth_token=_first_env(
+            "ARC_MCP_AUTH_TOKEN",
+            "MCP_AUTH_TOKEN",
+            "GH_TOKEN",
+            "GITHUB_TOKEN",
+            "GITHUB_PERSONAL_ACCESS_TOKEN",
+        ),
         mcp_prompt=os.getenv("ARC_MCP_PROMPT", ""),
         mcp_transport=os.getenv("ARC_MCP_TRANSPORT", "streamable_http").lower(),
         mcp_timeout_seconds=float(os.getenv("ARC_MCP_TIMEOUT_SECONDS", "20")),
@@ -184,6 +192,8 @@ def load_settings() -> AppSettings:
         langgraph_checkpoint_path=os.getenv("ARC_LANGGRAPH_CHECKPOINT_PATH", ".arc/langgraph_checkpoints.sqlite"),
         max_revisions=int(os.getenv("ARC_MAX_REVISIONS", "2")),
         seed_reference_knowledge=_env_bool("ARC_SEED_REFERENCE_KNOWLEDGE", False),
+        skill_paths=_env_list("ARC_SKILL_PATHS") or ["skills"],
+        skill_script_timeout_seconds=float(os.getenv("ARC_SKILL_SCRIPT_TIMEOUT_SECONDS", "10")),
     )
 
 

@@ -11,26 +11,27 @@ Please simulate Northstar Platform, a 5-engineer Python/FastAPI platform team, a
 - Source count: 3
 - Context recall: 1.0
 - Citation precision: 1.0
-- Faithfulness proxy: 0.8722
-- Expected term recall: 0.5833
+- Faithfulness proxy: 0.897
+- Expected term recall: 0.5
 - Team constraint recall: 0.625
+- Constraint coverage passed: `True`
 - Expected source recall: 0.0
 
 ## Routing And Trace
 
-- Route counts: `{'internal': 3}`
-- Tool counts: `{'vector_retrieval': 3}`
+- Route counts: `{'internal': 2}`
+- Tool counts: `{'vector_retrieval': 2}`
 - Evidence channels: `{'document-chunk': 4, 'run-artifact': 1}`
-- Trace events: 37
-- Checkpoints: 11
-- Handoffs: 9
+- Trace events: 61
+- Checkpoints: 19
+- Handoffs: 15
 - Actors: `['evaluator', 'planner', 'reporter', 'research_supervisor', 'researcher', 'retriever', 'supervisor', 'verifier']`
 
 ## Graph Retrieval Check
 
-- Document hits: 10
-- Graph-enabled document hits: 10
-- Graph signal hits: 10
+- Document hits: 7
+- Graph-enabled document hits: 7
+- Graph signal hits: 7
 - Matched graph entities sample: `[['FastAPI', 'Northstar Platform', 'Northstar Platform Team Constraints', 'Python'], ['GitHub', 'Python/FastAPI'], ['FastAPI', 'Northstar Platform', 'Northstar Platform Team Constraints', 'Python']]`
 - Matched graph relationships sample: `[['Northstar Platform Team Constraints -[co_occurs_with]-> Team Shape', 'Team Shape -[co_occurs_with]-> Northstar Platform'], ['platform -[co_occurs_with]-> adoption'], ['Northstar Platform Team Constraints -[co_occurs_with]-> Team Shape', 'Team Shape -[co_occurs_with]-> Northstar Platform']]`
 
@@ -38,7 +39,7 @@ Interpretation: graph design is justified only when the retrieved team context c
 
 ## Matched Expectations
 
-- Terms: `['LangGraph', 'langchain-ai/langgraph', 'trace', 'FastAPI', 'citation', 'pilot', 'rollback']`
+- Terms: `['LangGraph', 'langchain-ai/langgraph', 'trace', 'FastAPI', 'pilot', 'rollback']`
 - Constraints: `['5-engineer', 'Python 3.11', 'FastAPI', 'one machine', 'replayable runs']`
 - Source patterns: `[]`
 
@@ -50,14 +51,14 @@ Interpretation: graph design is justified only when the retrieved team context c
 
 1. The strongest real use case is a repeatable adoption memo, not a generic chatbot. The local team context pack removes the need to paste the same constraints into every prompt.
 2. The current runtime already has a real graph: planner, research supervisor, parallel research, reporter, verifier/evaluator, revision, and finalize. In this scenario the graph is conceptually appropriate because evidence sufficiency and citation gates can change the path.
-3. The configured MCP tools should be checked before a GitHub-heavy demo. If they are local memory/workbench tools instead of GitHub repository tools, the run can still use Web evidence but cannot prove GitHub MCP value.
+3. GitHub MCP is a separate source-of-truth evidence channel. In real MCP mode the lab now forces the GitHub read-only endpoint and fails fast when auth is missing, so web-only evidence cannot be mistaken for MCP evidence.
 4. The next product surface should be a first-class adoption memo preset: repo, decision question, team context pack, generated report, trace, and metrics in one bundle.
 
 ## Issues Found And Fixed
 
-1. Real provider timeouts could abort the run during long reporter/verifier calls. The lab now defaults to deterministic mode for reproducibility and keeps real provider mode as an explicit integration test.
-2. Deterministic graph extraction was over-collecting structure words such as `The` and `Input`. A small stopword filter makes graph signal more trustworthy.
-3. MCP is still not part of this lab run, so GitHub source-of-truth evidence remains a separate future smoke test rather than part of the current proof.
+1. Real provider timeouts could abort the run during long reporter/verifier calls. The reporter input is now compacted and the real lab is the default run mode.
+2. Budgeted indexing graph extraction was over-collecting structure words such as `The` and `Input`. A small stopword filter makes graph signal more trustworthy while keeping the real research/report path on real providers.
+3. MCP configuration used to inherit stale local workbench tools. Real MCP lab runs now force the GitHub read-only endpoint and GitHub tool allowlist.
 
 ## Provider Snapshot
 
@@ -65,4 +66,5 @@ Interpretation: graph design is justified only when the retrieved team context c
 - Embedding: `deterministic` / `hashed-embedding`
 - Search: `none`
 - MCP enabled for this run: `False`
+- MCP auth token configured: `False`
 - Rerank: `rule`

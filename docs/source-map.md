@@ -25,7 +25,18 @@ PraisonAI remains only a secondary reference for:
 - agent handoff vocabulary
 - observability and run-ledger concepts
 
-The previous project memory implementation was removed from the core, so PraisonAI should no longer be presented as a memory-runtime reference for this project.
+It should not be presented as the primary memory reference. The current memory layer is closer to a small Mem0-inspired session/user/project store and is implemented directly in SQLite.
+
+## Memory Reference: Mem0
+
+Mem0 is used as a conceptual reference for memory layering:
+
+- user-level preferences
+- project/team constraints
+- session facts
+- retrieval of relevant memories before planning
+
+No Mem0 SDK is imported at runtime. The local implementation lives in `agent.py`, `schemas.py`, and `storage.py`, and project-scope memory is synced into the local document store for retrieval.
 
 ## Conceptual RAG Reference: LightRAG
 
@@ -41,6 +52,7 @@ No LightRAG code is copied. The local graph layer is a bounded retrieval signal 
 ## Original Modules
 
 - `schemas.py`: structured contracts for requests, plan items, routes, evidence, reports, trace, and evaluation.
+- `agent.py`: conversational session facade, memory extraction, plan confirmation, and research job binding.
 - `providers.py`: OpenAI-compatible real model provider, structured JSON calls, embeddings, graph extraction, source compression, and report composition.
 - `deterministic_provider.py`: offline/test provider with contract-compatible behavior.
 - `graph_runtime.py`: LangGraph orchestration path.
@@ -56,7 +68,7 @@ No LightRAG code is copied. The local graph layer is a bounded retrieval signal 
 - `source_reader.py`: provider raw-content extraction/compression.
 - `document_reader.py`: local file parsing before indexing.
 - `evaluation.py`: proxy RAG and citation metrics.
-- `storage.py`: SQLite persistence for documents, jobs, runs, and trace artifacts.
+- `storage.py`: SQLite persistence for documents, jobs, runs, agent sessions, messages, plan drafts, memory, and trace artifacts.
 - `ledger.py`: in-process run/job ledgers.
 - `telemetry.py`: trace events for handoffs, tools, checkpoints, evaluation, and failures.
 
@@ -64,20 +76,30 @@ Removed from the current core:
 
 - `memory/store.py`
 - the former local workbench MCP server
-- memory API endpoints
 - local workbench MCP defaults
+
+Reintroduced in the agent layer:
+
+- `POST /v1/agent/sessions`
+- `POST /v1/agent/sessions/{session_id}/messages`
+- `POST /v1/agent/sessions/{session_id}/confirm-plan`
+- `GET /v1/agent/sessions/{session_id}/memory`
+- `POST /v1/memory`
+- `GET /v1/memory`
+- `DELETE /v1/memory/{memory_id}`
 
 ## Study Order
 
 1. Read `docs/product-positioning.md` to understand the runtime boundary.
-2. Read `schemas.py` to understand the data contracts.
-3. Read `providers.py` to see where real LLM calls happen.
-4. Read `graph_runtime.py` to understand the runtime graph.
-5. Read `pipeline.py` to see how the application is assembled.
-6. Read `agents/` to understand which code is thin orchestration and which decisions are delegated to the provider.
-7. Read `retrieval/store.py` for the Agentic RAG implementation.
-8. Read `evaluation.py`, `storage.py`, and `telemetry.py` for replay and quality evidence.
-9. Read `mcp_tools.py` only after the main chain is clear; GitHub MCP is a developer evidence channel, not the whole runtime.
+2. Read `agent.py` to understand the conversation, memory, and confirmation layer.
+3. Read `schemas.py` to understand the data contracts.
+4. Read `providers.py` to see where real LLM calls happen.
+5. Read `graph_runtime.py` to understand the runtime graph.
+6. Read `pipeline.py` to see how the application is assembled.
+7. Read `agents/` to understand which code is thin orchestration and which decisions are delegated to the provider.
+8. Read `retrieval/store.py` for the Agentic RAG implementation.
+9. Read `evaluation.py`, `storage.py`, and `telemetry.py` for replay and quality evidence.
+10. Read `mcp_tools.py` only after the main chain is clear; GitHub MCP is a developer evidence channel, not the whole runtime.
 
 ## Interview Checkpoint
 
@@ -89,6 +111,6 @@ You should be able to explain:
 - how child retrieval plus parent/neighbor expansion differs from a naive chunk return
 - why GitHub MCP is an external developer evidence source rather than a replacement for Tavily or local RAG
 - how `mcp_tool_name` and `mcp_tool_args` flow from provider decision to MCP evidence and trace
-- why memory was removed from the core
+- why memory is implemented as a thin local agent layer rather than an enterprise personalization system
 - what would be required to expose this project as a clean MCP Server later
 - why this project should be discussed as an inspectable runtime experiment rather than a commercial Codex replacement

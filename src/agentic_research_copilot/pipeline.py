@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from threading import RLock
 
 from .agents import PlannerAgent, ResearchAgent, ReporterAgent, SupervisorAgent, VerifierAgent
+from .constraint_evaluation import apply_constraint_coverage_gate, extract_constraint_coverage_from_run
 from .document_reader import DocumentReader
 from .evaluation import RAGEvaluator
 from .ledger import JobLedger, RunLedger
@@ -63,7 +64,13 @@ class ResearchCopilot:
         self.embedding_provider = build_embedding_provider(self.settings, self.model_provider)
         self.mcp_registry = build_mcp_tool(self.settings)
         self.mcp_tool = self.mcp_registry.search if self.mcp_registry is not None else None
-        self.mcp_tool_catalog = self.mcp_registry.describe_tools() if self.mcp_registry is not None else []
+        self.mcp_tool_catalog_error = ""
+        self.mcp_tool_catalog = []
+        if self.mcp_registry is not None:
+            try:
+                self.mcp_tool_catalog = self.mcp_registry.describe_tools()
+            except Exception as exc:
+                self.mcp_tool_catalog_error = str(exc)
         self.reranker = build_reranker(
             RerankerConfig(
                 provider=self.settings.rerank_provider,
@@ -202,7 +209,8 @@ class ResearchCopilot:
             "runs_deleted": runs_deleted,
             "jobs_deleted": jobs_deleted,
             "telemetry_deleted": telemetry_deleted,
-            "memory_removed_from_core": True,
+            "memory_removed_from_core": False,
+            "agent_memory_preserved": True,
         }
 
     def clarify(self, request: ResearchRequest) -> ClarificationContract:
@@ -310,17 +318,88 @@ class ResearchCopilot:
             "product": {
                 "name": "AI Research Copilot",
                 "positioning": (
-                    "A deep research assistant that turns complex questions into planned, cited, "
-                    "traceable, and reviewable research reports."
+                    "A conversational research agent that turns technical questions, local constraints, "
+                    "and saved memory into confirmed research plans, cited reports, trace, and evaluation."
                 ),
-                "release_shape": "single Python FastAPI service with a background job queue, Qdrant retrieval, and a static local web console",
-                "research_path": "plan -> search/read -> synthesize -> verify/evaluate -> replay",
+                "release_shape": "single Python FastAPI service with an agent session layer, SQLite memory, background job queue, Qdrant retrieval, and a static local workbench",
+                "research_path": "session -> memory -> interactive plan -> confirm -> research -> report/eval/replay",
                 "seed_reference_knowledge": self.settings.seed_reference_knowledge,
+            },
+            "agent_session": {
+                "enabled": True,
+                "status_contract": [
+                    "collecting",
+                    "planning",
+                    "awaiting_confirmation",
+                    "researching",
+                    "completed",
+                    "failed",
+                ],
+                "confirmation_gate": "Research runs are not started from chat until the user confirms the generated plan draft.",
+                "handoff_boundary": "ConversationalResearchAgent owns session state, memory injection, clarification, plan confirmation, and job binding; ResearchCopilot remains the research runtime.",
+                "ui_shape": "Agent Workbench with session list, chat timeline, plan draft, memory inspector, tool status, report, trace, and evaluation tabs.",
+                "session_key": "session_id is mirrored as session_key so export bundles and event streams have a stable external handle.",
+                "step_stream": {
+                    "mode": "polling",
+                    "endpoint": "/v1/agent/sessions/{session_id}/steps",
+                    "events_endpoint": "/v1/agent/sessions/{session_id}/events",
+                    "notes": "Session-visible AgentRunStep rows are written during chat/planning/confirmation and synchronized from run trace after completion.",
+                },
+                "context_compaction": {
+                    "enabled": True,
+                    "trigger": "long conversations are summarized into session.context_summary before planning",
+                    "heartbeat": "researching sessions refresh a lightweight heartbeat step while the background job is still active",
+                },
+            },
+            "workspace_control_plane": {
+                "enabled": True,
+                "endpoint": "/v1/agent/workspaces",
+                "purpose": "Single-user workspace profiles carry team context, stack, deployment constraints, source preferences, and disabled tools.",
+                "default_workspace": "auto-created on startup if no workspace exists",
+            },
+            "skills": {
+                "enabled": True,
+                "endpoint": "/v1/agent/skills",
+                "pack_roots": self.settings.skill_paths,
+                "script_timeout_seconds": self.settings.skill_script_timeout_seconds,
+                "pack_shape": "skill.json + SKILL.md + optional scripts/",
+                "execution_boundary": "Only manifest-declared local scripts run through JSON stdin/stdout, with a timeout and no shell command composition.",
+                "catalog": [
+                    "open_source_adoption_review",
+                    "architecture_tradeoff_memo",
+                    "demo_readiness_risk_review",
+                ],
+                "selection_policy": "Registry-loaded skill selection with required-input checks, instruction excerpts, optional preflight hooks, and a readable reason in the plan draft",
+            },
+            "tool_policy": {
+                "enabled": True,
+                "registry_endpoint": "/v1/agent/tools",
+                "default_tools": ["web_search", "vector_retrieval", "mcp_tool"],
+                "approval_model": "observable_hitl_v2",
+                "approval_boundary": "v2 records approval requests for unavailable or risky MCP actions without interrupting every research tool call.",
+                "destructive_tools_supported": False,
             },
             "clarification": {
                 "enabled": True,
                 "mode": "ODR-style clarify_with_user front door",
                 "purpose": "Ask at most one concise follow-up question when the request is too vague to research safely.",
+            },
+            "memory": {
+                "enabled": True,
+                "provider": "sqlite",
+                "scopes": ["user", "project", "session"],
+                "kinds": ["preference", "constraint", "decision", "fact", "todo"],
+                "extraction": "lightweight heuristic extractor records explicit preferences, team/project constraints, and session facts after user turns",
+                "planning_injection": "Relevant memory is appended to the ResearchRequest before planner drafting so team constraints do not need to be pasted repeatedly.",
+                "knowledge_base_sync": "Project-scope memory is also indexed as a local document for vector/BM25/graph retrieval.",
+                "boundary": "Mem0-inspired memory layering without adding the Mem0 SDK.",
+            },
+            "constraint_coverage": {
+                "enabled": True,
+                "warning_threshold": 0.6,
+                "fail_threshold": 0.4,
+                "purpose": "Project constraints saved as memory must be visible in the final memo or evaluation notes.",
+                "endpoint": "/v1/research/runs/{run_id}/constraint-coverage",
             },
             "orchestration": {
                 "runtime": self.settings.orchestration_runtime,
@@ -389,6 +468,26 @@ class ResearchCopilot:
                     ],
                     "dependency": False,
                 },
+                {
+                    "name": "Mem0",
+                    "learning_priority": "reference",
+                    "used_for": [
+                        "user/project/session memory layering",
+                        "preference and constraint persistence",
+                        "memory retrieval before planning",
+                    ],
+                    "dependency": False,
+                },
+                {
+                    "name": "Open WebUI / AnythingLLM",
+                    "learning_priority": "reference",
+                    "used_for": [
+                        "chat-first workspace shell",
+                        "local knowledge base entry point",
+                        "session-oriented workbench layout",
+                    ],
+                    "dependency": False,
+                },
             ],
             "open_deep_research_alignment": {
                 "positioning": (
@@ -404,15 +503,21 @@ class ResearchCopilot:
                     "citation-backed report sections mapped to existing evidence",
                     "source quality surfaced through evaluation rather than runtime source blocking",
                     "LLM judge style demo artifact outside the hot path",
+                    "human confirmation gate before launching a long-running research job",
                 ],
                 "product_specific_differences": [
                     "Uses an ODR-style LLM research supervisor; ConductResearch calls carry selected tools, query rewrites, grounding mode, and sufficiency criteria",
                     "Keeps deterministic route hints only for offline tests/fallbacks, not as the primary real-provider decision layer",
                     "Adds local document grounding with text/Markdown/HTML/PDF parsing before Qdrant retrieval",
+                    "Adds a conversational session and memory layer in front of the research graph instead of turning every chat turn into a run",
                     "Uses single-node FastAPI/Celery/Redis/SQLite/Qdrant deployment, not a distributed platform",
                 ],
             },
             "agents": [
+                {
+                    "name": "conversational_agent",
+                    "role": "manages sessions, memory, clarification, plan drafts, confirmation gate, and research job binding",
+                },
                 {"name": "planner", "role": "creates a research brief and decomposed plan"},
                 {
                     "name": "clarifier",
@@ -473,6 +578,8 @@ class ResearchCopilot:
                     "configured_enabled": self.settings.mcp_enabled,
                     "server_url_configured": bool(self.settings.mcp_server_url),
                     "loaded": self.mcp_tool is not None,
+                    "available": self.mcp_tool is not None and not self.mcp_tool_catalog_error,
+                    "catalog_error": self.mcp_tool_catalog_error,
                     "tools": self.settings.mcp_tools,
                     "tools_configured": bool(self.settings.mcp_tools),
                     "tool_catalog": [tool.model_dump() for tool in self.mcp_tool_catalog],
@@ -529,6 +636,12 @@ class ResearchCopilot:
                 {"name": "run_ledger", "provider": "sqlite", "enabled": True},
                 {"name": "job_queue", "provider": self.settings.job_queue_backend, "enabled": True},
                 {"name": "telemetry", "provider": "in_process_event_log", "enabled": True},
+                {
+                    "name": "agent_memory",
+                    "provider": "sqlite + local DocumentStore sync",
+                    "enabled": True,
+                    "scopes": ["user", "project", "session"],
+                },
             ],
             "retrieval": {
                 "routes": ["external", "internal", "hybrid"],
@@ -608,7 +721,21 @@ class ResearchCopilot:
             "storage": {
                 "backend": "sqlite",
                 "path": str(self.storage.path),
-                "persisted_objects": ["documents", "research_jobs", "research_runs"],
+                "persisted_objects": [
+                    "documents",
+                    "research_jobs",
+                    "research_runs",
+                    "agent_workspaces",
+                    "agent_sessions",
+                    "agent_messages",
+                    "agent_plan_drafts",
+                    "agent_run_steps",
+                    "tool_invocations",
+                    "approval_requests",
+                    "memory_items",
+                    "memory_extraction_results",
+                    "constraint_coverage",
+                ],
             },
         }
 
@@ -883,7 +1010,13 @@ class ResearchCopilot:
     def run(self, request: ResearchRequest, *, job_id: str | None = None) -> ResearchRun:
         from .graph_runtime import LangGraphResearchRuntime
 
-        return LangGraphResearchRuntime(self).run(request, job_id=job_id)
+        run = LangGraphResearchRuntime(self).run(request, job_id=job_id)
+        coverage = extract_constraint_coverage_from_run(run)
+        if coverage:
+            self.storage.save_constraint_coverage(coverage)
+            run = apply_constraint_coverage_gate(run, coverage)
+            self.storage.save_run(run)
+        return run
 
     def _research_plan_items(
         self,
@@ -1413,10 +1546,10 @@ class ResearchCopilot:
 
         evidence_summary = self._evidence_summary(citations)
         parts = [
-            f"This section answers: {item.question}",
-            f"Research goal: {request.topic}.",
-            f"Why it matters: {item.purpose}",
-            f"Finding: {finding}",
+            f"This section answers: {self._compact_report_text(item.question, 260)}",
+            f"Research goal: {self._compact_report_text(request.topic, 420)}.",
+            f"Why it matters: {self._compact_report_text(item.purpose, 260)}",
+            f"Finding: {self._compact_report_text(finding, 900)}",
         ]
         if evidence_summary:
             parts.append(f"Grounding evidence: {evidence_summary}")
@@ -1428,12 +1561,18 @@ class ResearchCopilot:
                 f"from {route.min_sources} source group(s)."
             )
         if search_queries:
-            query_text = "; ".join(query.query for query in search_queries[:3])
+            query_text = "; ".join(
+                self._compact_report_text(query.query, 180) for query in search_queries[:2]
+            )
             parts.append(f"Queries used: {query_text}.")
         if note is not None and note.gaps:
-            parts.append(f"Remaining caveats: {'; '.join(note.gaps[:3])}.")
+            gaps = "; ".join(self._compact_report_text(gap, 180) for gap in note.gaps[:2])
+            parts.append(f"Remaining caveats: {gaps}.")
         if note is not None and note.follow_up_queries:
-            parts.append(f"Useful follow-up: {'; '.join(note.follow_up_queries[:2])}.")
+            followups = "; ".join(
+                self._compact_report_text(query, 180) for query in note.follow_up_queries[:2]
+            )
+            parts.append(f"Useful follow-up: {followups}.")
         return " ".join(part.strip() for part in parts if part and part.strip())
 
     def _fallback_section_content(
@@ -1458,6 +1597,13 @@ class ResearchCopilot:
             if text:
                 snippets.append(text[:320].rstrip())
         return " ".join(snippets)
+
+    @staticmethod
+    def _compact_report_text(value: object, max_chars: int) -> str:
+        text = " ".join(str(value or "").split())
+        if len(text) <= max_chars:
+            return text
+        return text[: max_chars - 3].rstrip() + "..."
 
     def _estimate_confidence(
         self,

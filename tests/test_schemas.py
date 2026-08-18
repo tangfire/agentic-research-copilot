@@ -1,4 +1,4 @@
-from agentic_research_copilot.schemas import SupervisorDecisionContract
+from agentic_research_copilot.schemas import ResearcherToolDecisionContract, SupervisorDecisionContract
 
 
 def test_supervisor_contract_treats_null_lists_as_empty_lists():
@@ -26,3 +26,17 @@ def test_supervisor_contract_treats_null_lists_as_empty_lists():
     assert contract.tool_calls[0].web_queries == []
     assert contract.tool_calls[0].internal_queries == []
     assert contract.tool_calls[0].sufficiency_criteria == []
+
+
+def test_researcher_contract_treats_null_reflection_as_empty_string():
+    contract = ResearcherToolDecisionContract.model_validate(
+        {
+            "action": "web_search",
+            "query": "LangGraph checkpoint docs",
+            "reflection": None,
+            "rationale": None,
+        }
+    )
+
+    assert contract.reflection == ""
+    assert contract.rationale == ""

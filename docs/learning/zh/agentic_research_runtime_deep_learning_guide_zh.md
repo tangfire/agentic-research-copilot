@@ -347,14 +347,14 @@ GET /v1/runtime/provider-check
 
 `add_document()` 和 `ingest_document_path()` 会把本地资料放进 `DocumentStore`。
 
-这里的本地资料不是“长期记忆”，而是当前 research runtime 可检索的 evidence corpus。
+这里的本地资料是当前 research runtime 可检索的 evidence corpus。现在 agent 层也会把重要的 `project` memory 同步进 DocumentStore，让团队约束进入同一套检索链路。
 
 区别很重要：
 
-- memory 暗示长期用户画像、偏好、历史经验。
+- memory 表示用户偏好、团队约束、会话事实。
 - corpus 表示本次或本项目可检索资料。
 
-这个项目保留 corpus，删除 memory，是为了让边界更诚实。
+这个项目现在保留两者，但边界不同：SQLite memory 负责会话和约束管理，DocumentStore 负责可检索证据。它不是企业级长期个性化系统。
 
 ### 5.4 job 管理
 

@@ -2,25 +2,25 @@
 
 ## Current Assessment
 
-The current architecture is coherent for an autumn-recruiting project when it is framed as an Agentic Research Runtime rather than a commercial research assistant.
+The current architecture is coherent for an autumn-recruiting project when it is framed as a Conversational Research Agent Runtime rather than a commercial research assistant.
 
 Already credible:
 
 - ODR-style planning and supervision are implemented.
+- Agent sessions, SQLite memory, plan confirmation, and the static Agent Workbench are implemented.
 - The LangGraph workflow is explicit and test-covered.
 - Agentic RAG is more than a thin top-k wrapper: it includes child chunks, parent/neighbor context, dense retrieval, BM25, graph signal fusion, and rerank.
 - GitHub MCP can add developer source-of-truth evidence for repositories, code, issues, pull requests, and releases.
 - Report generation is tied to existing evidence and checked by verifier/evaluator metrics.
 - Trace, checkpoints, jobs, runs, and evaluation artifacts make the system explainable in interviews.
 
-Removed because they weakened the story:
+Kept out because they would weaken the story:
 
-- project memory as a core module
 - local research-workbench MCP server
 
-The reason is practical: without strong real corpus/history assets, those modules looked like broad framework features rather than evidence-backed project capabilities.
+The reason is practical: the project now has local single-user agent memory, but it should not claim enterprise personalization or restore a self-calling MCP workbench. Those would look like broad framework features rather than evidence-backed project capabilities.
 
-## What Needs To Be Added Now
+## What Needs To Be Hardened Now
 
 The project should not add another large feature before the demo evidence is strong. The missing pieces are mostly proof, polish, and reproducibility.
 
@@ -34,7 +34,8 @@ The project should not add another large feature before the demo evidence is str
 3. Save report, trace, route, source-index, and evaluation artifacts for each topic.
 4. Document one successful strict-provider run and one deterministic fallback run.
 5. Keep the adoption memo lab current: team context pack, repo decision topic, generated report, trace, evaluation, and analysis.
-6. Keep `pytest` passing after the docs/demo cleanup.
+6. Keep the conversational session demo current: saved team constraints, plan draft, confirmed job, completed run, memory, trace, and evaluation.
+7. Keep `pytest` passing after the docs/demo cleanup.
 
 ### P1: Evaluation And Reliability
 
@@ -49,10 +50,11 @@ The project should not add another large feature before the demo evidence is str
    - evaluation JSON
    - runtime config summary
 5. Make failure states demo-friendly: provider missing, search missing, MCP auth missing, empty corpus, and reranker unavailable.
+6. Add a small memory eval fixture so the extractor can be improved without silently polluting project memory.
 
 ### P2: Product Polish
 
-1. Improve the web console around the artifacts that matter: plan, evidence, citations, quality gates, trace, and replay.
+1. Improve the Agent Workbench around the artifacts that matter: session memory, plan, evidence, citations, quality gates, trace, and replay.
 2. Add example screenshots only after real demo artifacts exist.
 3. Add a short "How to read a run" guide for interview preparation.
 4. Consider exposing this app as an MCP Server later, but only as a facade over the stable API.
@@ -92,8 +94,8 @@ Future:
 
 ## What Not To Add Now
 
-- generic chat memory
-- user preference storage
+- enterprise-grade personalization memory
+- multi-user account memory
 - browser automation
 - multi-agent theater with no separate responsibility
 - distributed cluster claims
@@ -105,6 +107,6 @@ Future:
 
 Use this line:
 
-> I intentionally removed modules that were broader than the evidence supported. The final project focuses on the hard part: a supervised research graph, bounded tool use, hybrid retrieval, citation-locked synthesis, and replayable quality evaluation.
+> I kept the project narrow: a local conversational research agent with SQLite memory, a confirmation gate, supervised research graph, bounded tool use, hybrid retrieval, citation-locked synthesis, and replayable quality evaluation.
 
 This is stronger than pretending the app is a complete enterprise research platform.
