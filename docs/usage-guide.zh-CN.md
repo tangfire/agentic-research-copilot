@@ -15,22 +15,24 @@
 在项目根目录运行：
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
 
 然后打开：
 
 ```text
-http://127.0.0.1:8000/
+http://127.0.0.1:8002/
 ```
 
 API 文档在：
 
 ```text
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8002/docs
 ```
 
 如果页面顶部显示 `API ok`，说明前端已经连上后端。
+
+这个启动脚本是推荐方式。它会使用独立的本地 SQLite/Qdrant 目录，并默认关闭 GitHub MCP，避免旧进程或旧环境变量让页面看起来“不像刚改完的代码”。
 
 ## 2. 第一次使用
 
@@ -112,8 +114,10 @@ http://127.0.0.1:8000/docs
 后端没有启动，重新运行：
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
+
+如果你刚改过代码但页面没有变化，优先怀疑旧进程还在跑。关闭旧的 `uvicorn`/`python` 服务后重新执行上面的启动脚本。
 
 ### 一直停在计划阶段
 

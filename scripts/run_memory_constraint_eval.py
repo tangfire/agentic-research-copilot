@@ -40,15 +40,29 @@ STOPWORDS = {
 
 def main() -> None:
     constraints = _team_constraints()
-    report_text = REPORT_PATH.read_text(encoding="utf-8") if REPORT_PATH.exists() else ""
+    report_available = REPORT_PATH.exists()
+    summary_available = SUMMARY_PATH.exists()
+    report_text = REPORT_PATH.read_text(encoding="utf-8") if report_available else ""
+    evaluation_ready = bool(report_text.strip())
     covered = [_constraint_covered(constraint, report_text) for constraint in constraints]
     covered_count = sum(1 for item in covered if item["covered"])
     total = len(covered)
-    constraint_coverage = covered_count / total if total else 1.0
+    constraint_coverage = covered_count / total if total and evaluation_ready else 0.0
     summary = _load_json(SUMMARY_PATH)
-    memory_precision_proxy = 1.0 if total else 0.0
-    memory_recall_proxy = constraint_coverage
+    memory_precision_proxy = 1.0 if total and evaluation_ready else 0.0
+    memory_recall_proxy = constraint_coverage if evaluation_ready else 0.0
+    notes = [
+        "This script is a lightweight labeled fixture for the adoption lab.",
+        "memory_precision and memory_recall are proxy fields for curated team constraints, not a general memory benchmark.",
+    ]
+    if not evaluation_ready:
+        notes.append(
+            "No adoption memo report was found. Run scripts/run_adoption_memo_experiment.py before treating these metrics as meaningful."
+        )
+    elif not summary_available:
+        notes.append("The adoption memo summary JSON was not found, so latest_run_id is unavailable.")
     result = {
+        "status": "completed" if evaluation_ready else "not_ready",
         "metric_scope": "curated_fixture_proxy",
         "memory_precision": round(memory_precision_proxy, 4),
         "memory_recall": round(memory_recall_proxy, 4),
@@ -59,11 +73,10 @@ def main() -> None:
         "constraint_count": total,
         "covered_constraint_count": covered_count,
         "latest_run_id": (summary.get("headline") or {}).get("run_id"),
+        "report_path": str(REPORT_PATH),
+        "summary_path": str(SUMMARY_PATH),
         "constraints": covered,
-        "notes": [
-            "This script is a lightweight labeled fixture for the adoption lab.",
-            "memory_precision and memory_recall are proxy fields for curated team constraints, not a general memory benchmark.",
-        ],
+        "notes": notes,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

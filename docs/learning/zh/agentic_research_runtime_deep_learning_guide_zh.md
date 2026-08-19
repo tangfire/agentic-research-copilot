@@ -874,13 +874,13 @@ pytest -q
 ### 13.3 启动 API
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
 
 然后访问：
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8002
 ```
 
 ### 13.4 添加一段本地资料
@@ -890,7 +890,7 @@ http://127.0.0.1:8000
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://127.0.0.1:8000/v1/documents `
+  -Uri http://127.0.0.1:8002/v1/documents `
   -ContentType "application/json" `
   -Body '{"title":"Project Positioning Note","source":"local-note","content":"This project should be presented as an Agentic Research Runtime rather than a commercial Codex replacement. It focuses on planning, evidence routing, Agentic RAG, verification, evaluation, and trace replay."}'
 ```
@@ -900,7 +900,7 @@ Invoke-RestMethod `
 ```powershell
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://127.0.0.1:8000/v1/research/runs `
+  -Uri http://127.0.0.1:8002/v1/research/runs `
   -ContentType "application/json" `
   -Body '{"topic":"How should this project be positioned for AI engineering interviews?","depth":"standard","include_private_docs":true}'
 ```
@@ -910,8 +910,8 @@ Invoke-RestMethod `
 ### 13.6 查看 trace 和 evaluation
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/v1/research/runs/<run_id>/trace
-Invoke-RestMethod http://127.0.0.1:8000/v1/research/runs/<run_id>/evaluation
+Invoke-RestMethod http://127.0.0.1:8002/v1/research/runs/<run_id>/trace
+Invoke-RestMethod http://127.0.0.1:8002/v1/research/runs/<run_id>/evaluation
 ```
 
 学习时不要只看 final report。你要看：

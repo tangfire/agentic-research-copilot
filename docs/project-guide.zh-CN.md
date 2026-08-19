@@ -28,22 +28,36 @@ specialist worker 负责某个责任边界下的工具循环和证据归属
 
 ## 先读什么
 
-1. [README.md](../README.md)
-2. [Architecture](architecture.md)
-3. [OpenClaw / Hermes Design Notes](openclaw-hermes-design-notes.zh-CN.md)
-4. [Agent Maturity Pack](agent-maturity-pack.zh-CN.md)
-5. [Tool Loop And HITL](tool-loop-and-hitl.zh-CN.md)
-6. [Memory And Constraint Evaluation](memory-and-constraint-eval.zh-CN.md)
-7. [Autumn Recruiting Playbook](autumn-recruiting-playbook.zh-CN.md)
-8. [Interview Question Bank](interview-question-bank.zh-CN.md)
-9. [Demo Script](demo-script.zh-CN.md)
-10. [Usage Guide](usage-guide.zh-CN.md)
+按这个顺序读，不要一上来把所有文档都打开：
+
+1. [README.md](../README.md)：知道项目是什么，不是什么。
+2. [Usage Guide](usage-guide.zh-CN.md)：先把本地 workbench 跑起来。
+3. [Demo Script](demo-script.zh-CN.md)：照着跑一次完整 demo。
+4. [Architecture](architecture.md)：理解 session、memory、skill、tool loop、三专家 worker 和 eval。
+5. [Autumn Recruiting Playbook](autumn-recruiting-playbook.zh-CN.md)：整理简历和 2 分钟讲法。
+6. [Interview Question Bank](interview-question-bank.zh-CN.md)：按面试题反复练。
+
+下面这些是深入学习资料，不是第一次上手必读：
+
+- [Tool Loop And HITL](tool-loop-and-hitl.zh-CN.md)
+- [Memory And Constraint Evaluation](memory-and-constraint-eval.zh-CN.md)
+- [OpenClaw / Hermes Design Notes](openclaw-hermes-design-notes.zh-CN.md)
+- [Agent Maturity Pack](agent-maturity-pack.zh-CN.md)
+- [Adoption Memo Lab](adoption-memo-lab.zh-CN.md)
 
 ## 怎么启动
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
+
+然后打开：
+
+```text
+http://127.0.0.1:8002/
+```
+
+这个脚本会使用当前代码启动一个干净的本地 workbench，默认关闭 GitHub MCP，避免旧环境变量影响演示。
 
 ## 怎么用
 
@@ -59,3 +73,4 @@ uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --
 - `specialist worker` 是在线执行单元，但它运行在同一条 LangGraph research stage 内。
 - `memory precision` 和 `constraint coverage` 多半是工程 proxy，不是学术 benchmark。
 - `MCP unavailable` 不是故障，缺 token 时本来就应该显式降级。
+- 如果你刚改过代码，先重启服务；不要拿旧端口上的旧进程判断新代码是否生效。

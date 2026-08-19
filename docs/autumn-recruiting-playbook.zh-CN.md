@@ -214,14 +214,16 @@ v2 还加了 approval model：
 先启动服务：
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
 
 打开：
 
 ```text
-http://127.0.0.1:8000/
+http://127.0.0.1:8002/
 ```
+
+这条启动方式用于本地演示，会默认关闭 GitHub MCP。缺 token 时应该显示 unavailable，而不是假装拿到了 GitHub MCP evidence。
 
 推荐输入：
 

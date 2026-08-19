@@ -11,14 +11,16 @@
 ## 2. 启动
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
 
 打开：
 
 ```text
-http://127.0.0.1:8000/
+http://127.0.0.1:8002/
 ```
+
+演示前先确认这是刚启动的新进程，不要复用旧端口上的旧服务。
 
 ## 3. 演示顺序
 

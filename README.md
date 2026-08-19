@@ -256,13 +256,13 @@ Run the harness benchmark:
 python scripts/run_harness_benchmark.py --clean --max-tasks 24
 ```
 
-Start API:
+Start the local workbench:
 
 ```powershell
-uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --port 8000
+.\scripts\start_workbench_local.ps1 -Port 8002
 ```
 
-Open the local workbench at `http://127.0.0.1:8000/`.
+Open the local workbench at `http://127.0.0.1:8002/`. The script starts a clean single-user local runtime and disables GitHub MCP by default, so missing MCP tokens are shown as unavailable instead of leaking old shell configuration into the demo.
 
 ## Quick Use
 
@@ -281,20 +281,13 @@ Open the local workbench at `http://127.0.0.1:8000/`.
 Read in this order:
 
 1. `docs/project-guide.zh-CN.md`
-2. `docs/architecture.md`
-3. `docs/agent-maturity-pack.zh-CN.md`
-4. `docs/tool-loop-and-hitl.zh-CN.md`
-5. `docs/memory-and-constraint-eval.zh-CN.md`
-6. `docs/autumn-recruiting-playbook.zh-CN.md`
-7. `docs/interview-question-bank.zh-CN.md`
-8. `docs/learning/zh/agentic_research_runtime_deep_learning_guide_zh.md`
-9. `src/agentic_research_copilot/agent.py`
-10. `src/agentic_research_copilot/schemas.py`
-11. `src/agentic_research_copilot/providers.py`
-12. `src/agentic_research_copilot/graph_runtime.py`
-13. `src/agentic_research_copilot/pipeline.py`
-14. `src/agentic_research_copilot/agents`
-15. `src/agentic_research_copilot/retrieval/store.py`
+2. `docs/usage-guide.zh-CN.md`
+3. `docs/demo-script.zh-CN.md`
+4. `docs/architecture.md`
+5. `docs/autumn-recruiting-playbook.zh-CN.md`
+6. `docs/interview-question-bank.zh-CN.md`
+
+Then use `docs/source-map.md` and `docs/learning/zh/agentic_research_runtime_deep_learning_guide_zh.md` when you want to connect the docs to specific code paths.
 
 ## Interview Framing
 
