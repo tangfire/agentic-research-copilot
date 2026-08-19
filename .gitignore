@@ -17,3 +17,5 @@ coverage.xml
 htmlcov/
 .arc/
 *.sqlite
+examples/adoption-lab/outputs/*
+!examples/adoption-lab/outputs/.gitkeep

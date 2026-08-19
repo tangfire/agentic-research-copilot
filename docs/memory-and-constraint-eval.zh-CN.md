@@ -186,7 +186,7 @@ project_constraint_count = accepted 里 project 或 constraint 的数量
 真实实验里你看到过：
 
 ```text
-constraint_recall = 0.25
+constraint_coverage = 0.25
 ```
 
 这不是“项目没用”的证明，反而是很真实的产品问题：
@@ -197,7 +197,7 @@ constraint_recall = 0.25
 
 所以需要两个概念：
 
-### 6.1 constraint_recall
+### 6.1 constraint_coverage
 
 实验级指标，问的是：
 
@@ -323,7 +323,7 @@ DELETE /v1/memory/{memory_id}
 
 > 我借鉴了 Mem0 的长期 memory 和检索思想，但 v2 没引入 SDK。因为这是学习项目，我希望自己实现最小闭环：抽取、存储、检索、注入 planning、进入本地 KB、最后评估覆盖率。
 
-被问“constraint_recall 低怎么办”：
+被问“constraint_coverage 低怎么办”：
 
 > 这说明真实产品问题被测出来了。v2 的修复是把 project memory 标成 hard constraint，planner prompt 明确要求覆盖，report 后再做 constraint coverage gate。低于阈值会进入 evaluation notes，严重时标记 evaluation failed，但保留报告便于复盘。
 

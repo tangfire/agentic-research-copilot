@@ -86,7 +86,7 @@ team constraints / repo / technical question
 
 30 秒答法：
 
-> 可以退化成单 Agent，所以我保留单 Agent baseline 作为对照。但主模式下三个 worker 的价值是让工具边界、证据归属和失败定位更清楚。真正执行还是同一条 LangGraph workflow，不是先跑一遍节点再偷偷跑另一套 agent。
+> 可以退化成单 Agent 做 ablation，但主模式下三个 worker 的价值是让工具边界、证据归属和失败定位更清楚。真正执行还是同一条 LangGraph workflow，不是先跑一遍节点再偷偷跑另一套 agent。
 
 ## 3. 工具与技能
 

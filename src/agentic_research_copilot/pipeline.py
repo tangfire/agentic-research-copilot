@@ -124,6 +124,7 @@ class ResearchCopilot:
         self._job_executor: ThreadPoolExecutor | None = None
         self.workflow = ResearchWorkflow()
         self.evaluator = RAGEvaluator()
+        self.search_tool = search_tool or build_search_tool(self.settings)
         self.router = RetrievalCoordinator(
             max_query_rewrites=self.settings.rag_max_query_rewrites,
             min_evidence_per_item=self.settings.rag_min_evidence_per_item,
@@ -131,9 +132,17 @@ class ResearchCopilot:
             mcp_enabled=self.mcp_tool is not None,
         )
         self.planner = PlannerAgent(self.model_provider, self.settings)
-        resolved_search_tool = search_tool or build_search_tool(self.settings)
-        self.researcher = ResearchAgent(
-            resolved_search_tool,
+        self.researcher = self._build_research_worker()
+        self.verifier = VerifierAgent(self.model_provider, self.settings)
+        self.reporter = ReporterAgent(self.model_provider, self.settings)
+        self.supervisor_agent = SupervisorAgent(self.model_provider, self.settings)
+        self._restore_state()
+        if self.settings.seed_reference_knowledge:
+            self._seed_reference_knowledge()
+
+    def _build_research_worker(self) -> ResearchAgent:
+        return ResearchAgent(
+            self.search_tool,
             model_provider=self.model_provider,
             embedding_provider=self.embedding_provider,
             mcp_tool=self.mcp_tool,
@@ -145,28 +154,6 @@ class ResearchCopilot:
             chunk_context_window=self.settings.source_reader_chunk_context_window,
             max_iterations=self.settings.research_max_iterations,
         )
-        self.specialist_workers = {
-            role_id: ResearchAgent(
-                resolved_search_tool,
-                model_provider=self.model_provider,
-                embedding_provider=self.embedding_provider,
-                mcp_tool=self.mcp_tool,
-                mcp_tool_catalog=self.mcp_tool_catalog,
-                source_reader_enabled=self.settings.source_reader_enabled,
-                source_reader_strategy=self.settings.source_reader_strategy,
-                raw_content_max_chars=self.settings.source_reader_max_chars,
-                excerpt_max_chars=self.settings.source_reader_excerpt_chars,
-                chunk_context_window=self.settings.source_reader_chunk_context_window,
-                max_iterations=self.settings.research_max_iterations,
-            )
-            for role_id in SPECIALIST_PROFILES
-        }
-        self.verifier = VerifierAgent(self.model_provider, self.settings)
-        self.reporter = ReporterAgent(self.model_provider, self.settings)
-        self.supervisor_agent = SupervisorAgent(self.model_provider, self.settings)
-        self._restore_state()
-        if self.settings.seed_reference_knowledge:
-            self._seed_reference_knowledge()
 
     def add_document(
         self,
@@ -435,7 +422,7 @@ class ResearchCopilot:
             "orchestration": {
                 "runtime": self.settings.orchestration_runtime,
                 "strict_providers": self.settings.strict_providers,
-                "active_graph": "supervisor -> planner -> research_supervisor -> specialist_workers -> reporter -> verifier/evaluator -> finalize",
+                "active_graph": "supervisor -> planner -> research_supervisor -> specialist_worker stage -> reporter -> verifier/evaluator -> finalize",
                 "checkpointer": self.settings.langgraph_checkpointer,
                 "checkpoint_path": self.settings.langgraph_checkpoint_path,
                 "durability_boundary": "Single-node LangGraph sqlite checkpointing is the default graph durability layer; SQLite run traces/replay are always persisted by the app, with MemorySaver used only as a defensive fallback.",
@@ -1233,7 +1220,7 @@ class ResearchCopilot:
         agent_id: AgentSpecialistId = "architecture_fit",
     ) -> PlanItemResearchResult:
         profile = SPECIALIST_PROFILES[agent_id]
-        worker = self.specialist_workers.get(agent_id, self.researcher)
+        worker = self._build_research_worker()
         worker.mcp_tool = self.mcp_tool
         worker.mcp_tool_catalog = list(self.mcp_tool_catalog)
         worker_item = item.model_copy(

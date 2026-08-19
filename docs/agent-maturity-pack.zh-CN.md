@@ -44,7 +44,7 @@
 6. **Evaluation and guardrails**
    - 不是“生成了报告就算成功”。
    - 要评估 citation、context recall、faithfulness、工具选择、约束覆盖。
-   - 本项目这次重点补 `constraint_coverage`，因为真实实验里 `constraint_recall=0.25`，说明约束写进 memory 后不一定稳定进入最终报告。
+   - 本项目这次重点补 `constraint_coverage`，因为真实实验里一度出现覆盖偏低，说明约束写进 memory 后不一定稳定进入最终报告。
 
 ## 2. 本项目 v1 差在哪里
 

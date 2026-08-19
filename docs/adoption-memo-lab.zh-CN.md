@@ -104,7 +104,7 @@ python scripts/check_github_mcp.py
 - `citation_precision`：报告 section 是否都有引用。
 - `faithfulness_proxy`：生成内容和引用证据是否有足够重合。
 - `source_diversity`：报告是否依赖多个来源，而不是单一来源撑完整篇。
-- `constraint_recall`：报告是否提到团队关键约束。
+- `constraint_coverage`：报告是否提到团队关键约束。
 - `expected_term_recall`：报告是否覆盖预设评审要点。
 - `graph_signal_hits`：图检索是否真的贡献了候选证据，而不是只打开了配置。
 

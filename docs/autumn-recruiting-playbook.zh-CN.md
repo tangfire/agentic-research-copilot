@@ -197,7 +197,7 @@ v2 还加了 approval model：
 
 可以讲：
 
-> 我在真实实验里发现 constraint_recall 只有 0.25，说明 memory 写进去了不等于报告真的覆盖了团队约束。v2 把 project memory 标为 hard constraint，注入 planner，并在报告后做 constraint coverage gate。覆盖低于 0.6 进入 warning，低于 0.4 标记 evaluation failed，但保留报告用于复盘。
+> 我在真实实验里发现 constraint coverage 一度偏低，说明 memory 写进去了不等于报告真的覆盖了团队约束。v2 把 project memory 标为 hard constraint，注入 planner，并在报告后做 constraint coverage gate。覆盖低于 0.6 进入 warning，低于 0.4 标记 evaluation failed，但保留报告用于复盘。
 
 ### 4.7 面试时怎么解释 skill
 

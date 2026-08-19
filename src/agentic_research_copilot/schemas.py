@@ -454,7 +454,7 @@ AgentEventKind = Literal[
 ]
 
 
-AgentExecutionMode = Literal["specialist_worker", "single_agent_baseline", "role_routing_overlay"]
+AgentExecutionMode = Literal["specialist_worker"]
 
 
 class AgentRoleAssignment(BaseModel):

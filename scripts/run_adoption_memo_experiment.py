@@ -317,7 +317,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings, *, mode: str = "real
     evaluation = run.evaluation
     labeled = {
         "expected_term_recall": _ratio(len(expected_term_hits), len(EXPECTED_TERMS)),
-        "constraint_recall": _ratio(len(constraint_hits), len(EXPECTED_CONSTRAINTS)),
+        "constraint_coverage": _ratio(len(constraint_hits), len(EXPECTED_CONSTRAINTS)),
         "constraint_coverage_passed": _ratio(len(constraint_hits), len(EXPECTED_CONSTRAINTS)) >= 0.6,
         "expected_source_recall": _ratio(len(source_hits), len(EXPECTED_SOURCE_PATTERNS)),
         "matched_terms": expected_term_hits,
@@ -333,7 +333,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings, *, mode: str = "real
         "faithfulness_proxy": evaluation.faithfulness_proxy if evaluation else 0.0,
         "citation_precision": evaluation.citation_precision if evaluation else 0.0,
         "expected_term_recall": labeled["expected_term_recall"],
-        "constraint_recall": labeled["constraint_recall"],
+        "constraint_coverage": labeled["constraint_coverage"],
         "constraint_coverage_passed": labeled["constraint_coverage_passed"],
         "graph_signal_hits": len(graph_signal_hits),
     }
@@ -473,7 +473,7 @@ def _render_analysis(run: ResearchRun, settings: AppSettings, summary: dict[str,
         f"- Citation precision: {headline['citation_precision']}",
         f"- Faithfulness proxy: {headline['faithfulness_proxy']}",
         f"- Expected term recall: {headline['expected_term_recall']}",
-        f"- Team constraint recall: {headline['constraint_recall']}",
+        f"- Team constraint coverage: {headline['constraint_coverage']}",
         f"- Constraint coverage passed: `{headline['constraint_coverage_passed']}`",
         f"- Expected source recall: {labeled['expected_source_recall']}",
         "",
@@ -565,6 +565,8 @@ def _clean_lab_artifacts() -> None:
                 )
             )
             continue
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUTPUT_DIR / ".gitkeep").touch()
 
 
 def _title_from_markdown(content: str) -> str:
