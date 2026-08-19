@@ -36,16 +36,20 @@ class SupervisorAgent:
         revision_count: int = 0,
         revision_notes: Sequence[str] = (),
     ) -> SupervisorDecisionContract:
-        contract, usage = self.model_provider.supervise_research(
-            request,
-            research_brief,
-            plan,
-            retrieval_routes,
-            corpus_profile,
-            revision_count=revision_count,
-            revision_notes=revision_notes,
-        )
-        self.last_usage = usage
+        try:
+            contract, usage = self.model_provider.supervise_research(
+                request,
+                research_brief,
+                plan,
+                retrieval_routes,
+                corpus_profile,
+                revision_count=revision_count,
+                revision_notes=revision_notes,
+            )
+            self.last_usage = usage
+        except Exception as exc:
+            contract = self._fallback_contract(request, plan, retrieval_routes, corpus_profile, str(exc))
+            self.last_usage = None
         return self._normalize(
             contract,
             plan,
@@ -139,6 +143,54 @@ class SupervisorAgent:
                     min(contract.max_concurrent_research_units or len(plan) or 1, len(plan) or 1),
                 ),
             }
+        )
+
+    def _fallback_contract(
+        self,
+        request: ResearchRequest,
+        plan: Sequence[PlanItem],
+        retrieval_routes: Sequence[RetrievalRoute],
+        corpus_profile: CorpusProfile,
+        error: str,
+    ) -> SupervisorDecisionContract:
+        route_lookup = {route.plan_item_id: route for route in retrieval_routes}
+        tool_calls: list[SupervisorToolCall] = [
+            SupervisorToolCall(
+                name="think_tool",
+                rationale="Fallback supervisor decision used after structured output failure.",
+                reflection="Reflect on the research plan before delegation.",
+            )
+        ]
+        for item in plan:
+            if not item.requires_research:
+                continue
+            route = route_lookup.get(item.id)
+            fallback = self._fallback_route_fields(route, request=request, corpus_profile=corpus_profile)
+            tool_calls.append(
+                SupervisorToolCall(
+                    name="ConductResearch",
+                    rationale="Fallback delegation added because the structured supervisor response could not be parsed.",
+                    plan_item_ids=[item.id],
+                    research_topic=f"{item.question} Purpose: {item.purpose}",
+                    **fallback,
+                )
+            )
+        tool_calls.append(
+            SupervisorToolCall(
+                name="ResearchComplete",
+                rationale="Fallback completion added after structured output failure.",
+                reflection="Finish only when citations and evidence sufficiency pass.",
+            )
+        )
+        return SupervisorDecisionContract(
+            reflection=f"Fallback supervisor decision used after structured output failure: {error}",
+            tool_calls=tool_calls,
+            completion_criteria=[
+                "Every required plan item has a delegated research unit.",
+                "The verifier and evaluator still decide final pass/fail.",
+            ],
+            max_concurrent_research_units=max(1, min(len(plan) or 1, 2)),
+            confidence=0.15,
         )
 
     def _normalize_conduct_call(

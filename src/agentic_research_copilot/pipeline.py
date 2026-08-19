@@ -1276,6 +1276,7 @@ class ResearchCopilot:
                 min_sources=max(1, route.min_sources),
                 max_iterations=self.settings.research_max_iterations,
                 repository_hint=repository_hint,
+                required_tools=tuple(route.selected_tools),
             )
             web_evidence = self._tag_specialist_evidence(
                 self._dedupe_evidence(collection.evidence),

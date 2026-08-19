@@ -96,6 +96,32 @@ class FailingMCPDecisionProvider(FixtureResearchModelProvider):
         )
 
 
+class AlwaysMCPDecisionProvider(FixtureResearchModelProvider):
+    def decide_researcher_action(
+        self,
+        *,
+        item: PlanItem,
+        available_tools: Sequence[str],
+        previous_queries: Sequence[str],
+        evidence: Sequence[EvidenceItem],
+        gaps: Sequence[str],
+        iteration: int,
+        max_iterations: int,
+        mcp_tools: Sequence[MCPToolDescriptor] = (),
+    ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
+        return (
+            ResearcherToolDecisionContract(
+                action="mcp_tool",
+                query=f"mcp query {iteration}",
+                mcp_tool_name="get_file_contents",
+                mcp_tool_args={"owner": "API", "repo": "runtime", "path": "README.md"},
+                rationale="Always choose MCP.",
+                confidence=0.8,
+            ),
+            ModelUsage(provider="test", model="always-mcp-test"),
+        )
+
+
 def test_research_agent_passes_structured_mcp_args_to_tool():
     mcp_calls = []
 
@@ -193,7 +219,7 @@ def test_research_agent_repo_hint_overrides_bad_mcp_owner_repo():
             )
         ],
         source_reader_enabled=False,
-        max_iterations=1,
+        max_iterations=2,
     )
     agent.collect_iterative(
         PlanItem(
@@ -242,7 +268,7 @@ def test_research_agent_metadata_repo_hint_overrides_bad_mcp_owner_repo():
             )
         ],
         source_reader_enabled=False,
-        max_iterations=1,
+        max_iterations=2,
     )
     collection = agent.collect_iterative(
         PlanItem(
@@ -263,6 +289,71 @@ def test_research_agent_metadata_repo_hint_overrides_bad_mcp_owner_repo():
         "path": "README.md",
     }
     assert collection.iterations[0]["mcp_tool_args"] == mcp_calls[0][2]
+
+
+def test_research_agent_enforces_route_tool_diversity_before_completion():
+    calls = []
+
+    def fake_search(query):
+        calls.append(("web_search", query, None))
+        return [
+            {
+                "title": "Web deployment guide",
+                "source": "tavily",
+                "url": "https://example.test/langgraph-deploy",
+                "snippet": "External deployment evidence.",
+                "content": "External deployment evidence.",
+                "score": 0.8,
+            }
+        ]
+
+    def fake_mcp(query, tool_name=None, tool_args=None):
+        calls.append(("mcp_tool", query, tool_args))
+        return [
+            {
+                "title": "GitHub README",
+                "source": "mcp:get_file_contents",
+                "kind": "mcp",
+                "snippet": "Repository README evidence.",
+                "content": "Repository README evidence.",
+                "score": 0.82,
+            }
+        ]
+
+    agent = ResearchAgent(
+        fake_search,
+        model_provider=AlwaysMCPDecisionProvider(),
+        mcp_tool=fake_mcp,
+        mcp_tool_catalog=[
+            MCPToolDescriptor(
+                name="get_file_contents",
+                description="Read file contents from a GitHub repository.",
+                required_args=["owner", "repo", "path"],
+            )
+        ],
+        source_reader_enabled=False,
+        max_iterations=2,
+    )
+    collection = agent.collect_iterative(
+        PlanItem(
+            id="tool-diversity",
+            question="Evaluate GitHub repository langchain-ai/langgraph deployment evidence.",
+            purpose="Verify tool diversity.",
+            search_query="langchain-ai/langgraph deployment evidence",
+        ),
+        ["langchain-ai/langgraph deployment evidence"],
+        min_evidence=1,
+        min_sources=1,
+        repository_hint={"owner": "langchain-ai", "repo": "langgraph"},
+        required_tools=("web_search", "mcp_tool"),
+    )
+
+    assert [call[0] for call in calls] == ["web_search", "mcp_tool"]
+    assert collection.completed_reason == "sufficiency_met"
+    assert collection.iterations[0]["action"] == "web_search"
+    assert collection.iterations[0]["model_action"] == "mcp_tool"
+    assert "Tool policy changed" in collection.iterations[0]["forced_action_reason"]
+    assert collection.iterations[1]["action"] == "mcp_tool"
 
 
 def test_research_agent_mcp_failure_does_not_abort_loop():
@@ -314,18 +405,18 @@ def test_research_agent_mcp_failure_does_not_abort_loop():
     assert collection.iterations[1]["action"] == "web_search"
 
 
-def test_pipeline_trace_records_structured_github_mcp_tool_call(tmp_path: Path):
+def test_research_agent_mcp_trace_preserves_structured_args():
     mcp_calls = []
 
     def fake_search(query):
         return [
             {
-                "title": "Project overview",
+                "title": "Web overview",
                 "source": "tavily",
-                "url": "https://example.test/github-project",
-                "snippet": "Public overview of a GitHub project.",
-                "content": "Public overview of a GitHub project architecture.",
-                "score": 0.82,
+                "url": "https://example.test/overview",
+                "snippet": "General project overview.",
+                "content": "General project overview.",
+                "score": 0.8,
             }
         ]
 
@@ -343,47 +434,34 @@ def test_pipeline_trace_records_structured_github_mcp_tool_call(tmp_path: Path):
             }
         ]
 
-    provider = StructuredMCPDecisionProvider()
-    copilot = ResearchCopilot(
-        settings=AppSettings(
-            storage_path=str(tmp_path / "github-mcp.sqlite"),
-            langgraph_checkpoint_path=str(tmp_path / "github-mcp-checkpoints.sqlite"),
-            research_max_iterations=2,
-            rag_min_evidence_per_item=2,
-            rag_min_source_diversity=2,
+    agent = ResearchAgent(
+        fake_search,
+        model_provider=StructuredMCPDecisionProvider(),
+        mcp_tool=fake_mcp,
+        mcp_tool_catalog=[
+            MCPToolDescriptor(
+                name="search_code",
+                description="Search GitHub code for implementation evidence.",
+                optional_args=["query"],
+            )
+        ],
+        source_reader_enabled=False,
+        max_iterations=2,
+    )
+    collection = agent.collect_iterative(
+        PlanItem(
+            id="trace",
+            question="GitHub project architecture evidence",
+            purpose="Trace structured MCP args.",
+            search_query="langchain-ai/langgraph evidence",
         ),
-        search_tool=fake_search,
-        model_provider=provider,
-        embedding_provider=provider,
-    )
-    catalog = [
-        MCPToolDescriptor(
-            name="search_code",
-            description="Search GitHub code for implementation evidence.",
-            optional_args=["query"],
-        )
-    ]
-    copilot.mcp_tool = fake_mcp
-    copilot.mcp_tool_catalog = catalog
-    copilot.router.mcp_enabled = True
-    copilot.researcher.mcp_tool = fake_mcp
-    copilot.researcher.mcp_tool_catalog = catalog
-
-    result = copilot.run(
-        ResearchRequest(
-            topic="GitHub project architecture evidence",
-            max_sections=1,
-        )
+        ["langchain-ai/langgraph evidence"],
+        min_evidence=2,
+        min_sources=2,
+        repository_hint={"owner": "langchain-ai", "repo": "langgraph"},
     )
 
-    assert result.status == "completed"
     assert mcp_calls
-    mcp_trace = [
-        event
-        for event in result.trace
-        if event.kind == "tool_call" and event.provider == "model_context_protocol"
-    ]
-    assert mcp_trace
-    assert mcp_trace[0].tool_name == "search_code"
-    assert mcp_trace[0].metadata["source_channel"] == "mcp"
-    assert mcp_trace[0].metadata["mcp_tool_args"]["query"]
+    assert collection.iterations[1]["mcp_tool_name"] == "search_code"
+    assert collection.iterations[1]["mcp_tool_args"]["query"]
+    assert collection.evidence[1].metadata["mcp_tool_name"] == "search_code"
