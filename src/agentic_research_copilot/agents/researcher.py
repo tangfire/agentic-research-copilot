@@ -8,6 +8,7 @@ from typing import Any
 from ..provider_base import ResearchModelProvider
 from ..schemas import EvidenceItem, MCPToolDescriptor, PlanItem
 from ..source_reader import SourceReader, SourceReaderStrategy
+from ..github_repository import parse_github_repository_hint
 
 
 @dataclass
@@ -102,15 +103,25 @@ class ResearchAgent:
         query: str | None = None,
         tool_name: str | None = None,
         tool_args: dict[str, Any] | None = None,
+        repository_hint: dict[str, str] | None = None,
     ) -> list[EvidenceItem]:
         resolved_query = query or item.search_query or item.question
         if self.mcp_tool is None:
             return []
 
-        if tool_args:
-            results = self.mcp_tool(resolved_query, tool_name, tool_args)
-        else:
-            results = self.mcp_tool(resolved_query, tool_name)
+        normalized_tool_args = self._normalize_mcp_call_args(
+            item,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            repository_hint=repository_hint,
+        )
+        try:
+            if normalized_tool_args:
+                results = self.mcp_tool(resolved_query, tool_name, normalized_tool_args)
+            else:
+                results = self.mcp_tool(resolved_query, tool_name)
+        except Exception:
+            return []
         evidence: list[EvidenceItem] = []
         for result in results:
             metadata = result.get("metadata", {}) if isinstance(result.get("metadata"), dict) else {}
@@ -122,8 +133,8 @@ class ResearchAgent:
                 "source_channel": "mcp",
                 "search_query": resolved_query,
             }
-            if tool_args:
-                evidence_metadata["mcp_tool_args"] = tool_args
+            if normalized_tool_args:
+                evidence_metadata["mcp_tool_args"] = normalized_tool_args
             evidence.append(
                 EvidenceItem(
                     title=str(result.get("title", item.question)),
@@ -138,6 +149,62 @@ class ResearchAgent:
             )
         return evidence
 
+    def _normalize_mcp_call_args(
+        self,
+        item: PlanItem,
+        *,
+        tool_name: str | None,
+        tool_args: dict[str, Any] | None,
+        repository_hint: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        normalized = dict(tool_args or {})
+        repo_hint = repository_hint or self._github_repository_hint(item)
+        if tool_name in {
+            "get_file_contents",
+            "search_code",
+            "list_issues",
+            "issue_read",
+            "search_issues",
+            "list_pull_requests",
+            "pull_request_read",
+            "get_latest_release",
+        } and repo_hint is not None:
+            normalized["owner"] = repo_hint["owner"]
+            normalized["repo"] = repo_hint["repo"]
+        if tool_name == "get_file_contents":
+            normalized.setdefault("path", "README.md")
+        return self._clean_mcp_args(normalized)
+
+    def _github_repository_hint(self, item: PlanItem) -> dict[str, str] | None:
+        return parse_github_repository_hint(item.question, item.purpose, item.search_query or "")
+
+    def _clean_mcp_args(self, args: dict[str, Any]) -> dict[str, Any] | None:
+        cleaned: dict[str, Any] = {}
+        for key, value in args.items():
+            key_text = str(key).strip()
+            if not key_text:
+                continue
+            cleaned_value = self._clean_mcp_arg_value(value)
+            if cleaned_value in (None, "", [], {}):
+                continue
+            cleaned[key_text] = cleaned_value
+        return cleaned or None
+
+    def _clean_mcp_arg_value(self, value: Any) -> Any:
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return cleaned or None
+        if isinstance(value, dict):
+            return self._clean_mcp_args(value)
+        if isinstance(value, list):
+            cleaned = [self._clean_mcp_arg_value(item) for item in value]
+            cleaned = [item for item in cleaned if item is not None]
+            return cleaned or None
+        if isinstance(value, (bool, int, float)) or value is None:
+            return value
+        cleaned = str(value).strip()
+        return cleaned or None
+
     def collect_iterative(
         self,
         item: PlanItem,
@@ -146,6 +213,7 @@ class ResearchAgent:
         min_evidence: int = 1,
         min_sources: int = 1,
         max_iterations: int | None = None,
+        repository_hint: dict[str, str] | None = None,
     ) -> ResearchCollection:
         """Run a bounded ODR-style think/search/MCP/complete loop for one research unit."""
         query_queue = [query.strip() for query in queries if query and query.strip()]
@@ -257,12 +325,20 @@ class ResearchAgent:
             previous_queries.append(query)
             before_count = len(evidence)
             tool_start = time.perf_counter()
+            normalized_mcp_args = None
             if decision.action == "mcp_tool":
+                normalized_mcp_args = self._normalize_mcp_call_args(
+                    item,
+                    tool_name=decision.mcp_tool_name,
+                    tool_args=decision.mcp_tool_args,
+                    repository_hint=repository_hint,
+                )
                 query_evidence = self.collect_mcp(
                     item,
                     query=query,
                     tool_name=decision.mcp_tool_name,
-                    tool_args=decision.mcp_tool_args,
+                    tool_args=normalized_mcp_args,
+                    repository_hint=repository_hint,
                 )
             else:
                 query_evidence = self.collect(item, query=query)
@@ -290,7 +366,7 @@ class ResearchAgent:
                     "query": query,
                     "tool": decision.action,
                     "mcp_tool_name": decision.mcp_tool_name,
-                    "mcp_tool_args": decision.mcp_tool_args,
+                    "mcp_tool_args": normalized_mcp_args if decision.action == "mcp_tool" else decision.mcp_tool_args,
                     "source_channel": "mcp" if decision.action == "mcp_tool" else "external",
                     "result_count": len(query_evidence),
                     "tool_latency_ms": tool_latency_ms,

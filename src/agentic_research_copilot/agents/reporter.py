@@ -92,7 +92,22 @@ class ReporterAgent:
                 )
             )
 
+        synthesized = self._preserve_runtime_contract_sections(synthesized, fallback_sections)
         return synthesized or fallback_sections
+
+    def _preserve_runtime_contract_sections(
+        self,
+        synthesized: list[ReportSection],
+        fallback_sections: list[ReportSection],
+    ) -> list[ReportSection]:
+        existing_headings = {section.heading.strip().lower() for section in synthesized}
+        preserved = list(synthesized)
+        for section in fallback_sections:
+            heading = section.heading.strip().lower()
+            if heading == "team constraint coverage" and heading not in existing_headings:
+                preserved.append(section)
+                existing_headings.add(heading)
+        return preserved
 
     @staticmethod
     def _source_names(items: list[EvidenceItem]) -> list[str]:

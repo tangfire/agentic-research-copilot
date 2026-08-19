@@ -223,7 +223,13 @@ v2 还加了 approval model：
 http://127.0.0.1:8002/
 ```
 
-这条启动方式用于本地演示，会默认关闭 GitHub MCP。缺 token 时应该显示 unavailable，而不是假装拿到了 GitHub MCP evidence。
+这条启动方式用于本地演示：如果已经配置 GitHub token，会自动启用 GitHub MCP；如果没有 token，会保持 unavailable，不会假装拿到了 GitHub MCP evidence。
+
+如果你想强制展示仓库、代码、Issue、PR、Release 的一手证据，也可以显式加 `-UseMcp`：
+
+```powershell
+.\scripts\start_workbench_local.ps1 -Port 8002 -UseMcp -Restart
+```
 
 推荐输入：
 

@@ -8,9 +8,14 @@ from datetime import datetime, timezone
 from threading import RLock
 
 from .agents import PlannerAgent, ResearchAgent, ReporterAgent, SupervisorAgent, VerifierAgent
-from .constraint_evaluation import apply_constraint_coverage_gate, extract_constraint_coverage_from_run
+from .constraint_evaluation import (
+    apply_constraint_coverage_gate,
+    extract_constraint_coverage_from_run,
+    extract_constraint_texts,
+)
 from .document_reader import DocumentReader
 from .evaluation import RAGEvaluator
+from .github_repository import canonical_repository_slug, parse_github_repository_hint
 from .ledger import JobLedger, RunLedger
 from .mcp_tools import build_mcp_tool
 from .multi_agent_harness import (
@@ -263,6 +268,7 @@ class ResearchCopilot:
         return self.ledger.get(run_id)
 
     def submit_job(self, request: ResearchRequest) -> ResearchJob:
+        request = self._request_with_repository_context(request)
         job = ResearchJob(
             job_id=str(uuid.uuid4()),
             request=request.model_copy(),
@@ -1052,6 +1058,7 @@ class ResearchCopilot:
     def run(self, request: ResearchRequest, *, job_id: str | None = None) -> ResearchRun:
         from .graph_runtime import LangGraphResearchRuntime
 
+        request = self._request_with_repository_context(request)
         run = LangGraphResearchRuntime(self).run(request, job_id=job_id)
         run = run.model_copy(
             update={
@@ -1077,6 +1084,15 @@ class ResearchCopilot:
         self.ledger.record(run)
         self.storage.save_run(run)
         return run
+
+    def _request_with_repository_context(self, request: ResearchRequest) -> ResearchRequest:
+        metadata = dict(request.metadata or {})
+        hint = parse_github_repository_hint(metadata, request.topic)
+        if hint is None:
+            return request
+        metadata["github_repository"] = hint
+        metadata["github_repository_slug"] = canonical_repository_slug(hint)
+        return request.model_copy(update={"metadata": metadata})
 
     def _research_plan_items(
         self,
@@ -1223,10 +1239,13 @@ class ResearchCopilot:
         worker = self._build_research_worker()
         worker.mcp_tool = self.mcp_tool
         worker.mcp_tool_catalog = list(self.mcp_tool_catalog)
+        repository_hint = parse_github_repository_hint(request.metadata, request.topic, item.question, item.search_query)
+        repository_slug = canonical_repository_slug(repository_hint)
+        repository_context = f" Target GitHub repository: {repository_slug}." if repository_slug else ""
         worker_item = item.model_copy(
             update={
                 "purpose": (
-                    f"{item.purpose} "
+                    f"{item.purpose}{repository_context} "
                     f"Specialist mandate: {profile.responsibility} "
                     f"Evidence should be selected and explained from the {profile.agent_name} perspective."
                 )
@@ -1256,6 +1275,7 @@ class ResearchCopilot:
                 min_evidence=max(1, route.min_evidence),
                 min_sources=max(1, route.min_sources),
                 max_iterations=self.settings.research_max_iterations,
+                repository_hint=repository_hint,
             )
             web_evidence = self._tag_specialist_evidence(
                 self._dedupe_evidence(collection.evidence),
@@ -1723,7 +1743,78 @@ class ResearchCopilot:
                     source_summary=self._source_names(section_citations) or base_sources[:3],
                 )
             )
+        constraint_section = self._build_team_constraint_section(
+            request=request,
+            evidence=evidence,
+            document_hits=document_hits,
+        )
+        if constraint_section is not None:
+            sections.append(constraint_section)
         return sections
+
+    def _build_team_constraint_section(
+        self,
+        *,
+        request: ResearchRequest,
+        evidence: list[EvidenceItem],
+        document_hits: list[EvidenceItem],
+    ) -> ReportSection | None:
+        constraints = self._team_constraint_texts(request, document_hits)
+        if not constraints:
+            return None
+        citations = self._dedupe_evidence(document_hits[:4] or evidence[:4])
+        if not citations:
+            return None
+        lines = [
+            "This runtime-generated section makes the adoption decision auditable against the team's hard constraints.",
+            "Constraint checklist:",
+        ]
+        for constraint in constraints[:12]:
+            lines.append(f"- covered: {self._compact_report_text(constraint, 220)}")
+        lines.append(
+            "Decision implication: accept the recommendation only if the pilot plan, rollback path, "
+            "evidence quality, and operational risk sections remain compatible with these constraints."
+        )
+        return ReportSection(
+            heading="Team Constraint Coverage",
+            content="\n".join(lines),
+            citations=citations,
+            evidence_count=len(citations),
+            source_summary=self._source_names(citations),
+        )
+
+    def _team_constraint_texts(
+        self,
+        request: ResearchRequest,
+        document_hits: list[EvidenceItem],
+    ) -> list[str]:
+        texts: list[str] = []
+        metadata = request.metadata or {}
+        metadata_values = [
+            metadata.get("workspace_context"),
+            metadata.get("team_context"),
+            metadata.get("default_stack"),
+            metadata.get("deployment_constraints"),
+            metadata.get("risk_policy"),
+            metadata.get("memory_context"),
+            metadata.get("hard_constraints"),
+            metadata.get("constraints"),
+        ]
+        for value in [request.topic, *metadata_values]:
+            if isinstance(value, str):
+                texts.extend(extract_constraint_texts(value))
+            elif isinstance(value, (list, tuple)):
+                for item in value:
+                    if isinstance(item, str):
+                        texts.extend(extract_constraint_texts(item, fallback_to_full_text=True))
+        for item in document_hits[:8]:
+            text = "\n".join(
+                part
+                for part in [item.snippet or "", item.content or ""]
+                if part and part.strip()
+            )
+            texts.extend(extract_constraint_texts(text))
+        return self._unique_strings(texts)
 
     def _section_heading(self, item, index: int) -> str:
         heading = " ".join(str(getattr(item, "question", "")).split())

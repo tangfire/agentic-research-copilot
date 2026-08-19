@@ -262,7 +262,7 @@ Start the local workbench:
 .\scripts\start_workbench_local.ps1 -Port 8002
 ```
 
-Open the local workbench at `http://127.0.0.1:8002/`. The script starts a clean single-user local runtime and disables GitHub MCP by default, so missing MCP tokens are shown as unavailable instead of leaking old shell configuration into the demo.
+Open the local workbench at `http://127.0.0.1:8002/`. The script starts a clean single-user local runtime and will enable GitHub MCP automatically when a token is configured; otherwise it keeps MCP disabled and shows that state explicitly.
 
 ## Quick Use
 

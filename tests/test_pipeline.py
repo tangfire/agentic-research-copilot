@@ -190,7 +190,10 @@ def test_pipeline_returns_report(tmp_path: Path):
     }
     plan_questions = {item.question for item in result.plan}
     assert not any(section.heading in legacy_system_headings for section in result.report.sections)
-    assert all(section.heading in plan_questions for section in result.report.sections)
+    assert all(
+        section.heading in plan_questions or section.heading == "Team Constraint Coverage"
+        for section in result.report.sections
+    )
     assert all(section.citations for section in result.report.sections)
     assert any("multi-agent research orchestration" in section.content.lower() for section in result.report.sections)
     assert result.web_hits is not None
@@ -286,6 +289,82 @@ def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):
     assert "closed-loop recycling partnerships" in sections[0].content
     assert "LangGraph StateGraph" not in sections[0].content
     assert [item.title for item in sections[0].citations] == ["Battery recycling partnership report"]
+
+
+def test_build_sections_adds_team_constraint_coverage_when_constraints_exist(tmp_path: Path):
+    provider = FixtureResearchModelProvider()
+    copilot = ResearchCopilot(
+        settings=AppSettings(storage_path=str(tmp_path / "constraint-sections.sqlite")),
+        model_provider=provider,
+        embedding_provider=provider,
+    )
+    request = ResearchRequest(
+        topic=(
+            "Evaluate langchain-ai/langgraph for a 5-engineer Python/FastAPI team. "
+            "First deployment must run on one machine and support replayable runs."
+        ),
+        max_sections=1,
+        metadata={
+            "workspace_context": "Deployment: one Linux VM. Stack: Python 3.11 and FastAPI.",
+            "risk_policy": "The team accepts graph-based orchestration only when the task has real branching.",
+        },
+    )
+    plan = [
+        PlanItem(
+            id="item_1",
+            question="Is LangGraph a fit for the team?",
+            purpose="Assess adoption fit.",
+            search_query="langchain-ai/langgraph adoption fit",
+        )
+    ]
+    route = RetrievalRoute(
+        plan_item_id="item_1",
+        mode="hybrid",
+        reason="Need public and local evidence.",
+        selected_tools=["web_search", "vector_retrieval"],
+        web_queries=["langchain-ai/langgraph adoption fit"],
+        internal_queries=["team constraints LangGraph"],
+        min_evidence=1,
+        min_sources=1,
+    )
+    evidence = [
+        EvidenceItem(
+            title="Northstar Platform Team Constraints",
+            source="team-context.md",
+            kind="document-chunk",
+            snippet="Stack: Python 3.11, FastAPI. First deployment must run on one machine.",
+            content="The first version must support replayable runs and persisted trace artifacts.",
+            score=0.95,
+            metadata={"plan_item_id": "item_1", "source_channel": "document-chunk"},
+        )
+    ]
+    note = ResearchNote(
+        plan_item_id="item_1",
+        question=plan[0].question,
+        finding="LangGraph fits only if the pilot remains single-machine and replayable.",
+        evidence_titles=["Northstar Platform Team Constraints"],
+        confidence=0.8,
+    )
+
+    sections = copilot._build_sections(
+        request=request,
+        research_brief="Assess adoption fit against local constraints.",
+        plan=plan,
+        retrieval_routes=[route],
+        evidence=evidence,
+        web_hits=[],
+        document_hits=evidence,
+        notes=[note],
+        search_queries=[],
+    )
+
+    coverage = sections[-1]
+    assert coverage.heading == "Team Constraint Coverage"
+    assert "5-engineer" in coverage.content
+    assert "Python/FastAPI" in coverage.content or "FastAPI" in coverage.content
+    assert "one machine" in coverage.content
+    assert "replayable runs" in coverage.content
+    assert coverage.citations[0].title == "Northstar Platform Team Constraints"
 
 
 def test_report_evidence_ranking_keeps_weak_sources_visible_but_not_primary(tmp_path: Path):

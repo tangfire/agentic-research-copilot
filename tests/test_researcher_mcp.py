@@ -60,6 +60,42 @@ class StructuredMCPDecisionProvider(FixtureResearchModelProvider):
         )
 
 
+class FailingMCPDecisionProvider(FixtureResearchModelProvider):
+    def decide_researcher_action(
+        self,
+        *,
+        item: PlanItem,
+        available_tools: Sequence[str],
+        previous_queries: Sequence[str],
+        evidence: Sequence[EvidenceItem],
+        gaps: Sequence[str],
+        iteration: int,
+        max_iterations: int,
+        mcp_tools: Sequence[MCPToolDescriptor] = (),
+    ) -> tuple[ResearcherToolDecisionContract, ModelUsage]:
+        if iteration == 1:
+            return (
+                ResearcherToolDecisionContract(
+                    action="mcp_tool",
+                    query="read README",
+                    mcp_tool_name="get_file_contents",
+                    mcp_tool_args={"owner": "API", "repo": "runtime", "path": "README.md"},
+                    rationale="Try MCP first.",
+                    confidence=0.8,
+                ),
+                ModelUsage(provider="test", model="failing-mcp-test"),
+            )
+        return (
+            ResearcherToolDecisionContract(
+                action="web_search",
+                query="langchain-ai/langgraph architecture overview",
+                rationale="Fallback to web evidence.",
+                confidence=0.75,
+            ),
+            ModelUsage(provider="test", model="failing-mcp-test"),
+        )
+
+
 def test_research_agent_passes_structured_mcp_args_to_tool():
     mcp_calls = []
 
@@ -127,6 +163,155 @@ def test_research_agent_passes_structured_mcp_args_to_tool():
     assert collection.iterations[1]["source_channel"] == "mcp"
     assert collection.iterations[1]["result_count"] == 1
     assert collection.evidence[1].metadata["mcp_tool_args"] == expected_args
+
+
+def test_research_agent_repo_hint_overrides_bad_mcp_owner_repo():
+    mcp_calls = []
+
+    def fake_mcp(query, tool_name=None, tool_args=None):
+        mcp_calls.append((query, tool_name, tool_args))
+        return [
+            {
+                "title": "GitHub README",
+                "source": "mcp:get_file_contents",
+                "kind": "mcp",
+                "snippet": "README from LangGraph.",
+                "content": "README from LangGraph.",
+                "score": 0.82,
+            }
+        ]
+
+    agent = ResearchAgent(
+        search_tool=None,
+        model_provider=FailingMCPDecisionProvider(),
+        mcp_tool=fake_mcp,
+        mcp_tool_catalog=[
+            MCPToolDescriptor(
+                name="get_file_contents",
+                description="Read file contents from a GitHub repository.",
+                required_args=["owner", "repo", "path"],
+            )
+        ],
+        source_reader_enabled=False,
+        max_iterations=1,
+    )
+    agent.collect_iterative(
+        PlanItem(
+            id="langgraph-readme",
+            question="Read GitHub repository langchain-ai/langgraph README.",
+            purpose="Verify langchain-ai/langgraph repository evidence.",
+            search_query="langchain-ai/langgraph GitHub README",
+        ),
+        ["langchain-ai/langgraph README"],
+        min_evidence=1,
+        min_sources=1,
+    )
+
+    assert mcp_calls[0][2] == {
+        "owner": "langchain-ai",
+        "repo": "langgraph",
+        "path": "README.md",
+    }
+
+
+def test_research_agent_metadata_repo_hint_overrides_bad_mcp_owner_repo():
+    mcp_calls = []
+
+    def fake_mcp(query, tool_name=None, tool_args=None):
+        mcp_calls.append((query, tool_name, tool_args))
+        return [
+            {
+                "title": "GitHub README",
+                "source": "mcp:get_file_contents",
+                "kind": "mcp",
+                "snippet": "README from LangGraph.",
+                "content": "README from LangGraph.",
+                "score": 0.82,
+            }
+        ]
+
+    agent = ResearchAgent(
+        search_tool=None,
+        model_provider=FailingMCPDecisionProvider(),
+        mcp_tool=fake_mcp,
+        mcp_tool_catalog=[
+            MCPToolDescriptor(
+                name="get_file_contents",
+                description="Read file contents from a GitHub repository.",
+                required_args=["owner", "repo", "path"],
+            )
+        ],
+        source_reader_enabled=False,
+        max_iterations=1,
+    )
+    collection = agent.collect_iterative(
+        PlanItem(
+            id="langgraph-readme",
+            question="Read the target repository README.",
+            purpose="Verify repository evidence.",
+            search_query="target GitHub README",
+        ),
+        ["target repository README"],
+        min_evidence=1,
+        min_sources=1,
+        repository_hint={"owner": "langchain-ai", "repo": "langgraph"},
+    )
+
+    assert mcp_calls[0][2] == {
+        "owner": "langchain-ai",
+        "repo": "langgraph",
+        "path": "README.md",
+    }
+    assert collection.iterations[0]["mcp_tool_args"] == mcp_calls[0][2]
+
+
+def test_research_agent_mcp_failure_does_not_abort_loop():
+    def fake_search(query):
+        return [
+            {
+                "title": "LangGraph overview",
+                "source": "web",
+                "url": "https://docs.langchain.com/oss/python/langgraph/overview",
+                "snippet": "LangGraph overview.",
+                "content": "LangGraph overview.",
+                "score": 0.8,
+            }
+        ]
+
+    def failing_mcp(query, tool_name=None, tool_args=None):
+        raise RuntimeError("GitHub MCP call failed")
+
+    agent = ResearchAgent(
+        fake_search,
+        model_provider=FailingMCPDecisionProvider(),
+        mcp_tool=failing_mcp,
+        mcp_tool_catalog=[
+            MCPToolDescriptor(
+                name="get_file_contents",
+                description="Read file contents from a GitHub repository.",
+                required_args=["owner", "repo", "path"],
+            )
+        ],
+        source_reader_enabled=False,
+        max_iterations=2,
+    )
+    collection = agent.collect_iterative(
+        PlanItem(
+            id="mcp-fallback",
+            question="Evaluate GitHub repository langchain-ai/langgraph.",
+            purpose="Verify fallback after MCP failure.",
+            search_query="langchain-ai/langgraph GitHub repository",
+        ),
+        ["langchain-ai/langgraph evidence"],
+        min_evidence=1,
+        min_sources=1,
+    )
+
+    assert collection.evidence
+    assert collection.evidence[0].source == "web"
+    assert collection.iterations[0]["action"] == "mcp_tool"
+    assert collection.iterations[0]["result_count"] == 0
+    assert collection.iterations[1]["action"] == "web_search"
 
 
 def test_pipeline_trace_records_structured_github_mcp_tool_call(tmp_path: Path):

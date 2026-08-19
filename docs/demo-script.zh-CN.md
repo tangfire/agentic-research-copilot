@@ -115,3 +115,9 @@ http://127.0.0.1:8002/
 就直接说：
 
 > 现在 GitHub MCP 是 unavailable，但系统不会假装成功。它会把这件事写进 tool registry 和 approval artifact，保证证据边界诚实。
+
+如果已经配好 token，演示前用这条命令启动：
+
+```powershell
+.\scripts\start_workbench_local.ps1 -Port 8002 -UseMcp -Restart
+```

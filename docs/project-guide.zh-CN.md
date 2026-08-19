@@ -57,7 +57,7 @@ specialist worker 负责某个责任边界下的工具循环和证据归属
 http://127.0.0.1:8002/
 ```
 
-这个脚本会使用当前代码启动一个干净的本地 workbench，默认关闭 GitHub MCP，避免旧环境变量影响演示。
+这个脚本会使用当前代码启动一个干净的本地 workbench；如果检测到 GitHub token，就会自动启用 GitHub MCP。
 
 ## 怎么用
 

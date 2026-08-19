@@ -32,7 +32,7 @@ http://127.0.0.1:8002/docs
 
 如果页面顶部显示 `API ok`，说明前端已经连上后端。
 
-这个启动脚本是推荐方式。它会使用独立的本地 SQLite/Qdrant 目录，并默认关闭 GitHub MCP，避免旧进程或旧环境变量让页面看起来“不像刚改完的代码”。
+这个启动脚本是推荐方式。它会使用独立的本地 SQLite/Qdrant 目录，并在检测到 GitHub token 时自动启用 GitHub MCP；如果没有 token，就保持关闭，避免旧进程或旧环境变量让页面看起来“不像刚改完的代码”。
 
 ## 2. 第一次使用
 
@@ -95,6 +95,46 @@ http://127.0.0.1:8002/docs
 顶部显示 `MCP 未配置` 不代表项目坏了。基础研究仍然可以使用本地知识库和 web 工具。
 
 只有在需要 GitHub 仓库、代码、Issue、PR 或 Release 的一手证据时，才配置 GitHub MCP。没有 token 时，界面会明确显示不可用，不会伪造 MCP 证据。
+
+### 配置 GitHub MCP
+
+推荐先用环境变量临时配置，不要把 token 提交到 git：
+
+```powershell
+$env:ARC_MCP_AUTH_TOKEN="你的 GitHub token"
+python scripts\check_github_mcp.py
+```
+
+检查通过后，用 GitHub MCP 模式重启 workbench：
+
+```powershell
+.\scripts\start_workbench_local.ps1 -Port 8002 -UseMcp -Restart
+```
+
+然后检查工具状态：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8002/v1/agent/tools
+```
+
+你应该能看到 `mcp_tool` 的 `enabled=true`，并且 `failure_mode` 为空。
+
+如果想长期保存配置，可以在本地 `.env` 里写：
+
+```text
+ARC_MCP_AUTH_TOKEN=你的 GitHub token
+```
+
+项目也支持这些别名，任选一个即可：
+
+```text
+ARC_MCP_AUTH_TOKEN
+GH_TOKEN
+GITHUB_TOKEN
+GITHUB_PERSONAL_ACCESS_TOKEN
+```
+
+注意：如果本地已经配置了 GitHub token，默认启动会自动启用 MCP；如果你想强制关闭，可以加 `-NoMcp`。
 
 ## 6. 研究完成后做什么
 

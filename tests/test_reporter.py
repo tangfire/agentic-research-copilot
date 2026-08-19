@@ -54,3 +54,32 @@ def test_reporter_uses_synthesized_sections_with_existing_citations():
     assert report.sections[0].heading == "Synthesized Analysis"
     assert "citation-backed" in report.sections[0].content
     assert [item.title for item in report.sections[0].citations] == ["Second", "First"]
+
+
+def test_reporter_preserves_team_constraint_coverage_section():
+    fallback = [
+        ReportSection(
+            heading="Analysis",
+            content="Template analysis.",
+            citations=[EvidenceItem(title="First", source="source-a", snippet="A")],
+        ),
+        ReportSection(
+            heading="Team Constraint Coverage",
+            content="- covered: First deployment must run on one machine.",
+            citations=[EvidenceItem(title="Constraints", source="team-context", snippet="One machine.")],
+        ),
+    ]
+    citations = [item for section in fallback for item in section.citations]
+
+    report = ReporterAgent(model_provider=SynthesizingProvider()).build_report(
+        "agentic research",
+        fallback,
+        citations,
+        0.8,
+    )
+
+    assert [section.heading for section in report.sections] == [
+        "Synthesized Analysis",
+        "Team Constraint Coverage",
+    ]
+    assert "one machine" in report.sections[1].content
