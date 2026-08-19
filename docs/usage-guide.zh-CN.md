@@ -199,4 +199,4 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 1. 先跑通一次 `发送 -> 确认 -> 报告`。
 2. 再保存一条 project constraint，观察下一次计划是否自动使用。
 3. 再打开高级信息，理解 route、tool loop 和 trace。
-4. 最后运行 benchmark，观察 route precision / recall 和 constraint coverage。
+4. 最后运行 benchmark 或 real provider experiment，先看 `adoption-memo.bundle.md/json`，再看 route precision / recall、selection vs execution 和 constraint coverage。

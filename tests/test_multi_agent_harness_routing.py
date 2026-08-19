@@ -135,3 +135,53 @@ def test_benchmark_contract_requires_completed_tools_and_expected_evidence():
     assert summary.expected_evidence_coverage == 0.5
     assert summary.passed is False
     assert any("missing web_search" in note for note in summary.notes)
+
+
+def test_benchmark_summary_separates_selection_from_evidence_backed_execution():
+    task = BenchmarkTask(
+        task_id="route-split",
+        topic="Evaluate a repo with evidence backed routing.",
+        expected_agent_ids=["architecture_fit"],
+        expected_tools=["web_search"],
+        expected_evidence_kinds=["web"],
+        min_source_count=1,
+    )
+    request = ResearchRequest(topic=task.topic)
+    run = ResearchRun(
+        run_id="run-route-split",
+        request=request,
+        status="completed",
+        trace=[],
+        evidence=[],
+        report=ResearchReport(title="Memo", summary="Summary", source_count=0),
+        evaluation=RAGEvaluation(citation_precision=0.0, passed=False),
+    )
+    assignments = [
+        AgentRoleAssignment(
+            assignment_id="assignment-1",
+            agent_id="architecture_fit",
+            agent_name="ArchitectureFitAgent",
+            status="selected",
+            selected_tools=["web_search"],
+            evidence_count=0,
+        )
+    ]
+
+    summary = summarize_run(
+        run,
+        task=task,
+        assignments=assignments,
+        route_decisions=[],
+        conflicts=[],
+        evidence_ledger=EvidenceLedger(
+            run_id=run.run_id,
+            total_evidence_count=0,
+            utilization_rate=0.0,
+        ),
+    )
+
+    assert summary.route_selection_precision == 1.0
+    assert summary.route_selection_recall == 1.0
+    assert summary.route_precision == 0.0
+    assert summary.route_recall == 0.0
+    assert any("Evidence-backed route recall" in note for note in summary.notes)

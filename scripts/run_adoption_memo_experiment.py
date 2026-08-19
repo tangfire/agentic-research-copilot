@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shutil
+from datetime import datetime, timezone
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -315,6 +316,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings, *, mode: str = "real
     model_events = [event for event in run.trace if event.model]
     handoff_events = [event for event in run.trace if event.kind == "handoff"]
     evaluation = run.evaluation
+    benchmark_summary = run.benchmark_summary.model_dump(mode="json") if run.benchmark_summary else None
     labeled = {
         "expected_term_recall": _ratio(len(expected_term_hits), len(EXPECTED_TERMS)),
         "constraint_coverage": _ratio(len(constraint_hits), len(EXPECTED_CONSTRAINTS)),
@@ -332,6 +334,14 @@ def _build_summary(run: ResearchRun, settings: AppSettings, *, mode: str = "real
         "context_recall": evaluation.context_recall if evaluation else 0.0,
         "faithfulness_proxy": evaluation.faithfulness_proxy if evaluation else 0.0,
         "citation_precision": evaluation.citation_precision if evaluation else 0.0,
+        "route_precision": benchmark_summary["route_precision"] if benchmark_summary else 0.0,
+        "route_recall": benchmark_summary["route_recall"] if benchmark_summary else 0.0,
+        "route_selection_precision": benchmark_summary["route_selection_precision"] if benchmark_summary else 0.0,
+        "route_selection_recall": benchmark_summary["route_selection_recall"] if benchmark_summary else 0.0,
+        "specialist_completion_rate": benchmark_summary["specialist_completion_rate"] if benchmark_summary else 0.0,
+        "tool_completed_success_rate": benchmark_summary["tool_completed_success_rate"] if benchmark_summary else 0.0,
+        "expected_tool_coverage": benchmark_summary["expected_tool_coverage"] if benchmark_summary else 0.0,
+        "expected_evidence_coverage": benchmark_summary["expected_evidence_coverage"] if benchmark_summary else 0.0,
         "expected_term_recall": labeled["expected_term_recall"],
         "constraint_coverage": labeled["constraint_coverage"],
         "constraint_coverage_passed": labeled["constraint_coverage_passed"],
@@ -371,6 +381,7 @@ def _build_summary(run: ResearchRun, settings: AppSettings, *, mode: str = "real
             "experiment_mode": mode,
         },
         "evaluation": run.evaluation.model_dump(mode="json") if run.evaluation else None,
+        "benchmark_summary": benchmark_summary,
         "findings": [
             "Real report synthesis must use compact section drafts and evidence indexes; unbounded prompts make timeout failures likely.",
             "Budgeted local indexing keeps the team context pack fast while preserving real model/search/report execution.",
@@ -405,6 +416,147 @@ def _write_outputs(run: ResearchRun, settings: AppSettings, summary: dict[str, A
         _render_analysis(run, settings, summary),
         encoding="utf-8",
     )
+    demo_bundle = _build_demo_bundle(run, settings, summary)
+    (OUTPUT_DIR / "adoption-memo.bundle.json").write_text(
+        json.dumps(demo_bundle, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (OUTPUT_DIR / "adoption-memo.bundle.md").write_text(
+        _render_demo_bundle(demo_bundle),
+        encoding="utf-8",
+    )
+
+
+def _build_demo_bundle(run: ResearchRun, settings: AppSettings, summary: dict[str, Any]) -> dict[str, Any]:
+    benchmark = summary.get("benchmark_summary") or {}
+    report = run.report
+    route_summary = {
+        "route_precision": benchmark.get("route_precision", 0.0),
+        "route_recall": benchmark.get("route_recall", 0.0),
+        "route_selection_precision": benchmark.get("route_selection_precision", 0.0),
+        "route_selection_recall": benchmark.get("route_selection_recall", 0.0),
+        "specialist_completion_rate": benchmark.get("specialist_completion_rate", 0.0),
+        "tool_completed_success_rate": benchmark.get("tool_completed_success_rate", 0.0),
+        "expected_tool_coverage": benchmark.get("expected_tool_coverage", 0.0),
+        "expected_evidence_coverage": benchmark.get("expected_evidence_coverage", 0.0),
+        "selected_agent_ids": benchmark.get("metadata", {}).get("selected_agent_ids", []),
+        "completed_agent_ids": benchmark.get("metadata", {}).get("completed_agent_ids", []),
+        "route_decision_count": benchmark.get("metadata", {}).get("route_decision_count", 0),
+        "conflict_count": benchmark.get("metadata", {}).get("conflict_count", 0),
+    }
+    evidence_summary = {
+        "source_count": run.report.source_count if report else 0,
+        "channels": summary["evidence_channels"],
+        "constraint_coverage": summary["labeled_expectations"]["constraint_coverage"],
+        "constraint_coverage_passed": summary["labeled_expectations"]["constraint_coverage_passed"],
+        "expected_term_recall": summary["headline"]["expected_term_recall"],
+        "graph_signal_hits": summary["headline"]["graph_signal_hits"],
+    }
+    trace_summary = summary["trace"]
+    return {
+        "bundle_version": "v1",
+        "kind": "real_provider_demo_bundle",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "run_id": run.run_id,
+        "status": run.status,
+        "topic": run.request.topic,
+        "depth": run.request.depth,
+        "headline": summary["headline"],
+        "route_summary": route_summary,
+        "evidence_summary": evidence_summary,
+        "trace_summary": trace_summary,
+        "provider_summary": summary["providers"],
+        "evaluation": summary["evaluation"],
+        "benchmark_summary": benchmark,
+        "report": {
+            "title": report.title if report else None,
+            "summary": report.summary if report else None,
+            "section_count": len(report.sections) if report else 0,
+            "section_headings": [section.heading for section in report.sections] if report else [],
+            "source_index_count": len(report.source_index) if report else 0,
+        },
+        "artifacts": {
+            "report_md": "adoption-memo.report.md",
+            "run_json": "adoption-memo.run.json",
+            "trace_json": "adoption-memo.trace.json",
+            "evaluation_json": "adoption-memo.evaluation.json",
+            "summary_json": "adoption-memo.summary.json",
+            "analysis_md": "adoption-memo.analysis.md",
+            "bundle_json": "adoption-memo.bundle.json",
+            "bundle_md": "adoption-memo.bundle.md",
+        },
+        "talking_points": [
+            "This bundle captures one real-provider adoption memo run end to end.",
+            "Route quality is split into selection and evidence-backed execution so over-selection is visible.",
+            "Tool coverage, evidence channels, constraint coverage, and replayability are all exported together.",
+            "The bundle is meant to be read as a demo artifact, not a raw debug dump.",
+        ],
+    }
+
+
+def _render_demo_bundle(bundle: dict[str, Any]) -> str:
+    headline = bundle["headline"]
+    route = bundle["route_summary"]
+    evidence = bundle["evidence_summary"]
+    trace = bundle["trace_summary"]
+    lines = [
+        "# Adoption Memo Demo Bundle",
+        "",
+        f"- Run ID: `{bundle['run_id']}`",
+        f"- Status: `{bundle['status']}`",
+        f"- Topic: {bundle['topic']}",
+        f"- Depth: `{bundle['depth']}`",
+        f"- Exported at: `{bundle['exported_at']}`",
+        "",
+        "## Headline",
+        "",
+        f"- Evaluation passed: `{headline['evaluation_passed']}`",
+        f"- Route precision: `{headline['route_precision']}`",
+        f"- Route recall: `{headline['route_recall']}`",
+        f"- Route selection precision: `{headline['route_selection_precision']}`",
+        f"- Route selection recall: `{headline['route_selection_recall']}`",
+        f"- Tool completed success rate: `{headline['tool_completed_success_rate']}`",
+        f"- Expected tool coverage: `{headline['expected_tool_coverage']}`",
+        f"- Expected evidence coverage: `{headline['expected_evidence_coverage']}`",
+        f"- Citation precision: `{headline['citation_precision']}`",
+        f"- Constraint coverage: `{headline['constraint_coverage']}`",
+        "",
+        "## Route Summary",
+        "",
+        f"- Selected agents: `{route['selected_agent_ids']}`",
+        f"- Completed agents: `{route['completed_agent_ids']}`",
+        f"- Route decisions: `{route['route_decision_count']}`",
+        f"- Conflicts: `{route['conflict_count']}`",
+        "",
+        "## Evidence Summary",
+        "",
+        f"- Source count: `{evidence['source_count']}`",
+        f"- Evidence channels: `{evidence['channels']}`",
+        f"- Constraint coverage passed: `{evidence['constraint_coverage_passed']}`",
+        f"- Graph signal hits: `{evidence['graph_signal_hits']}`",
+        "",
+        "## Trace Summary",
+        "",
+        f"- Event count: `{trace['event_count']}`",
+        f"- Checkpoint count: `{trace['checkpoint_count']}`",
+        f"- Handoff count: `{trace['handoff_count']}`",
+        f"- Model event count: `{trace['model_event_count']}`",
+        f"- Actors: `{trace['actors']}`",
+        "",
+        "## Talking Points",
+        "",
+    ]
+    lines.extend(f"- {point}" for point in bundle["talking_points"])
+    lines.extend(
+        [
+            "",
+            "## Artifacts",
+            "",
+        ]
+    )
+    for name, path in bundle["artifacts"].items():
+        lines.append(f"- `{name}`: `{path}`")
+    return "\n".join(lines)
 
 
 def _render_report(run: ResearchRun) -> str:
@@ -472,6 +624,13 @@ def _render_analysis(run: ResearchRun, settings: AppSettings, summary: dict[str,
         f"- Context recall: {headline['context_recall']}",
         f"- Citation precision: {headline['citation_precision']}",
         f"- Faithfulness proxy: {headline['faithfulness_proxy']}",
+        f"- Route precision: {headline['route_precision']}",
+        f"- Route recall: {headline['route_recall']}",
+        f"- Route selection precision: {headline['route_selection_precision']}",
+        f"- Route selection recall: {headline['route_selection_recall']}",
+        f"- Tool completed success rate: {headline['tool_completed_success_rate']}",
+        f"- Expected tool coverage: {headline['expected_tool_coverage']}",
+        f"- Expected evidence coverage: {headline['expected_evidence_coverage']}",
         f"- Expected term recall: {headline['expected_term_recall']}",
         f"- Team constraint coverage: {headline['constraint_coverage']}",
         f"- Constraint coverage passed: `{headline['constraint_coverage_passed']}`",

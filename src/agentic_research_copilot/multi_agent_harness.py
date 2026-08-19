@@ -683,14 +683,22 @@ def summarize_run(
     replay_source_run_id: str | None = None,
 ) -> BenchmarkRunSummary:
     selected_agents = {assignment.agent_id for assignment in assignments}
-    completed_agents = {assignment.agent_id for assignment in assignments if assignment.status == "completed"}
+    completed_agents = {
+        assignment.agent_id
+        for assignment in assignments
+        if assignment.status == "completed" and assignment.evidence_count > 0
+    }
     if task is not None and task.expected_agent_ids:
         expected_agents = set(task.expected_agent_ids)
-        route_precision = len(selected_agents & expected_agents) / max(1, len(selected_agents))
-        route_recall = len(selected_agents & expected_agents) / max(1, len(expected_agents))
+        route_selection_precision = len(selected_agents & expected_agents) / max(1, len(selected_agents))
+        route_selection_recall = len(selected_agents & expected_agents) / max(1, len(expected_agents))
+        route_precision = len(completed_agents & expected_agents) / max(1, len(completed_agents))
+        route_recall = len(completed_agents & expected_agents) / max(1, len(expected_agents))
     else:
-        route_precision = 1.0 if selected_agents else 0.0
-        route_recall = 1.0 if selected_agents else 0.0
+        route_selection_precision = 1.0 if selected_agents else 0.0
+        route_selection_recall = 1.0 if selected_agents else 0.0
+        route_precision = 1.0 if completed_agents else 0.0
+        route_recall = 1.0 if completed_agents else 0.0
 
     tool_calls = [
         event
@@ -724,7 +732,11 @@ def summarize_run(
     unresolved_conflicts = [conflict for conflict in conflicts if not conflict.resolved]
     notes: list[str] = []
     if route_recall < 1.0:
-        notes.append("Route recall missed at least one expected specialist.")
+        notes.append("Evidence-backed route recall missed at least one expected specialist.")
+    if route_selection_recall < 1.0:
+        notes.append("Route selection missed at least one expected specialist.")
+    if route_selection_precision < 1.0:
+        notes.append("Route selection included at least one specialist outside the expected set.")
     if specialist_completion < 1.0:
         notes.append("At least one selected specialist did not receive evidence.")
     if expected_tool_coverage < 1.0:
@@ -758,6 +770,8 @@ def summarize_run(
         task_id=task.task_id if task else None,
         route_precision=round(route_precision, 4),
         route_recall=round(route_recall, 4),
+        route_selection_precision=round(route_selection_precision, 4),
+        route_selection_recall=round(route_selection_recall, 4),
         specialist_completion_rate=round(specialist_completion, 4),
         tool_success_rate=round(tool_success, 4),
         tool_completed_success_rate=round(completed_tool_success, 4),
@@ -774,6 +788,8 @@ def summarize_run(
         metadata={
             "selected_agent_ids": sorted(selected_agents),
             "completed_agent_ids": sorted(completed_agents),
+            "route_selection_precision": round(route_selection_precision, 4),
+            "route_selection_recall": round(route_selection_recall, 4),
             "actual_completed_tools": sorted(actual_completed_tools),
             "actual_evidence_kinds": sorted(actual_evidence_kinds),
             "source_count": actual_source_count,

@@ -546,6 +546,8 @@ class BenchmarkRunSummary(BaseModel):
     metric_scope: Literal["labeled_fixture_or_proxy"] = "labeled_fixture_or_proxy"
     route_precision: float = 0.0
     route_recall: float = 0.0
+    route_selection_precision: float = 0.0
+    route_selection_recall: float = 0.0
     specialist_completion_rate: float = 0.0
     tool_success_rate: float = 0.0
     tool_completed_success_rate: float = 0.0
