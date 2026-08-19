@@ -29,7 +29,7 @@ def test_router_uses_hybrid_when_public_and_private_evidence_are_both_relevant()
     assert routes[0].web_query
     assert routes[0].internal_query
     assert "contextual grounding" in routes[0].reason
-    assert routes[0].selected_tools == ["web_search", "vector_retrieval", "mcp_tool"]
+    assert routes[0].selected_tools == ["web_search", "vector_retrieval"]
     assert len(routes[0].web_queries) >= 2
     assert len(routes[0].internal_queries) >= 2
     assert routes[0].min_evidence >= 2
@@ -52,4 +52,21 @@ def test_router_falls_back_to_external_when_private_corpus_is_unavailable():
     assert routes[0].mode == "external"
     assert routes[0].web_query == "research copilot benchmarks"
     assert routes[0].internal_query is None
+    assert routes[0].selected_tools == ["web_search"]
+
+
+def test_router_adds_mcp_only_for_explicit_repository_targets():
+    router = RetrievalCoordinator()
+    request = ResearchRequest(topic="Review GitHub repo langchain-ai/open_deep_research architecture")
+    item = PlanItem(
+        id="repo-target",
+        question="What does the repository README say about the workflow?",
+        purpose="Inspect the source-of-truth repo.",
+        search_query="GitHub langchain-ai/open_deep_research README",
+    )
+    profile = CorpusProfile(has_private_docs=False)
+
+    routes = router.build_routes(request, "Review the repository workflow.", [item], profile)
+
     assert routes[0].selected_tools == ["web_search", "mcp_tool"]
+    assert "explicit repository target detected" in routes[0].reason

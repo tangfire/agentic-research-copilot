@@ -1350,7 +1350,7 @@ class ResearchCopilot:
         ]
         if not selected_tools:
             if agent_id == "repo_signal" and self.mcp_tool is not None:
-                selected_tools = ["mcp_tool"]
+                selected_tools = ["web_search"]
             elif agent_id == "architecture_fit" and request.include_private_docs and corpus_profile.has_private_docs:
                 selected_tools = ["vector_retrieval"]
             elif agent_id == "ops_risk" and request.include_private_docs and corpus_profile.has_private_docs:

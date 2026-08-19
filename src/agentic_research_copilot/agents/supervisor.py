@@ -48,6 +48,8 @@ class SupervisorAgent:
             )
             self.last_usage = usage
         except Exception as exc:
+            if not self._is_structured_output_error(exc):
+                raise
             contract = self._fallback_contract(request, plan, retrieval_routes, corpus_profile, str(exc))
             self.last_usage = None
         return self._normalize(
@@ -144,6 +146,10 @@ class SupervisorAgent:
                 ),
             }
         )
+
+    def _is_structured_output_error(self, exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "invalid structured output" in message or "structured output" in message
 
     def _fallback_contract(
         self,

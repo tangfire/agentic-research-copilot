@@ -60,7 +60,7 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
             "社区",
             "活跃",
         ),
-        preferred_tools=("mcp_tool", "web_search"),
+        preferred_tools=("web_search", "mcp_tool"),
         exclusive_tools=("mcp_tool",),
         shared_tools=("web_search",),
     ),

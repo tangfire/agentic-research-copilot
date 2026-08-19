@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .github_repository import canonical_repository_slug, parse_github_repository_hint
 from .schemas import CorpusProfile, PlanItem, ResearchRequest, RetrievalRoute
 
 
@@ -74,6 +75,14 @@ class RetrievalCoordinator:
         item: PlanItem,
         corpus_profile: CorpusProfile,
     ) -> RetrievalRoute:
+        repository_hint = parse_github_repository_hint(
+            request.metadata,
+            request.topic,
+            research_brief,
+            item.question,
+            item.purpose,
+            item.search_query or "",
+        )
         blob = " ".join(
             part
             for part in [
@@ -119,8 +128,12 @@ class RetrievalCoordinator:
             )
         if not reason_bits:
             reason_bits.append("defaulting to public web evidence")
+        if repository_hint is not None:
+            reason_bits.append(
+                f"explicit repository target detected ({canonical_repository_slug(repository_hint)})"
+            )
 
-        selected_tools = self._selected_tools(mode)
+        selected_tools = self._selected_tools(mode, has_repository_target=repository_hint is not None)
         rewrite_count = self._rewrite_count_for_depth(request.depth)
         web_queries = (
             self._dedupe_queries(
@@ -176,13 +189,15 @@ class RetrievalCoordinator:
     def _selected_tools(
         self,
         mode: str,
+        *,
+        has_repository_target: bool,
     ) -> list[str]:
         tools: list[str] = []
         if mode in {"external", "hybrid"}:
             tools.append("web_search")
         if mode in {"internal", "hybrid"}:
             tools.append("vector_retrieval")
-        if self.mcp_enabled:
+        if self.mcp_enabled and has_repository_target:
             tools.append("mcp_tool")
         return tools
 
