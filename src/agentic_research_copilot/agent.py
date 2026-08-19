@@ -385,7 +385,7 @@ class ConversationalResearchAgent:
             session_id=session_id,
             kind="planning",
             status="completed",
-            title="Plan draft generated",
+            title="研究计划已生成",
             summary=plan_draft.research_brief,
             actor="planner",
             input_preview=_trim(research_request.topic, 500),
@@ -438,8 +438,8 @@ class ConversationalResearchAgent:
             session_id=session_id,
             kind="research",
             status="running",
-            title="Research job started",
-            summary="The confirmed plan was submitted to the research runtime.",
+            title="研究任务已启动",
+            summary="已把确认后的计划提交到底层 research runtime。",
             actor="conversational_agent",
             job_id=job.job_id,
             run_id=job.run_id,
@@ -466,7 +466,7 @@ class ConversationalResearchAgent:
         assistant_message = self._save_message(
             session_id=session_id,
             role="assistant",
-            content="Plan confirmed. I started the research job and will attach the report, trace, and evaluation when it completes.",
+            content="计划已确认，研究任务已经启动。完成后我会把报告、trace 和 evaluation 绑定回这个会话。",
             intent="confirm",
             metadata={
                 "job_id": job.job_id,
@@ -544,14 +544,14 @@ class ConversationalResearchAgent:
             AgentToolDefinition(
                 name="web_search",
                 channel="web",
-                description="Broad public web evidence through the configured search provider.",
+                description="通过已配置的搜索服务获取公开 Web 证据。",
                 input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
                 enabled=web_enabled and "web_search" not in disabled_tools,
                 requires_auth=web_requires_key,
                 auth_configured=not web_requires_key or bool(getattr(settings, "search_api_key", "")),
                 risk_level="low",
                 approval_required=False,
-                failure_mode="" if web_enabled else "Search provider is disabled.",
+                failure_mode="" if web_enabled else "搜索服务未启用。",
                 metadata={
                     "provider": getattr(settings, "search_provider", "none"),
                     "workspace_disabled": "web_search" in disabled_tools,
@@ -560,7 +560,7 @@ class ConversationalResearchAgent:
             AgentToolDefinition(
                 name="vector_retrieval",
                 channel="vector",
-                description="Local knowledge base retrieval over documents and project memory.",
+                description="检索本地知识库、项目文档和 project memory。",
                 input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
                 enabled="vector_retrieval" not in disabled_tools,
                 requires_auth=False,
@@ -575,7 +575,7 @@ class ConversationalResearchAgent:
             AgentToolDefinition(
                 name="mcp_tool",
                 channel="mcp",
-                description="External MCP tools, typically GitHub repository/code/issue/PR/release evidence.",
+                description="外部 MCP 工具，通常用于 GitHub 仓库、代码、Issue、PR 和 Release 证据。",
                 input_schema={
                     "type": "object",
                     "properties": {
@@ -625,7 +625,7 @@ class ConversationalResearchAgent:
                     update={
                         "status": invocation_status,
                         "updated_at": now,
-                        "error": "" if approve else "Approval was rejected by the user.",
+                        "error": "" if approve else "用户拒绝了这次审批。",
                     }
                 )
             )
@@ -757,19 +757,19 @@ class ConversationalResearchAgent:
         available = self.copilot.mcp_tool is not None and not catalog_error
         reason = ""
         if not configured:
-            reason = f"{display_name} is not configured."
+            reason = f"{display_name} 未配置。"
         elif auth_required and not auth_token_configured:
-            reason = f"{display_name} auth token is missing."
+            reason = f"{display_name} 缺少 auth token。"
         elif catalog_error:
             reason = catalog_error
         elif not available:
-            reason = f"{display_name} client is not available."
+            reason = f"{display_name} 客户端不可用。"
         if available:
-            label = f"{display_name} available"
+            label = f"{display_name} 可用"
         elif not configured or (auth_required and not auth_token_configured):
-            label = f"{display_name} not configured"
+            label = f"{display_name} 未配置"
         else:
-            label = f"{display_name} unavailable"
+            label = f"{display_name} 不可用"
         return {
             "configured": configured,
             "available": available,
@@ -843,7 +843,7 @@ class ConversationalResearchAgent:
             tool_name="mcp_tool",
             status="pending_approval",
             arguments={"configured_tools": mcp.get("tools", [])},
-            result_preview="GitHub MCP is configured but unavailable.",
+            result_preview="GitHub MCP 已配置但当前不可用。",
             error=str(mcp.get("reason") or ""),
             metadata={"kind": "mcp_unavailable", "job_id": job.job_id},
         )
@@ -852,8 +852,8 @@ class ConversationalResearchAgent:
             approval_id=_stable_id("approval_mcp_unavailable", session.session_id, job.job_id),
             session_id=session.session_id,
             invocation_id=invocation.invocation_id,
-            reason=str(mcp.get("reason") or "GitHub MCP is unavailable."),
-            requested_action="Review GitHub MCP configuration before trusting MCP evidence.",
+            reason=str(mcp.get("reason") or "GitHub MCP 当前不可用。"),
+            requested_action="在信任 MCP 证据前检查 GitHub MCP 配置。",
             metadata={"kind": "mcp_unavailable", "job_id": job.job_id},
         )
         self.store.save_approval_request(approval)
@@ -861,7 +861,7 @@ class ConversationalResearchAgent:
             session_id=session.session_id,
             kind="approval",
             status="pending",
-            title="GitHub MCP approval required",
+            title="需要检查 GitHub MCP",
             summary=approval.reason,
             actor="tool_policy",
             tool_name="mcp_tool",
@@ -878,8 +878,8 @@ class ConversationalResearchAgent:
             session_id=session.session_id,
             kind="research",
             status="completed" if run.status == "completed" else "failed",
-            title="Research run completed",
-            summary=f"Run {run.run_id} finished with status {run.status}.",
+            title="研究运行已结束",
+            summary=f"Run {run.run_id} 已结束，状态为 {run.status}。",
             actor="research_runtime",
             job_id=job_id,
             run_id=run.run_id,
@@ -1025,9 +1025,9 @@ class ConversationalResearchAgent:
             accepted=saved,
             rejected=rejected,
             reason=(
-                "Accepted explicit preferences, team/project constraints, and concrete session facts."
+                "已接受明确偏好、团队/项目约束和具体会话事实。"
                 if saved
-                else "No new durable memory candidate was accepted."
+                else "没有新的长期记忆候选被接受。"
             ),
             metadata={"extractor": "heuristic-v2", "duplicate_rejections": len(rejected)},
         )
@@ -1402,35 +1402,35 @@ class ConversationalResearchAgent:
 
     def _render_plan_message(self, plan_draft: AgentPlanDraft) -> str:
         lines = [
-            "I drafted a research plan. Please confirm before I start the research run.",
+            "我已经拟好研究计划。请先确认，确认后才会启动正式研究。",
             "",
         ]
         if plan_draft.skill_name:
             lines.extend(
                 [
-                    f"Selected skill: {plan_draft.skill_name}",
-                    f"Skill reason: {plan_draft.skill_reason or 'Matched the current research scenario.'}",
+                    f"选中的 skill：{plan_draft.skill_name}",
+                    f"选择原因：{plan_draft.skill_reason or '匹配当前研究场景。'}",
                     "",
                 ]
             )
         if plan_draft.workspace_id:
             lines.extend(
                 [
-                    f"Workspace: {plan_draft.workspace_id}",
+                    f"工作区：{plan_draft.workspace_id}",
                     "",
                 ]
             )
         lines.extend(
             [
-            f"Research brief: {plan_draft.research_brief}",
+            f"研究 brief：{plan_draft.research_brief}",
             "",
-            "Plan:",
+            "计划：",
             ]
         )
         for index, item in enumerate(plan_draft.plan_items, start=1):
             lines.append(f"{index}. {item.question}")
         if plan_draft.success_criteria:
-            lines.extend(["", "Success criteria:"])
+            lines.extend(["", "成功标准："])
             lines.extend(f"- {item}" for item in plan_draft.success_criteria[:5])
         return "\n".join(lines)
 
@@ -1476,8 +1476,8 @@ class ConversationalResearchAgent:
                 session_id=session.session_id,
                 kind="heartbeat",
                 status="running",
-                title="Research still running",
-                summary="The confirmed research job is still active.",
+                title="研究仍在运行",
+                summary="已确认的研究任务仍在后台执行。",
                 actor="research_runtime",
                 job_id=job.job_id,
                 run_id=job.run_id,
@@ -1806,12 +1806,12 @@ def _default_workspace_profile() -> WorkspaceProfile:
     now = _utc_now()
     return WorkspaceProfile(
         workspace_id=DEFAULT_WORKSPACE_ID,
-        name="Research Desk Workspace",
-        team_context="Single-user local research desk focused on open-source adoption review and technical decision memos.",
+        name="研究工作区",
+        team_context="单用户本地研究台，主要用于开源引入评审和技术决策 memo。",
         default_stack=["FastAPI", "SQLite", "LangGraph", "Qdrant", "GitHub MCP"],
-        deployment_constraints=["single-node", "local-first", "read-only external evidence", "no destructive tools"],
-        risk_policy="Use web, vector, and read-only MCP tools; keep approvals observable and avoid destructive actions.",
-        preferred_sources=["GitHub", "official docs", "project README", "local notes"],
+        deployment_constraints=["单节点", "本地优先", "外部证据只读", "不支持破坏性工具"],
+        risk_policy="优先使用 web、vector 和只读 MCP 工具；审批过程必须可观察，避免破坏性动作。",
+        preferred_sources=["GitHub", "官方文档", "项目 README", "本地笔记"],
         disabled_tools=[],
         created_at=now,
         updated_at=now,
@@ -1824,8 +1824,8 @@ def _default_skill_catalog() -> list[ResearchSkill]:
     return [
         ResearchSkill(
             skill_id="open_source_adoption_review",
-            name="Open Source Adoption Review",
-            scenario="Evaluate whether a repository or open-source project fits a small team's technical and deployment constraints.",
+            name="开源引入评审",
+            scenario="评估某个仓库或开源项目是否适合小团队的技术栈、部署方式和风险约束。",
             trigger_keywords=["repo", "github", "开源", "采用", "引入", "适合", "adoption", "review"],
             required_inputs=["目标 repo / 项目", "团队约束", "决策问题"],
             plan_template=[
@@ -1833,15 +1833,15 @@ def _default_skill_catalog() -> list[ResearchSkill]:
                 "检查架构、维护活跃度、issue/release 信号",
                 "核对部署/运维风险与替代方案",
             ],
-            evaluation_focus=["source quality", "constraint coverage", "citations", "demo readiness"],
+            evaluation_focus=["来源质量", "约束覆盖", "引用", "演示可解释性"],
             created_at=now,
             updated_at=now,
             metadata={"default": True},
         ),
         ResearchSkill(
             skill_id="architecture_tradeoff_memo",
-            name="Architecture Tradeoff Memo",
-            scenario="Compare two or more libraries or architectures and explain the decision tradeoffs.",
+            name="架构取舍 memo",
+            scenario="比较两个或多个库/架构方案，并说明技术决策取舍。",
             trigger_keywords=["对比", "比较", "选型", "tradeoff", "compare", "vs", "architecture"],
             required_inputs=["要比较的方案", "决策标准", "团队约束"],
             plan_template=[
@@ -1849,15 +1849,15 @@ def _default_skill_catalog() -> list[ResearchSkill]:
                 "对齐评估标准与约束",
                 "比较收益、复杂度、风险和迁移成本",
             ],
-            evaluation_focus=["decision clarity", "tradeoff coverage", "evidence balance"],
+            evaluation_focus=["决策清晰度", "取舍覆盖", "证据平衡"],
             created_at=now,
             updated_at=now,
             metadata={"default": False},
         ),
         ResearchSkill(
             skill_id="demo_readiness_risk_review",
-            name="Demo Readiness Risk Review",
-            scenario="Check whether a project is ready for recruiting demos and where the main risks are.",
+            name="演示风险评审",
+            scenario="检查项目是否适合用于秋招展示，以及主要风险在哪里。",
             trigger_keywords=["秋招", "面试", "展示", "demo", "risk", "风险", "presentation"],
             required_inputs=["演示 / 面试场景", "风险点", "需要验证的结论"],
             plan_template=[
@@ -1865,7 +1865,7 @@ def _default_skill_catalog() -> list[ResearchSkill]:
                 "梳理最容易被质疑的风险点",
                 "准备可复盘的证据和讲法",
             ],
-            evaluation_focus=["demo viability", "risk coverage", "storyline clarity"],
+            evaluation_focus=["演示可行性", "风险覆盖", "叙事清晰度"],
             created_at=now,
             updated_at=now,
             metadata={"default": False},

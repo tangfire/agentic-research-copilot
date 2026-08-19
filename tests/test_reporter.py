@@ -64,8 +64,8 @@ def test_reporter_preserves_team_constraint_coverage_section():
             citations=[EvidenceItem(title="First", source="source-a", snippet="A")],
         ),
         ReportSection(
-            heading="Team Constraint Coverage",
-            content="- covered: First deployment must run on one machine.",
+            heading="团队约束覆盖",
+            content="- 已覆盖：First deployment must run on one machine.",
             citations=[EvidenceItem(title="Constraints", source="team-context", snippet="One machine.")],
         ),
     ]
@@ -80,6 +80,6 @@ def test_reporter_preserves_team_constraint_coverage_section():
 
     assert [section.heading for section in report.sections] == [
         "Synthesized Analysis",
-        "Team Constraint Coverage",
+        "团队约束覆盖",
     ]
     assert "one machine" in report.sections[1].content

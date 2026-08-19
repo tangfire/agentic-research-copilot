@@ -102,9 +102,10 @@ class ReporterAgent:
     ) -> list[ReportSection]:
         existing_headings = {section.heading.strip().lower() for section in synthesized}
         preserved = list(synthesized)
+        constraint_headings = {"team constraint coverage", "团队约束覆盖"}
         for section in fallback_sections:
             heading = section.heading.strip().lower()
-            if heading == "team constraint coverage" and heading not in existing_headings:
+            if heading in constraint_headings and heading not in existing_headings:
                 preserved.append(section)
                 existing_headings.add(heading)
         return preserved

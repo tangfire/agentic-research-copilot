@@ -1767,17 +1767,16 @@ class ResearchCopilot:
         if not citations:
             return None
         lines = [
-            "This runtime-generated section makes the adoption decision auditable against the team's hard constraints.",
-            "Constraint checklist:",
+            "这一节由 runtime 自动生成，用来把采用建议和团队硬约束对齐，方便复盘。",
+            "团队约束覆盖清单：",
         ]
         for constraint in constraints[:12]:
-            lines.append(f"- covered: {self._compact_report_text(constraint, 220)}")
+            lines.append(f"- 已覆盖：{self._compact_report_text(constraint, 220)}")
         lines.append(
-            "Decision implication: accept the recommendation only if the pilot plan, rollback path, "
-            "evidence quality, and operational risk sections remain compatible with these constraints."
+            "决策含义：只有当试点计划、回滚路径、证据质量和运维风险都能满足这些约束时，才应该接受最终采用建议。"
         )
         return ReportSection(
-            heading="Team Constraint Coverage",
+            heading="团队约束覆盖",
             content="\n".join(lines),
             citations=citations,
             evidence_count=len(citations),
@@ -1820,7 +1819,7 @@ class ResearchCopilot:
     def _section_heading(self, item, index: int) -> str:
         heading = " ".join(str(getattr(item, "question", "")).split())
         if not heading:
-            return f"Research question {index}"
+            return f"研究问题 {index}"
         return heading[:120].rstrip()
 
     def _section_content(
@@ -1840,33 +1839,33 @@ class ResearchCopilot:
 
         evidence_summary = self._evidence_summary(citations)
         parts = [
-            f"This section answers: {self._compact_report_text(item.question, 260)}",
-            f"Research goal: {self._compact_report_text(request.topic, 420)}.",
-            f"Why it matters: {self._compact_report_text(item.purpose, 260)}",
-            f"Finding: {self._compact_report_text(finding, 900)}",
+            f"本节回答：{self._compact_report_text(item.question, 260)}",
+            f"研究目标：{self._compact_report_text(request.topic, 420)}。",
+            f"为什么重要：{self._compact_report_text(item.purpose, 260)}",
+            f"核心发现：{self._compact_report_text(finding, 900)}",
         ]
         if evidence_summary:
-            parts.append(f"Grounding evidence: {evidence_summary}")
+            parts.append(f"支撑证据：{evidence_summary}")
         if route is not None:
             tool_summary = ", ".join(route.selected_tools) or route.mode
             parts.append(
-                f"Retrieval route: {route.mode} using {tool_summary}; "
-                f"sufficiency target is {route.min_evidence} evidence item(s) "
-                f"from {route.min_sources} source group(s)."
+                f"检索路由：{route.mode}，使用 {tool_summary}；"
+                f"充分性目标是至少 {route.min_evidence} 条证据，"
+                f"覆盖 {route.min_sources} 个来源组。"
             )
         if search_queries:
             query_text = "; ".join(
                 self._compact_report_text(query.query, 180) for query in search_queries[:2]
             )
-            parts.append(f"Queries used: {query_text}.")
+            parts.append(f"使用的查询：{query_text}。")
         if note is not None and note.gaps:
             gaps = "; ".join(self._compact_report_text(gap, 180) for gap in note.gaps[:2])
-            parts.append(f"Remaining caveats: {gaps}.")
+            parts.append(f"剩余注意点：{gaps}。")
         if note is not None and note.follow_up_queries:
             followups = "; ".join(
                 self._compact_report_text(query, 180) for query in note.follow_up_queries[:2]
             )
-            parts.append(f"Useful follow-up: {followups}.")
+            parts.append(f"建议继续追问：{followups}。")
         return " ".join(part.strip() for part in parts if part and part.strip())
 
     def _fallback_section_content(
@@ -1877,8 +1876,8 @@ class ResearchCopilot:
     ) -> str:
         evidence_summary = self._evidence_summary(citations)
         if evidence_summary:
-            return f"{research_brief} Evidence related to {topic}: {evidence_summary}"
-        return f"{research_brief} No citation-backed evidence was available for {topic}."
+            return f"{research_brief} 与 {topic} 相关的证据：{evidence_summary}"
+        return f"{research_brief} 暂时没有找到可引用证据来支撑 {topic}。"
 
     def _evidence_summary(self, citations: list[EvidenceItem]) -> str:
         snippets: list[str] = []

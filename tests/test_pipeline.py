@@ -191,7 +191,7 @@ def test_pipeline_returns_report(tmp_path: Path):
     plan_questions = {item.question for item in result.plan}
     assert not any(section.heading in legacy_system_headings for section in result.report.sections)
     assert all(
-        section.heading in plan_questions or section.heading == "Team Constraint Coverage"
+        section.heading in plan_questions or section.heading == "团队约束覆盖"
         for section in result.report.sections
     )
     assert all(section.citations for section in result.report.sections)
@@ -359,7 +359,7 @@ def test_build_sections_adds_team_constraint_coverage_when_constraints_exist(tmp
     )
 
     coverage = sections[-1]
-    assert coverage.heading == "Team Constraint Coverage"
+    assert coverage.heading == "团队约束覆盖"
     assert "5-engineer" in coverage.content
     assert "Python/FastAPI" in coverage.content or "FastAPI" in coverage.content
     assert "one machine" in coverage.content

@@ -478,7 +478,7 @@ def test_agent_reports_mcp_unavailable_when_token_is_missing(tmp_path: Path, mon
     assert mcp_status["available"] is False
     assert mcp_status["provider"] == "github"
     assert mcp_status["display_name"] == "GitHub MCP"
-    assert mcp_status["label"] == "GitHub MCP not configured"
+    assert mcp_status["label"] == "GitHub MCP 未配置"
     assert mcp_status["auth_required"] is True
     assert mcp_status["auth_token_configured"] is False
     assert "token" in mcp_status["reason"].lower()

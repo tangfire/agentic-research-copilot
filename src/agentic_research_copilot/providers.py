@@ -210,6 +210,8 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "into a structured plan of 3-5 focused sub-questions, each independently researchable and "
                 "mapping to a distinct section of the final report.\n\n"
                 "Guidelines:\n"
+                "- Unless the user explicitly asks for English, write all user-facing fields in Simplified Chinese. "
+                "Keep established technical names such as GitHub, MCP, LangGraph, FastAPI, trace, evaluation, and worker in English when clearer.\n"
                 "- Write a clear research_brief that summarizes the goal, approach, and key constraints.\n"
                 "- Each plan item must have a specific question (not vague), a clear purpose, and an "
                 "optimized search_query tuned for search engines (shorter and keyword-focused).\n"
@@ -358,7 +360,9 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
             "confidence": confidence,
             "instructions": (
                 "Synthesize the final report sections from the draft sections and evidence. "
-                "Use the same language as the topic/request. Each section must be specific, "
+                "Use Simplified Chinese by default unless the topic/request explicitly asks for English. "
+                "Keep established technical names such as GitHub, MCP, LangGraph, FastAPI, trace, evaluation, and worker in English when clearer. "
+                "Each section must be specific, "
                 "citation-backed, and balanced. Use citation_indexes to reference only the "
                 "provided evidence_index entries. Do not invent sources, URLs, facts, or citations."
             ),
@@ -369,7 +373,8 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "Open Deep Research pattern of synthesizing compressed findings into a "
                 "comprehensive citation-backed report. Return valid JSON only that conforms "
                 "to the supplied schema. Populate sections with rewritten section drafts and "
-                "citation_indexes that map to the provided evidence_index."
+                "citation_indexes that map to the provided evidence_index. User-facing text "
+                "should be Simplified Chinese unless English is explicitly requested."
             ),
             user_payload=payload,
             schema=ReporterContract.model_json_schema(),
