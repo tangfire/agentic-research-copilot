@@ -39,15 +39,15 @@ The conversational layer now also carries a workspace control plane and a small 
 
 The skill layer is now backed by local skill packs under `skills/`: each pack can ship a `skill.json` manifest, a `SKILL.md` instruction file, and optional whitelist-only scripts that run through a controlled JSON stdin/stdout boundary. This is intentionally smaller than a full plugin marketplace, but it is real enough to demonstrate discoverable skills, instruction loading, preflight hooks, and safe local execution.
 
-The v4 specialist routing layer keeps the role story narrow: `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane` are stable responsibility lanes for open-source adoption review. They do not start another model/tool loop after the research runtime. They make route decisions, evidence ownership, conflicts, and benchmark summaries visible in the run artifact and session export.
+The v4 specialist routing layer keeps the role story narrow: `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent` are stable specialist workers for open-source adoption review. They run inside the research stage, each with its own tool boundary and evidence ownership, and make route decisions, conflicts, and benchmark summaries visible in the run artifact and session export.
 
-## Node, Agent, And Lane
+## Node, Agent, And Specialist Worker
 
 These three words have different meanings in this repository:
 
 - **Workflow node**: a LangGraph state transition such as `planner`, `research_supervisor`, `parallel_research`, `reporter`, or `verifier_evaluator`. A node controls when a stage runs and how state moves.
 - **Agent**: a model-backed capability invoked by a node, such as `PlannerAgent`, `SupervisorAgent`, `ResearchAgent`, `ReporterAgent`, or `VerifierAgent`. An agent owns a decision contract or execution contract.
-- **Specialist lane**: a bounded role-routing overlay. `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane` describe which responsibility and evidence should be covered. They do not invoke a second hidden research workflow.
+- **Specialist worker**: a bounded role-execution unit. `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent` describe which responsibility and evidence should be covered. They run inside the existing research stage rather than invoking a second hidden workflow.
 
 The execution path is therefore one workflow:
 
@@ -55,7 +55,7 @@ The execution path is therefore one workflow:
 LangGraph node -> agent capability -> shared state/evidence -> next node
 ```
 
-The specialist lane is selected before and recorded during the run, then used to explain evidence ownership and evaluate route precision/recall. It is not:
+The specialist worker is selected before and recorded during the run, then used to explain evidence ownership and evaluate route precision/recall. It is not:
 
 ```text
 workflow nodes -> another hidden agent loop -> final report
@@ -72,10 +72,10 @@ workflow nodes -> another hidden agent loop -> final report
 7. `Planner` writes a research brief and decomposes the topic into focused plan items.
 8. `ResearchSupervisor` emits ODR-style `think_tool`, `ConductResearch`, and `ResearchComplete` tool calls.
 9. `Researcher` runs a bounded tool loop for each delegated unit: `web_search`, optional external `mcp_tool`, or completion.
-10. `Retriever` grounds uploaded documents and project memory with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, graph signal fusion, and reranking.
+10. `Retriever` grounds uploaded documents and project memory with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, and optional graph/rerank enhancement.
 11. `Reporter` writes topic-specific sections from notes and evidence. It does not use fixed demo sections.
 12. `ConstraintCoverage` checks hard project constraints against report sections and evidence, adding warnings or failing evaluation when coverage is too weak.
-13. `Specialist routing` maps plan items to `RepoSignalLane`, `ArchitectureFitLane`, and `OpsRiskLane`, then writes role assignments, route decisions, conflicts, an evidence ledger, and labeled/proxy benchmark metrics. The compatibility module is `multi_agent_harness.py`; it does not execute another research loop.
+13. `Specialist routing` maps plan items to `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent`, then writes role assignments, route decisions, conflicts, an evidence ledger, and labeled/proxy benchmark metrics. The compatibility module is `multi_agent_harness.py`; it does not execute another hidden research loop.
 14. `Verifier` and `RAGEvaluator` check citation coverage, evidence sufficiency, source diversity, context precision, and unsupported sections.
 15. `RunLedger`, SQLite storage, telemetry, and LangGraph checkpoints make the run inspectable; frozen replay reuses saved artifacts instead of re-calling live tools.
 
@@ -144,8 +144,8 @@ These items are tracked in [Hardening Roadmap](docs/hardening-roadmap.md).
 - `SQLite`: persists sessions, messages, plan drafts, memory, jobs, runs, and trace metadata for a single-user local workbench.
 - `Qdrant`: stores dense vectors for contextual grounding.
 - `SQLite FTS5/BM25`: adds lexical recall for exact terms, paper names, component names, and metrics.
-- `LightRAG-inspired graph signal`: extracts entities and relationships, then fuses graph hits with dense/BM25 candidates before rerank.
-- `Qwen/DashScope rerank`: reorders fused candidates with a query-aware reranker in real-provider mode.
+- `LightRAG-inspired graph signal`: optional enhancement that extracts entities and relationships, then fuses graph hits with dense/BM25 candidates before rerank.
+- `Qwen/DashScope rerank`: optional real-provider reranker for fused candidates; the default local fallback is rule-based.
 - `Celery/Redis`: optional single-node API/worker separation for strict demo runs, not a distributed platform claim.
 - `MCP`: optional external tool interface. GitHub MCP is the preferred extension because it adds developer source-of-truth evidence that Tavily-style web search and local RAG do not cover as precisely.
 - `OpenAI-compatible providers`: let the same contracts work with DeepSeek, Qwen/DashScope-compatible endpoints, OpenAI-style APIs, and explicit dev fixtures in tests.

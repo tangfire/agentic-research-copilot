@@ -39,7 +39,7 @@ class SpecialistProfile:
 SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
     "repo_signal": SpecialistProfile(
         agent_id="repo_signal",
-        agent_name="RepoSignalLane",
+        agent_name="RepoSignalAgent",
         responsibility="Checks repository facts, maintenance signals, code/issue/PR/release evidence, and source authority.",
         trigger_keywords=(
             "repo",
@@ -66,7 +66,7 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
     ),
     "architecture_fit": SpecialistProfile(
         agent_id="architecture_fit",
-        agent_name="ArchitectureFitLane",
+        agent_name="ArchitectureFitAgent",
         responsibility="Checks architecture fit, API/runtime design, integration cost, workflow semantics, and local KB alignment.",
         trigger_keywords=(
             "architecture",
@@ -103,7 +103,7 @@ SPECIALIST_PROFILES: dict[AgentSpecialistId, SpecialistProfile] = {
     ),
     "ops_risk": SpecialistProfile(
         agent_id="ops_risk",
-        agent_name="OpsRiskLane",
+        agent_name="OpsRiskAgent",
         responsibility="Checks deployment, rollback, compliance, dependency, cost, reliability, and operational risk constraints.",
         trigger_keywords=(
             "ops",
@@ -267,8 +267,8 @@ def specialist_catalog() -> list[dict[str, Any]]:
             "preferred_tools": list(profile.preferred_tools),
             "exclusive_tools": list(profile.exclusive_tools),
             "shared_tools": list(profile.shared_tools),
-            "execution_mode": "role_routing_overlay",
-            "online_worker": False,
+            "execution_mode": "specialist_worker",
+            "online_worker": True,
         }
         for profile in SPECIALIST_PROFILES.values()
     ]
@@ -295,11 +295,11 @@ def role_preview_for_plan(
             item_roles[item_id] = [_best_role_for_text(_plan_item_text(next(item for item in plan if item.id == item_id)), selected)]
     return {
         "selected_agents": [SPECIALIST_PROFILES[role_id].agent_name for role_id in selected],
-        "selected_lanes": [SPECIALIST_PROFILES[role_id].agent_name for role_id in selected],
+        "selected_workers": [SPECIALIST_PROFILES[role_id].agent_name for role_id in selected],
         "selected_agent_ids": selected,
         "item_roles": item_roles,
         "reason": _selection_reason(selected),
-        "execution_mode": "role_routing_overlay",
+        "execution_mode": "specialist_worker",
     }
 
 
@@ -461,6 +461,7 @@ def build_role_assignments(
                 agent_id=role_id,
                 agent_name=profile.agent_name,
                 status=status,
+                execution_mode="specialist_worker",
                 reason=_assignment_reason(role_id, request, item_ids),
                 plan_item_ids=item_ids,
                 selected_tools=tools,
@@ -472,10 +473,10 @@ def build_role_assignments(
                     "responsibility": profile.responsibility,
                     "preferred_tools": list(profile.preferred_tools),
                     "skill_id": skill_id,
-                    "online_worker": False,
+                    "online_worker": True,
                     "execution_boundary": (
-                        "This specialist lane is a route/evidence ownership overlay. "
-                        "It does not start a second model/tool execution after the LangGraph runtime."
+                        "This specialist is an online research worker inside the LangGraph research stage. "
+                        "LangGraph owns control flow; specialist workers own focused tool/evidence execution."
                     ),
                 },
             )
@@ -517,6 +518,7 @@ def build_route_decisions(
                 agent_id=assignment.agent_id,
                 agent_name=assignment.agent_name,
                 status="selected",
+                execution_mode="specialist_worker",
                 mode=route.mode if route is not None else "hybrid",
                 selected_tools=list(route.selected_tools if route is not None else assignment.selected_tools),
                 reason=route.reason if route is not None else assignment.reason,
@@ -610,7 +612,7 @@ def detect_conflicts(
                 severity="low",
                 agent_ids=unique_ids,
                 plan_item_ids=[item_id],
-                description=f"Plan item {item_id} is relevant to multiple specialist lanes.",
+                description=f"Plan item {item_id} is relevant to multiple specialist workers.",
                 resolution="Keep the shared ownership visible; Writer synthesizes the final memo and Verifier checks citation coverage.",
                 resolved=True,
             )
@@ -690,9 +692,31 @@ def summarize_run(
         route_precision = 1.0 if selected_agents else 0.0
         route_recall = 1.0 if selected_agents else 0.0
 
-    tool_calls = [event for event in run.trace if event.kind == "tool_call"]
-    successful_tool_calls = [event for event in tool_calls if event.status in {"completed", "started"}]
-    tool_success = len(successful_tool_calls) / max(1, len(tool_calls)) if tool_calls else 1.0
+    tool_calls = [
+        event
+        for event in run.trace
+        if event.kind == "tool_call" and _normalize_trace_tool_name(event) is not None
+    ]
+    completed_tool_calls = [event for event in tool_calls if event.status == "completed"]
+    tool_success = len(completed_tool_calls) / max(1, len(tool_calls)) if tool_calls else 1.0
+    completed_tool_success = len(completed_tool_calls) / max(1, len(tool_calls)) if tool_calls else 1.0
+    actual_completed_tools = {
+        tool
+        for tool in (_normalize_trace_tool_name(event) for event in completed_tool_calls)
+        if tool is not None
+    }
+    actual_evidence_kinds = {item.kind for item in run.evidence if item.kind}
+    actual_source_count = run.report.source_count if run.report is not None else len({item.source for item in run.evidence if item.source})
+    if task is not None and task.expected_tools:
+        expected_tools = set(task.expected_tools)
+        expected_tool_coverage = len(actual_completed_tools & expected_tools) / max(1, len(expected_tools))
+    else:
+        expected_tool_coverage = 1.0
+    if task is not None and task.expected_evidence_kinds:
+        expected_evidence_kinds = set(task.expected_evidence_kinds)
+        expected_evidence_coverage = len(actual_evidence_kinds & expected_evidence_kinds) / max(1, len(expected_evidence_kinds))
+    else:
+        expected_evidence_coverage = 1.0
     citation_precision = run.evaluation.citation_precision if run.evaluation is not None else 0.0
     constraint_coverage = _constraint_coverage_proxy(run)
     specialist_completion = len(completed_agents) / max(1, len(assignments))
@@ -703,6 +727,14 @@ def summarize_run(
         notes.append("Route recall missed at least one expected specialist.")
     if specialist_completion < 1.0:
         notes.append("At least one selected specialist did not receive evidence.")
+    if expected_tool_coverage < 1.0:
+        missing_tools = sorted(set(task.expected_tools if task else []) - actual_completed_tools)
+        notes.append(f"Expected tool coverage is incomplete: missing {', '.join(missing_tools)}.")
+    if expected_evidence_coverage < 1.0:
+        missing_kinds = sorted(set(task.expected_evidence_kinds if task else []) - actual_evidence_kinds)
+        notes.append(f"Expected evidence coverage is incomplete: missing {', '.join(missing_kinds)}.")
+    if task is not None and actual_source_count < task.min_source_count:
+        notes.append(f"Source count {actual_source_count} is below required minimum {task.min_source_count}.")
     if unresolved_conflicts:
         notes.append("Unresolved conflicts remain in the harness output.")
     if replay_source_run_id:
@@ -713,6 +745,9 @@ def summarize_run(
         and route_recall >= 0.75
         and specialist_completion >= 0.66
         and tool_success >= 0.8
+        and expected_tool_coverage >= 1.0
+        and expected_evidence_coverage >= 1.0
+        and (task is None or actual_source_count >= task.min_source_count)
         and evidence_ledger.utilization_rate >= 0.15
         and citation_precision >= 0.8
         and not any(conflict.severity == "high" and not conflict.resolved for conflict in conflicts)
@@ -725,16 +760,25 @@ def summarize_run(
         route_recall=round(route_recall, 4),
         specialist_completion_rate=round(specialist_completion, 4),
         tool_success_rate=round(tool_success, 4),
+        tool_completed_success_rate=round(completed_tool_success, 4),
+        expected_tool_coverage=round(expected_tool_coverage, 4),
+        expected_evidence_coverage=round(expected_evidence_coverage, 4),
         evidence_utilization=evidence_ledger.utilization_rate,
         citation_precision=round(citation_precision, 4),
         constraint_coverage=constraint_coverage,
         replay_fidelity=replay_fidelity,
+        execution_mode="specialist_worker",
         latency_ms=run.duration_ms or 0,
         passed=passed,
         notes=notes,
         metadata={
             "selected_agent_ids": sorted(selected_agents),
             "completed_agent_ids": sorted(completed_agents),
+            "actual_completed_tools": sorted(actual_completed_tools),
+            "actual_evidence_kinds": sorted(actual_evidence_kinds),
+            "source_count": actual_source_count,
+            "expected_tools": list(task.expected_tools if task else []),
+            "expected_evidence_kinds": list(task.expected_evidence_kinds if task else []),
             "conflict_count": len(conflicts),
             "unresolved_conflict_count": len(unresolved_conflicts),
             "route_decision_count": len(route_decisions),
@@ -805,13 +849,13 @@ def _append_harness_trace(
         RunTraceEvent(
             kind="step",
             actor="multi_agent_harness",
-            message="Mapped completed research artifacts to specialist lanes.",
+            message="Mapped completed research artifacts to specialist workers.",
             step="harness.role_assignment",
             metadata={
                 "role_assignments": [assignment.model_dump(mode="json") for assignment in assignments],
                 "selected_agent_ids": [assignment.agent_id for assignment in assignments],
-                "execution_mode": "role_routing_overlay",
-                "online_worker": False,
+                "execution_mode": "specialist_worker",
+                "online_worker": True,
             },
         )
     )
@@ -826,7 +870,7 @@ def _append_harness_trace(
                 "conflict_count": len(conflicts),
                 "evidence_ledger": evidence_ledger.model_dump(mode="json"),
                 "benchmark_summary": summary.model_dump(mode="json"),
-                "execution_mode": "role_routing_overlay",
+                "execution_mode": "specialist_worker",
             },
         )
     )
@@ -835,7 +879,7 @@ def _append_harness_trace(
 
 def _selection_reason(selected: Sequence[AgentSpecialistId]) -> str:
     names = ", ".join(SPECIALIST_PROFILES[role_id].agent_name for role_id in selected)
-    return f"Selected specialist lanes for this bounded open-source adoption workflow: {names}."
+    return f"Selected specialist workers for this bounded open-source adoption workflow: {names}."
 
 
 def _scenario_hint_from_request(request: ResearchRequest, *, skill_id: str | None) -> str:
@@ -980,6 +1024,27 @@ def _tool_for_evidence(item: EvidenceItem) -> str:
     if item.kind == "run-artifact":
         return "run_artifact"
     return "web_search"
+
+
+def _normalize_research_tool_name(tool_name: str | None) -> str | None:
+    if not tool_name:
+        return None
+    normalized = tool_name.strip()
+    if normalized in {"think_tool", "ConductResearch", "ResearchComplete"}:
+        return None
+    if normalized in {"qdrant_retrieval", "document_retrieval", "local_kb", "local_search"}:
+        return "vector_retrieval"
+    if normalized == "mcp_tool" or normalized.startswith("mcp_") or normalized.startswith("github_"):
+        return "mcp_tool"
+    if normalized in {"web_search", "vector_retrieval"}:
+        return normalized
+    return normalized
+
+
+def _normalize_trace_tool_name(event: RunTraceEvent) -> str | None:
+    if event.provider == "model_context_protocol" or event.metadata.get("source_channel") == "mcp":
+        return "mcp_tool"
+    return _normalize_research_tool_name(event.tool_name)
 
 
 def _constraint_coverage_proxy(run: ResearchRun) -> float:

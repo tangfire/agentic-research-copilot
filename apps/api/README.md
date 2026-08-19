@@ -8,8 +8,15 @@ Main surfaces:
 
 - research runs and asynchronous jobs
 - document ingest and local corpus search
-- agent orchestration through the pipeline
+- conversational agent sessions, memory, workspaces, skills, and plan confirmation
+- specialist worker routing through `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent`
 - report generation and replay
 - trace, evaluation, telemetry, and runtime config
 
-There are no memory endpoints in the current core. Project memory and the old local workbench MCP server were removed so the backend remains focused on evidence-grounded research runs.
+The old local workbench MCP server is intentionally gone. MCP is now only an external evidence boundary. Memory endpoints are part of the current agent workbench layer:
+
+- `POST /v1/memory`
+- `GET /v1/memory`
+- `DELETE /v1/memory/{memory_id}`
+
+The lower-level `/v1/research/*` APIs remain focused on evidence-grounded research runs.

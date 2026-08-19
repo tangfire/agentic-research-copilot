@@ -1,7 +1,16 @@
 from pathlib import Path
 
-from agentic_research_copilot.multi_agent_harness import select_specialists
+from agentic_research_copilot.multi_agent_harness import select_specialists, summarize_run
 from agentic_research_copilot.schemas import BenchmarkTask, ResearchRequest
+from agentic_research_copilot.schemas import (
+    AgentRoleAssignment,
+    EvidenceItem,
+    EvidenceLedger,
+    RAGEvaluation,
+    ResearchReport,
+    ResearchRun,
+    RunTraceEvent,
+)
 
 
 def test_route_selection_does_not_match_repo_on_substrings():
@@ -54,3 +63,75 @@ def test_route_selection_covers_labeled_benchmark_cases():
         )
 
         assert set(select_specialists(request)) == set(case.expected_agent_ids), case.task_id
+
+
+def test_benchmark_contract_requires_completed_tools_and_expected_evidence():
+    task = BenchmarkTask(
+        task_id="strict-tool-coverage",
+        topic="Evaluate a repo with expected web and local evidence.",
+        expected_agent_ids=["architecture_fit"],
+        expected_tools=["web_search", "vector_retrieval"],
+        expected_evidence_kinds=["web", "document-chunk"],
+        min_source_count=2,
+    )
+    request = ResearchRequest(topic=task.topic)
+    run = ResearchRun(
+        run_id="run-strict",
+        request=request,
+        status="completed",
+        trace=[
+            RunTraceEvent(
+                kind="tool_call",
+                actor="ArchitectureFitAgent",
+                tool_name="web_search",
+                status="started",
+                message="Started web search but did not complete.",
+            ),
+            RunTraceEvent(
+                kind="tool_call",
+                actor="ArchitectureFitAgent",
+                tool_name="vector_retrieval",
+                status="completed",
+                message="Retrieved local evidence.",
+            ),
+        ],
+        evidence=[
+            EvidenceItem(
+                title="Local note",
+                source="local-kb",
+                kind="document-chunk",
+                snippet="Local grounding evidence.",
+                metadata={"plan_item_id": "item_1"},
+            )
+        ],
+        report=ResearchReport(title="Memo", summary="Summary", source_count=1),
+        evaluation=RAGEvaluation(citation_precision=1.0, passed=True),
+    )
+    assignments = [
+        AgentRoleAssignment(
+            assignment_id="assignment-1",
+            agent_id="architecture_fit",
+            agent_name="ArchitectureFitAgent",
+            status="completed",
+            selected_tools=["web_search", "vector_retrieval"],
+            evidence_count=1,
+        )
+    ]
+    summary = summarize_run(
+        run,
+        task=task,
+        assignments=assignments,
+        route_decisions=[],
+        conflicts=[],
+        evidence_ledger=EvidenceLedger(
+            run_id=run.run_id,
+            total_evidence_count=1,
+            utilization_rate=1.0,
+        ),
+    )
+
+    assert summary.tool_completed_success_rate == 0.5
+    assert summary.expected_tool_coverage == 0.5
+    assert summary.expected_evidence_coverage == 0.5
+    assert summary.passed is False
+    assert any("missing web_search" in note for note in summary.notes)

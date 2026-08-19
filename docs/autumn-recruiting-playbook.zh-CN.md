@@ -243,7 +243,7 @@ http://127.0.0.1:8000/
 8. 看 Tools 区：tool registry、approval requests、tool invocation、steps。
 9. 看 Quality 区：citation precision、context recall、faithfulness、constraint coverage。
 10. 说明 GitHub MCP 如果没 token，会显示 unavailable，不会伪装成 MCP evidence。
-11. 打开 Harness 区：展示三个 specialist lane、route decision、evidence ledger、conflict 和 benchmark summary。
+11. 打开 Harness 区：展示三个 specialist worker、route decision、evidence ledger、conflict 和 benchmark summary。
 12. 调用 replay，说明它复用冻结 run artifact，不重新搜索、不重新调用 MCP。
 
 ## 6. 面试官问“为什么不用 Codex/Deep Research”
@@ -260,15 +260,15 @@ http://127.0.0.1:8000/
 
 v4 不再把“多 Agent”讲成数量，而是讲成责任边界：
 
-- `RepoSignalLane`：仓库、代码、issue、PR、release 和 license 事实。
-- `ArchitectureFitLane`：架构适配、API、workflow、集成成本和本地知识库。
-- `OpsRiskLane`：部署、回滚、依赖、可靠性、成本和风险。
+- `RepoSignalAgent`：仓库、代码、issue、PR、release 和 license 事实。
+- `ArchitectureFitAgent`：架构适配、API、workflow、集成成本和本地知识库。
+- `OpsRiskAgent`：部署、回滚、依赖、可靠性、成本和风险。
 
-Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循环和报告生成。三类 specialist lane 负责把“谁应该关注什么”显式写进 run artifact。Writer 合并结论，Verifier 检查证据、冲突和约束覆盖。它们不是第二套在线研究 worker。
+Planner 仍然决定研究计划，底层 LangGraph workflow 仍然负责状态和 checkpoint。三类 specialist worker 在 research stage 内真正执行各自的工具循环：它们共享 provider 家族，但职责、工具边界、trace actor 和证据归属不同。Writer 合并结论，Verifier 检查证据、冲突和约束覆盖。
 
 可以这样回答“这是不是硬凑技术”：
 
-> 如果只是问一个事实，三个 specialist 确实是过度设计。但开源引入评审需要同时回答仓库事实、架构适配和运维风险，而且每一类证据来源和失败方式都不同。我只保留三个稳定 lane，并用 route precision、evidence utilization、constraint coverage 和 conflict record 验证拆分是否有价值。
+> 如果只是问一个事实，三个 specialist 确实是过度设计。但开源引入评审需要同时回答仓库事实、架构适配和运维风险，而且每一类证据来源和失败方式都不同。我只保留三个稳定 worker，并用 route precision、expected tool coverage、expected evidence coverage、constraint coverage 和 conflict record 验证拆分是否有价值。
 
 可以这样回答“和研究闭环有什么关系”：
 
@@ -290,7 +290,7 @@ Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循
 
 诚实补一句：
 
-> 现在它是 LightRAG-inspired 的轻量图增强，不是完整 GraphRAG 平台。
+> 现在它是可选的 LightRAG-inspired 轻量图增强，不是默认必须开启的完整 GraphRAG 平台。
 
 ### Q3：fixture 路径是不是假的？
 
@@ -337,7 +337,7 @@ Planner 仍然决定研究计划，底层 research runtime 仍然负责工具循
 简历项目 bullet 可以这样写：
 
 - 设计并实现 conversational research agent：支持 session state、SQLite memory、interactive planning、human confirmation、step stream 和后台 research job binding。
-- 构建 Agentic RAG 检索层：结合 Qdrant dense retrieval、SQLite FTS5/BM25、LightRAG-inspired entity/relation graph signal 和 reranking，支持本地文档与 project memory grounding。
+- 构建 Agentic RAG 检索层：以 Qdrant dense retrieval + SQLite FTS5/BM25 为主路径，支持可选 LightRAG-inspired entity/relation graph signal 和 reranking，服务本地文档与 project memory grounding。
 - 实现 ODR-style research workflow：clarify、plan、research supervisor、bounded tool loop、reporter、verifier/evaluator、trace/replay。
 - 设计 tool registry/policy/invocation/approval 模型，支持 GitHub MCP repository/code/issue/PR/release evidence，并在 token 缺失时 fail fast 或显式降级。
 - 建设可观测质量体系：输出 source index、retrieval route、tool calls、checkpoint、citation precision、context precision、faithfulness proxy、constraint coverage 等评估指标。

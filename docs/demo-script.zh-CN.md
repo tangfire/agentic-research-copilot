@@ -89,14 +89,14 @@ http://127.0.0.1:8000/
 重点切右侧：
 
 - `Tools`：tool registry / invocation / approval
-- `Harness`：RepoSignalLane / ArchitectureFitLane / OpsRiskLane 三个 specialist lane、route decisions、conflicts、evidence ledger、benchmark summary
+- `Harness`：RepoSignalAgent / ArchitectureFitAgent / OpsRiskAgent 三个 specialist worker、route decisions、conflicts、evidence ledger、benchmark summary
 - `Quality`：citation precision / context recall / constraint coverage
 - `Run Result`：report / source index / recommendation
 - `Export`：导出整个 session bundle
 
 讲法：
 
-> 这里的 multi-agent 不是为了把 agent 数量堆上去，而是把开源引入评审拆成三个稳定责任边界：仓库事实、架构适配、运维风险。Harness 区能看到每个 lane 负责哪些 plan item、用了哪些工具、拿到多少证据，以及 Verifier 发现了哪些冲突或覆盖缺口。
+> 这里的 multi-agent 不是为了把 agent 数量堆上去，而是把开源引入评审拆成三个稳定责任边界：仓库事实、架构适配、运维风险。Harness 区能看到每个 worker 负责哪些 plan item、用了哪些工具、拿到多少证据，以及 Verifier 发现了哪些冲突或覆盖缺口。
 
 ### Step 6：收尾
 

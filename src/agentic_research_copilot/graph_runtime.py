@@ -470,6 +470,7 @@ class LangGraphResearchRuntime:
                 ),
                 "plan_count": len(plan),
                 "runtime": "langgraph",
+                "execution_mode": "specialist_worker",
             },
         )
         research_results = self.copilot._research_plan_items(
@@ -485,13 +486,15 @@ class LangGraphResearchRuntime:
         document_hits: list[EvidenceItem] = []
         notes: list[ResearchNote] = []
         evidence: list[EvidenceItem] = []
+        executed_routes = []
 
         for item in plan:
-            route = route_lookup.get(item.id)
             result = research_results.get(item.id)
+            route = result.executed_route if result is not None and result.executed_route is not None else route_lookup.get(item.id)
             if route is None or result is None:
                 item.status = "done"
                 continue
+            executed_routes.append(route)
 
             web_evidence = result.web_evidence
             document_evidence = result.document_evidence
@@ -502,15 +505,18 @@ class LangGraphResearchRuntime:
                 self._append_trace(
                     state,
                     kind="tool_call",
-                    actor="researcher",
-                    message=f"Collected {len(web_evidence)} external evidence items.",
-                    step=f"research.{item.id}.web",
+                    actor=result.agent_name,
+                    message=f"{result.agent_name} collected {len(web_evidence)} external evidence items.",
+                    step=f"research.{result.agent_id}.{item.id}.web",
                     tool_name="web_search",
                     provider=self.copilot.settings.search_provider,
                     latency_ms=result.web_latency_ms,
                     result_count=len(web_evidence),
                     query=route.web_query or item.search_query or item.question,
                     queries=route.web_queries,
+                    agent_id=result.agent_id,
+                    agent_name=result.agent_name,
+                    execution_mode="specialist_worker",
                     parallel=True,
                     runtime="langgraph",
                 )
@@ -519,16 +525,19 @@ class LangGraphResearchRuntime:
                 self._append_trace(
                     state,
                     kind="tool_call",
-                    actor="retriever",
-                    message=f"Retrieved {len(document_evidence)} contextual evidence items.",
-                    step=f"retrieve.{item.id}",
-                    tool_name="qdrant_retrieval",
+                    actor=result.agent_name,
+                    message=f"{result.agent_name} retrieved {len(document_evidence)} contextual evidence items.",
+                    step=f"research.{result.agent_id}.{item.id}.vector",
+                    tool_name="vector_retrieval",
                     provider=corpus_profile.vector_backend,
                     latency_ms=result.document_latency_ms,
                     result_count=len(document_evidence),
                     query=route.internal_query or item.search_query or item.question,
                     queries=route.internal_queries,
                     backend=corpus_profile.vector_backend,
+                    agent_id=result.agent_id,
+                    agent_name=result.agent_name,
+                    execution_mode="specialist_worker",
                     parallel=True,
                     runtime="langgraph",
                 )
@@ -545,9 +554,9 @@ class LangGraphResearchRuntime:
                 self._append_trace(
                     state,
                     kind="tool_call",
-                    actor="researcher",
+                    actor=result.agent_name,
                     message=f"Called MCP tool {iteration.get('mcp_tool_name') or 'mcp_tool'}.",
-                    step=f"research.{item.id}.mcp.{iteration.get('iteration', 0)}",
+                    step=f"research.{result.agent_id}.{item.id}.mcp.{iteration.get('iteration', 0)}",
                     tool_name=iteration.get("mcp_tool_name") or "mcp_tool",
                     provider="model_context_protocol",
                     latency_ms=int(iteration.get("tool_latency_ms", 0) or 0),
@@ -557,16 +566,22 @@ class LangGraphResearchRuntime:
                     mcp_tool_args=iteration.get("mcp_tool_args"),
                     source_channel="mcp",
                     plan_item_id=item.id,
+                    agent_id=result.agent_id,
+                    agent_name=result.agent_name,
+                    execution_mode="specialist_worker",
                     runtime="langgraph",
                 )
             self._append_trace(
                 state,
                 kind="step",
-                actor="researcher",
-                message=f"Completed {item.question}",
-                step=f"research.{item.id}",
+                actor=result.agent_name,
+                message=f"{result.agent_name} completed {item.question}",
+                step=f"research.{result.agent_id}.{item.id}",
                 status="completed",
                 evidence_count=item.evidence_count,
+                agent_id=result.agent_id,
+                agent_name=result.agent_name,
+                execution_mode="specialist_worker",
                 note_confidence=note.confidence,
                 sufficiency_score=note.sufficiency_score,
                 sufficiency_gaps=note.gaps,
@@ -583,9 +598,12 @@ class LangGraphResearchRuntime:
             )
             self._checkpoint(
                 state,
-                f"research.{item.id}",
+                f"research.{result.agent_id}.{item.id}",
                 {
                     "question": item.question,
+                    "agent_id": result.agent_id,
+                    "agent_name": result.agent_name,
+                    "execution_mode": "specialist_worker",
                     "evidence_count": item.evidence_count,
                     "note_confidence": note.confidence,
                     "sufficiency_score": note.sufficiency_score,
@@ -601,15 +619,20 @@ class LangGraphResearchRuntime:
                     "min_sources": route.min_sources,
                     "web_evidence_count": len(web_evidence),
                     "document_evidence_count": len(document_evidence),
-                    "retrieval_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+                    "retrieval_strategy": "parent_child_dense_bm25_optional_graph_rerank",
                     "parallel": True,
                 },
             )
 
+        if executed_routes:
+            retrieval_routes = executed_routes
+            search_queries = self.copilot.workflow.build_queries(plan, retrieval_routes, revision_count=revision_count)
+        else:
+            search_queries = state["final_search_queries"]
         runtime_evidence = self.copilot._build_run_artifact_evidence(
             run_id=state["run_id"],
             plan=plan,
-            search_queries=state["final_search_queries"],
+            search_queries=search_queries,
             retrieval_routes=retrieval_routes,
             web_hits=web_hits,
             document_hits=document_hits,
@@ -622,6 +645,8 @@ class LangGraphResearchRuntime:
             "final_document_hits": document_hits,
             "final_notes": notes,
             "final_evidence": evidence,
+            "final_search_queries": search_queries,
+            "final_retrieval_routes": retrieval_routes,
         }
 
     def _reporter(self, state: ResearchGraphState) -> ResearchGraphState:

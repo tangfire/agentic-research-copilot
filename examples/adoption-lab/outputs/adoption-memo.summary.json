@@ -1,0 +1,117 @@
+{
+  "headline": {
+    "run_id": "8791320b-5ff8-4d3b-a408-ad0a089ebd44",
+    "status": "completed",
+    "evaluation_passed": true,
+    "source_count": 5,
+    "context_recall": 1.0,
+    "faithfulness_proxy": 0.8015,
+    "citation_precision": 1.0,
+    "expected_term_recall": 0.75,
+    "constraint_recall": 0.5,
+    "constraint_coverage_passed": false,
+    "graph_signal_hits": 0
+  },
+  "labeled_expectations": {
+    "expected_term_recall": 0.75,
+    "constraint_recall": 0.5,
+    "constraint_coverage_passed": false,
+    "expected_source_recall": 0.6667,
+    "matched_terms": [
+      "LangGraph",
+      "checkpoint",
+      "trace",
+      "revision",
+      "FastAPI",
+      "citation",
+      "evaluation",
+      "pilot",
+      "rollback"
+    ],
+    "matched_constraints": [
+      "5-engineer",
+      "Python 3.11",
+      "FastAPI",
+      "replayable runs"
+    ],
+    "matched_source_patterns": [
+      "github.com/langchain-ai/langgraph",
+      "langgraph"
+    ]
+  },
+  "route_counts": {
+    "hybrid": 4
+  },
+  "tool_counts": {
+    "web_search": 4,
+    "vector_retrieval": 4
+  },
+  "evidence_channels": {
+    "external": 12,
+    "document-chunk": 6,
+    "run-artifact": 1
+  },
+  "graph": {
+    "document_hits": 16,
+    "graph_enabled_hits": 0,
+    "graph_signal_hits": 0,
+    "matched_entities_sample": [],
+    "matched_relationships_sample": []
+  },
+  "trace": {
+    "event_count": 49,
+    "checkpoint_count": 12,
+    "handoff_count": 11,
+    "model_event_count": 4,
+    "actors": [
+      "ArchitectureFitAgent",
+      "OpsRiskAgent",
+      "evaluator",
+      "multi_agent_harness",
+      "planner",
+      "reporter",
+      "research_supervisor",
+      "researcher",
+      "supervisor",
+      "verifier"
+    ]
+  },
+  "providers": {
+    "model_provider": "openai_compatible",
+    "chat_model": "qwen-plus",
+    "embedding_provider": "openai_compatible",
+    "embedding_model": "qwen3.7-text-embedding",
+    "search_provider": "tavily",
+    "mcp_enabled": false,
+    "mcp_auth_token_configured": false,
+    "mcp_tools": [],
+    "rerank_provider": "dashscope",
+    "qdrant": "local-path",
+    "experiment_mode": "real"
+  },
+  "evaluation": {
+    "plan_coverage": 1.0,
+    "retrieval_hit_rate": 1.0,
+    "private_retrieval_hit_rate": 1.0,
+    "evidence_sufficiency": 1.0,
+    "tool_selection_coverage": 1.0,
+    "query_rewrite_count": 16,
+    "source_quality_score": 0.6553,
+    "context_precision": 0.4328,
+    "context_recall": 1.0,
+    "faithfulness_proxy": 0.8015,
+    "citation_precision": 1.0,
+    "citation_source_coverage": 1.0,
+    "source_diversity": 5,
+    "insufficient_plan_items": [],
+    "unsupported_sections": [],
+    "no_citation_section_count": 0,
+    "passed": true,
+    "notes": []
+  },
+  "findings": [
+    "Real report synthesis must use compact section drafts and evidence indexes; unbounded prompts make timeout failures likely.",
+    "Budgeted local indexing keeps the team context pack fast while preserving real model/search/report execution.",
+    "GitHub MCP is only counted as enabled when an auth token is configured and GitHub MCP tools are actually allowlisted."
+  ]
+}

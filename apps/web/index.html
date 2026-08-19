@@ -740,6 +740,10 @@
     async function loadSessions() {
       await loadWorkspaces();
       state.sessions = await api("/v1/agent/sessions");
+      if (state.activeSessionId && !state.sessions.some((session) => session.session_id === state.activeSessionId)) {
+        state.activeSessionId = null;
+        state.bundle = null;
+      }
       if (!state.activeSessionId && state.sessions.length) {
         state.activeSessionId = state.sessions[0].session_id;
       }
@@ -755,7 +759,18 @@
     }
 
     async function loadBundle(sessionId) {
-      state.bundle = await api(`/v1/agent/sessions/${sessionId}`);
+      try {
+        state.bundle = await api(`/v1/agent/sessions/${sessionId}`);
+      } catch (error) {
+        if (/not found/i.test(error.message || "")) {
+          state.activeSessionId = null;
+          state.bundle = null;
+          renderSessions();
+          renderAll();
+          return;
+        }
+        throw error;
+      }
       state.activeSessionId = sessionId;
       if (state.bundle.workspace && state.bundle.workspace.workspace_id) {
         state.activeWorkspaceId = state.bundle.workspace.workspace_id;
@@ -766,7 +781,7 @@
 
     function renderSessions() {
       if (!state.sessions.length) {
-        el.sessionList.innerHTML = '<div class="empty">No sessions yet.</div>';
+        el.sessionList.innerHTML = '<div class="empty">还没有会话，点“新建”开始。</div>';
         return;
       }
       const workspaceMap = new Map((state.workspaces || []).map((workspace) => [workspace.workspace_id, workspace]));
@@ -920,13 +935,13 @@
         return '<section class="block"><h3>计划</h3><p>还没有计划。先在左侧输入研究目标和团队约束。</p></section>';
       }
       const rolePreview = (plan.metadata && plan.metadata.role_preview) || {};
-      const previewLanes = rolePreview.selected_lanes || rolePreview.selected_agents || [];
+      const previewWorkers = rolePreview.selected_workers || rolePreview.selected_agents || rolePreview.selected_lanes || [];
       return `
         <section class="block">
           <h3>计划</h3>
           <p>${escapeHtml(plan.research_brief)}</p>
           <ol>${plan.plan_items.map((item) => `<li>${escapeHtml(item.question)}</li>`).join("")}</ol>
-          ${previewLanes.length ? `<p class="subtle">专长路由预览：${previewLanes.map((lane) => escapeHtml(lane)).join(" / ")}。这是责任分配预览，不是第二套研究执行。</p>` : ""}
+          ${previewWorkers.length ? `<p class="subtle">专家 worker 预览：${previewWorkers.map((worker) => escapeHtml(worker)).join(" / ")}。LangGraph 管流程，worker 负责各自的工具和证据。</p>` : ""}
           <div class="settings">
             <button id="confirmPlanInline" class="primary">确认并开始研究</button>
             <button id="continueConstraintsBtn">继续补充约束</button>
@@ -1062,7 +1077,7 @@
         <section class="block">
           <h3>路由</h3>
           <div class="metric-grid">
-            ${metric("专长 lane", assignments.length)}
+            ${metric("专家 worker", assignments.length)}
             ${metric("路由数", decisions.length)}
             ${metric("冲突数", conflicts.length)}
             ${metric("回放一致性", summary.replay_fidelity)}
@@ -1078,7 +1093,7 @@
               <span>${escapeHtml(short(assignment.reason, 180))}</span>
               <span class="subtle">${escapeHtml((assignment.selected_tools || []).join(", ") || "无工具")} · 证据 ${escapeHtml(assignment.evidence_count || 0)}</span>
             </div>
-          `).join("") : '<p>还没有专长路由。</p>'}
+          `).join("") : '<p>还没有专家 worker 记录。</p>'}
           ${conflicts.length ? `
             <h3>冲突</h3>
             ${conflicts.slice(0, 6).map((conflict) => `
@@ -1460,6 +1475,12 @@
     }
 
     function showError(message) {
+      if (/not found/i.test(message || "")) {
+        state.bundle = null;
+        state.activeSessionId = null;
+        renderAll();
+        return;
+      }
       const node = document.createElement("article");
       node.className = "message assistant";
       node.innerHTML = `<header><strong>error</strong></header><pre class="error">${escapeHtml(message)}</pre>`;

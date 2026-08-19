@@ -68,7 +68,7 @@ http://127.0.0.1:8000/docs
 - 工作区：团队背景、技术栈、部署约束、偏好来源。
 - Skill：当前选择的场景 playbook 和可执行脚本。
 - 工具：web、vector、GitHub MCP 的状态和调用记录。
-- 路由：RepoSignal / ArchitectureFit / OpsRisk 三个 specialist lane 为什么被选中。
+- 路由：RepoSignal / ArchitectureFit / OpsRisk 三个 specialist worker 为什么被选中、各自用了哪些工具。
 - 质量：引用、忠实度、上下文召回和约束覆盖。
 
 ## 4. 记忆怎么用
@@ -141,7 +141,7 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 这条顺序对应 agent 的核心链路：
 
 ```text
-为什么选这个 specialist lane
+为什么选这个 specialist worker
 -> 调用了哪些工具
 -> 中间经过哪些步骤
 -> 结果质量如何

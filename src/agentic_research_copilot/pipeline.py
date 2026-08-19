@@ -13,7 +13,13 @@ from .document_reader import DocumentReader
 from .evaluation import RAGEvaluator
 from .ledger import JobLedger, RunLedger
 from .mcp_tools import build_mcp_tool
-from .multi_agent_harness import enrich_research_run, replay_from_frozen_run
+from .multi_agent_harness import (
+    SPECIALIST_PROFILES,
+    build_role_assignments,
+    build_route_decisions,
+    enrich_research_run,
+    replay_from_frozen_run,
+)
 from .providers import build_embedding_provider, build_model_provider
 from .provider_base import ResearchModelProvider
 from .provider_validation import provider_runtime_report, require_real_provider_config
@@ -30,6 +36,7 @@ from .schemas import (
     RetrievalRoute,
     SearchQuery,
     SupervisorDecisionContract,
+    AgentSpecialistId,
 )
 from .routing import RetrievalCoordinator
 from .search import OPEN_DEEP_RESEARCH_STYLE_PROVIDERS, SearchTool, build_search_tool, search_provider_requires_key
@@ -43,6 +50,9 @@ from .workflow import ResearchWorkflow
 @dataclass
 class PlanItemResearchResult:
     item_id: str
+    agent_id: AgentSpecialistId = "architecture_fit"
+    agent_name: str = "ArchitectureFitAgent"
+    executed_route: RetrievalRoute | None = None
     web_evidence: list[EvidenceItem] = field(default_factory=list)
     document_evidence: list[EvidenceItem] = field(default_factory=list)
     note: ResearchNote | None = None
@@ -121,8 +131,9 @@ class ResearchCopilot:
             mcp_enabled=self.mcp_tool is not None,
         )
         self.planner = PlannerAgent(self.model_provider, self.settings)
+        resolved_search_tool = search_tool or build_search_tool(self.settings)
         self.researcher = ResearchAgent(
-            search_tool or build_search_tool(self.settings),
+            resolved_search_tool,
             model_provider=self.model_provider,
             embedding_provider=self.embedding_provider,
             mcp_tool=self.mcp_tool,
@@ -134,6 +145,22 @@ class ResearchCopilot:
             chunk_context_window=self.settings.source_reader_chunk_context_window,
             max_iterations=self.settings.research_max_iterations,
         )
+        self.specialist_workers = {
+            role_id: ResearchAgent(
+                resolved_search_tool,
+                model_provider=self.model_provider,
+                embedding_provider=self.embedding_provider,
+                mcp_tool=self.mcp_tool,
+                mcp_tool_catalog=self.mcp_tool_catalog,
+                source_reader_enabled=self.settings.source_reader_enabled,
+                source_reader_strategy=self.settings.source_reader_strategy,
+                raw_content_max_chars=self.settings.source_reader_max_chars,
+                excerpt_max_chars=self.settings.source_reader_excerpt_chars,
+                chunk_context_window=self.settings.source_reader_chunk_context_window,
+                max_iterations=self.settings.research_max_iterations,
+            )
+            for role_id in SPECIALIST_PROFILES
+        }
         self.verifier = VerifierAgent(self.model_provider, self.settings)
         self.reporter = ReporterAgent(self.model_provider, self.settings)
         self.supervisor_agent = SupervisorAgent(self.model_provider, self.settings)
@@ -408,11 +435,11 @@ class ResearchCopilot:
             "orchestration": {
                 "runtime": self.settings.orchestration_runtime,
                 "strict_providers": self.settings.strict_providers,
-                "active_graph": "supervisor -> planner -> research_supervisor -> parallel_research -> reporter -> verifier/evaluator -> finalize",
+                "active_graph": "supervisor -> planner -> research_supervisor -> specialist_workers -> reporter -> verifier/evaluator -> finalize",
                 "checkpointer": self.settings.langgraph_checkpointer,
                 "checkpoint_path": self.settings.langgraph_checkpoint_path,
                 "durability_boundary": "Single-node LangGraph sqlite checkpointing is the default graph durability layer; SQLite run traces/replay are always persisted by the app, with MemorySaver used only as a defensive fallback.",
-                "reference_pattern": "Open Deep Research uses LangGraph StateGraph/subgraph orchestration; this repo uses LangGraph for the v1 research workflow while keeping product-specific nodes.",
+                "reference_pattern": "Open Deep Research uses LangGraph StateGraph/subgraph orchestration; this repo uses LangGraph for a product-specific research workflow with specialist workers inside the research stage.",
             },
             "modeling": {
                 "strict_providers": self.settings.strict_providers,
@@ -511,7 +538,7 @@ class ResearchCopilot:
                 ],
                 "product_specific_differences": [
                     "Uses an ODR-style LLM research supervisor; ConductResearch calls carry selected tools, query rewrites, grounding mode, and sufficiency criteria",
-                    "Keeps explainable route hints as audit metadata, not as the primary real-provider decision layer",
+                    "Routes delegated research units to three bounded specialist workers for repo signals, architecture fit, and operations risk",
                     "Adds local document grounding with text/Markdown/HTML/PDF parsing before Qdrant retrieval",
                     "Adds a conversational session and memory layer in front of the research graph instead of turning every chat turn into a run",
                     "Uses single-node FastAPI/Celery/Redis/SQLite/Qdrant deployment, not a distributed platform",
@@ -535,10 +562,21 @@ class ResearchCopilot:
                     "name": "route_materializer",
                     "role": "turns ConductResearch tool-call arguments into executable web/vector/MCP route contracts",
                 },
-                {"name": "researcher", "role": "collects web evidence through the configured search tool"},
+                {
+                    "name": "repo_signal_agent",
+                    "role": "checks repository facts, source authority, maintenance signals, code, issues, pull requests, releases, and licenses",
+                },
+                {
+                    "name": "architecture_fit_agent",
+                    "role": "checks architecture fit, API/runtime semantics, integration cost, workflow design, and local KB alignment",
+                },
+                {
+                    "name": "ops_risk_agent",
+                    "role": "checks deployment, rollback, dependency, security/compliance, cost, latency, and reliability constraints",
+                },
                 {
                     "name": "grounding_layer",
-                    "role": "retrieves precise child chunks, expands parent/neighbor context, then applies dense/BM25 fusion and reranking",
+                    "role": "serves vector retrieval to specialist workers with precise child chunks, parent/neighbor context, dense/BM25 fusion, and optional graph/rerank enhancement",
                 },
                 {"name": "supervisor", "role": "coordinates handoffs, retries, and failure states"},
                 {
@@ -610,11 +648,11 @@ class ResearchCopilot:
                     "name": "document_retrieval",
                     "provider": corpus_profile.vector_backend,
                     "enabled": corpus_profile.has_private_docs,
-                    "strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+                    "strategy": "parent_child_dense_bm25_optional_graph_rerank",
                     "parent_child": "child chunks are retrieved precisely, then same-document neighbor context is returned for synthesis",
                     "contextual_retrieval": "indexing-time chunk context prefixes are prepended before dense embedding and BM25 indexing",
                     "graph_augmented": self.settings.rag_graph_enabled,
-                    "graph_strategy": "LightRAG-inspired structured entity/relation graph fused with dense/BM25 candidates",
+                    "graph_strategy": "Optional LightRAG-inspired structured entity/relation graph fused with dense/BM25 candidates",
                     "collection": corpus_profile.collection_name,
                     "keyword_backend": corpus_profile.keyword_backend,
                     "reranker": self.reranker.name,
@@ -635,7 +673,7 @@ class ResearchCopilot:
                     ),
                     "chunking_strategy": "DocumentStore performs paragraph-aware child chunking, contextual retrieval prefixing, dense embedding, and BM25 indexing",
                     "parent_child_strategy": "retrieval scores child chunks and returns same-document parent/neighbor context for synthesis",
-                    "graph_strategy": "LightRAG-inspired structured entity/relation graph; graph hits are fused before rerank",
+                    "graph_strategy": "Optional LightRAG-inspired structured entity/relation graph; graph hits are fused before rerank when enabled",
                 },
                 {"name": "run_ledger", "provider": "sqlite", "enabled": True},
                 {"name": "job_queue", "provider": self.settings.job_queue_backend, "enabled": True},
@@ -649,7 +687,7 @@ class ResearchCopilot:
             ],
             "retrieval": {
                 "routes": ["external", "internal", "hybrid"],
-                "default_strategy": "light_rag_inspired_parent_child_dense_bm25_graph_rerank",
+                "default_strategy": "parent_child_dense_bm25_optional_graph_rerank",
                 "hybrid_pipeline": {
                     "parent_child": "child retrieval with parent/neighbor context expansion",
                     "contextual_retrieval": "chunk-specific context prefixes are generated at ingestion and indexed with the chunk",
@@ -1067,6 +1105,30 @@ class ResearchCopilot:
         if not runnable_items:
             return {}
 
+        request_metadata = request.metadata or {}
+        assignments = build_role_assignments(
+            request,
+            plan,
+            list(route_lookup.values()),
+            [],
+            run_id=None,
+            session_id=_optional_text(request_metadata.get("session_id")),
+            skill_id=_optional_text(request_metadata.get("skill_id")),
+            workspace_context=_workspace_context_from_request_metadata(request_metadata),
+        )
+        route_decisions = build_route_decisions(
+            request,
+            plan,
+            list(route_lookup.values()),
+            [],
+            assignments,
+        )
+        worker_by_item = {
+            decision.plan_item_id: decision.agent_id
+            for decision in route_decisions
+            if decision.status == "selected"
+        }
+
         supervisor_worker_limit = (
             supervisor_decision.max_concurrent_research_units
             if supervisor_decision is not None
@@ -1082,9 +1144,15 @@ class ResearchCopilot:
                 item.id: self._research_plan_item(
                     request=request,
                     item=item,
-                    route=route_lookup[item.id],
+                    route=self._route_for_specialist(
+                        route_lookup[item.id],
+                        worker_by_item.get(item.id, "architecture_fit"),
+                        request=request,
+                        corpus_profile=corpus_profile,
+                    ),
                     corpus_profile=corpus_profile,
                     research_brief=research_brief,
+                    agent_id=worker_by_item.get(item.id, "architecture_fit"),
                 )
                 for item in runnable_items
             }
@@ -1096,9 +1164,15 @@ class ResearchCopilot:
                     self._research_plan_item,
                     request=request,
                     item=item,
-                    route=route_lookup[item.id],
+                    route=self._route_for_specialist(
+                        route_lookup[item.id],
+                        worker_by_item.get(item.id, "architecture_fit"),
+                        request=request,
+                        corpus_profile=corpus_profile,
+                    ),
                     corpus_profile=corpus_profile,
                     research_brief=research_brief,
+                    agent_id=worker_by_item.get(item.id, "architecture_fit"),
                 ): item
                 for item in runnable_items
             }
@@ -1111,6 +1185,11 @@ class ResearchCopilot:
                         raise
                     results[item.id] = PlanItemResearchResult(
                         item_id=item.id,
+                        agent_id=worker_by_item.get(item.id, "architecture_fit"),
+                        agent_name=SPECIALIST_PROFILES[
+                            worker_by_item.get(item.id, "architecture_fit")
+                        ].agent_name,
+                        executed_route=route_lookup.get(item.id),
                         note=ResearchNote(
                             plan_item_id=item.id,
                             question=item.question,
@@ -1151,7 +1230,21 @@ class ResearchCopilot:
         route,
         corpus_profile: CorpusProfile,
         research_brief: str,
+        agent_id: AgentSpecialistId = "architecture_fit",
     ) -> PlanItemResearchResult:
+        profile = SPECIALIST_PROFILES[agent_id]
+        worker = self.specialist_workers.get(agent_id, self.researcher)
+        worker.mcp_tool = self.mcp_tool
+        worker.mcp_tool_catalog = list(self.mcp_tool_catalog)
+        worker_item = item.model_copy(
+            update={
+                "purpose": (
+                    f"{item.purpose} "
+                    f"Specialist mandate: {profile.responsibility} "
+                    f"Evidence should be selected and explained from the {profile.agent_name} perspective."
+                )
+            }
+        )
         web_evidence: list[EvidenceItem] = []
         document_evidence: list[EvidenceItem] = []
         web_latency_ms = 0
@@ -1170,14 +1263,18 @@ class ResearchCopilot:
                 or getattr(route, "internal_queries", None)
                 or [route.web_query or route.internal_query or item.search_query or item.question]
             )
-            collection = self.researcher.collect_iterative(
-                item,
+            collection = worker.collect_iterative(
+                worker_item,
                 web_queries,
                 min_evidence=max(1, route.min_evidence),
                 min_sources=max(1, route.min_sources),
                 max_iterations=self.settings.research_max_iterations,
             )
-            web_evidence = self._dedupe_evidence(collection.evidence)
+            web_evidence = self._tag_specialist_evidence(
+                self._dedupe_evidence(collection.evidence),
+                agent_id=agent_id,
+                agent_name=profile.agent_name,
+            )
             research_iterations.extend(collection.iterations)
             researcher_completed_reason = collection.completed_reason
             researcher_follow_up_queries.extend(collection.follow_up_queries)
@@ -1195,6 +1292,11 @@ class ResearchCopilot:
                     )
                 )
             document_evidence = self._dedupe_evidence(document_evidence)
+            document_evidence = self._tag_specialist_evidence(
+                document_evidence,
+                agent_id=agent_id,
+                agent_name=profile.agent_name,
+            )
             document_latency_ms = int((datetime.now(timezone.utc) - start_collect).total_seconds() * 1000)
 
         item_evidence = self._dedupe_evidence([*web_evidence, *document_evidence])
@@ -1211,12 +1313,90 @@ class ResearchCopilot:
             )
         return PlanItemResearchResult(
             item_id=item.id,
+            agent_id=agent_id,
+            agent_name=profile.agent_name,
+            executed_route=route,
             web_evidence=web_evidence,
             document_evidence=document_evidence,
             note=note,
             web_latency_ms=web_latency_ms,
             document_latency_ms=document_latency_ms,
         )
+
+    def _route_for_specialist(
+        self,
+        route: RetrievalRoute,
+        agent_id: AgentSpecialistId,
+        *,
+        request: ResearchRequest,
+        corpus_profile: CorpusProfile,
+    ) -> RetrievalRoute:
+        """Apply the specialist's tool boundary before its worker loop starts."""
+        profile = SPECIALIST_PROFILES[agent_id]
+        allowed_tools = set(profile.shared_tools) | set(profile.exclusive_tools)
+        selected_tools = [
+            tool
+            for tool in route.selected_tools
+            if tool in allowed_tools
+            and not (tool == "mcp_tool" and self.mcp_tool is None)
+        ]
+        if not selected_tools:
+            if agent_id == "repo_signal" and self.mcp_tool is not None:
+                selected_tools = ["mcp_tool"]
+            elif agent_id == "architecture_fit" and request.include_private_docs and corpus_profile.has_private_docs:
+                selected_tools = ["vector_retrieval"]
+            elif agent_id == "ops_risk" and request.include_private_docs and corpus_profile.has_private_docs:
+                selected_tools = ["vector_retrieval"]
+            else:
+                selected_tools = ["web_search"]
+
+        mode = "hybrid" if {"web_search", "vector_retrieval"} <= set(selected_tools) else (
+            "internal" if selected_tools == ["vector_retrieval"] else "external"
+        )
+        web_queries = list(route.web_queries) if "web_search" in selected_tools else []
+        internal_queries = list(route.internal_queries) if "vector_retrieval" in selected_tools else []
+        if "web_search" in selected_tools and not web_queries:
+            web_queries = [route.web_query or route.internal_query or " ".join(
+                [route.reason, request.topic]
+            )]
+        if "vector_retrieval" in selected_tools and not internal_queries:
+            internal_queries = [route.internal_query or route.web_query or request.topic]
+
+        return route.model_copy(
+            update={
+                "mode": mode,
+                "selected_tools": selected_tools,
+                "web_query": web_queries[0] if web_queries else None,
+                "internal_query": internal_queries[0] if internal_queries else None,
+                "web_queries": web_queries,
+                "internal_queries": internal_queries,
+                "reason": (
+                    f"{route.reason} Specialist boundary: {profile.agent_name} "
+                    f"owns {', '.join(selected_tools)}."
+                ),
+            }
+        )
+
+    def _tag_specialist_evidence(
+        self,
+        evidence: list[EvidenceItem],
+        *,
+        agent_id: AgentSpecialistId,
+        agent_name: str,
+    ) -> list[EvidenceItem]:
+        return [
+            item.model_copy(
+                update={
+                    "metadata": {
+                        **item.metadata,
+                        "agent_id": agent_id,
+                        "agent_name": agent_name,
+                        "execution_mode": "specialist_worker",
+                    }
+                }
+            )
+            for item in evidence
+        ]
 
     def _routes_from_supervisor_decision(
         self,

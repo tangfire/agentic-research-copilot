@@ -112,6 +112,7 @@ def test_pipeline_returns_report(tmp_path: Path):
             storage_path=str(tmp_path / "pipeline.sqlite"),
             langgraph_checkpoint_path=str(tmp_path / "pipeline-checkpoints.sqlite"),
             seed_reference_knowledge=True,
+            rag_graph_enabled=True,
         ),
         model_provider=provider,
         embedding_provider=provider,
@@ -141,7 +142,10 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert result.handoffs
     assert result.role_assignments
     assert {assignment.agent_id for assignment in result.role_assignments} >= {"architecture_fit"}
+    assert all(assignment.execution_mode == "specialist_worker" for assignment in result.role_assignments)
+    assert any(assignment.metadata.get("online_worker") is True for assignment in result.role_assignments)
     assert result.route_decisions
+    assert all(decision.execution_mode == "specialist_worker" for decision in result.route_decisions)
     assert result.evidence_ledger is not None
     assert result.evidence_ledger.total_evidence_count == len(result.evidence)
     assert result.benchmark_summary is not None
@@ -162,14 +166,16 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert any(event.tool_name == "ConductResearch" for event in result.trace)
     assert any(event.actor == "reporter" and event.model for event in result.trace)
     assert any(event.kind == "tool_call" and event.metadata.get("parallel") is True for event in result.trace)
-    assert any(event.actor == "researcher" and "sufficiency_score" in event.metadata for event in result.trace)
+    specialist_actor_names = {assignment.agent_name for assignment in result.role_assignments}
+    assert any(event.actor in specialist_actor_names and "sufficiency_score" in event.metadata for event in result.trace)
+    assert any(event.metadata.get("execution_mode") == "specialist_worker" for event in result.trace)
     assert any(
         note.research_iterations for note in result.notes
     ) or any(route.mode == "internal" for route in result.retrieval_routes)
     assert any(
-        event.actor == "researcher" and event.metadata.get("research_iteration_count", 0) >= 1
+        event.actor in specialist_actor_names and event.metadata.get("research_iteration_count", 0) >= 1
         for event in result.trace
-    ) or any(event.actor == "retriever" for event in result.trace)
+    ) or any(event.tool_name == "vector_retrieval" for event in result.trace)
     assert any(checkpoint.stage == "langgraph.runtime" for checkpoint in result.checkpoints)
     assert any(checkpoint.stage == "supervisor.decision" for checkpoint in result.checkpoints)
     assert any(checkpoint.stage == "research.parallel.started" for checkpoint in result.checkpoints)
@@ -190,7 +196,7 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert result.web_hits is not None
     assert result.document_hits
     assert any(hit.kind == "document-chunk" for hit in result.document_hits)
-    assert any(hit.metadata.get("retrieval_strategy") == "light_rag_inspired_parent_child_dense_bm25_graph_rerank" for hit in result.document_hits)
+    assert any(hit.metadata.get("retrieval_strategy") == "parent_child_dense_bm25_optional_graph_rerank" for hit in result.document_hits)
     assert any(hit.metadata.get("parent_child_retrieval") is True for hit in result.document_hits)
     assert any(hit.metadata.get("graph_augmented_retrieval") is True for hit in result.document_hits)
     assert any(hit.metadata.get("hybrid_fusion") in {"rrf", "dbsf"} for hit in result.document_hits)

@@ -454,6 +454,9 @@ AgentEventKind = Literal[
 ]
 
 
+AgentExecutionMode = Literal["specialist_worker", "single_agent_baseline", "role_routing_overlay"]
+
+
 class AgentRoleAssignment(BaseModel):
     assignment_id: str
     run_id: str | None = None
@@ -461,7 +464,7 @@ class AgentRoleAssignment(BaseModel):
     agent_id: AgentSpecialistId
     agent_name: str
     status: AgentRoleStatus = "selected"
-    execution_mode: Literal["role_routing_overlay"] = "role_routing_overlay"
+    execution_mode: AgentExecutionMode = "specialist_worker"
     reason: str = ""
     plan_item_ids: list[str] = Field(default_factory=list)
     selected_tools: list[ResearchToolName] = Field(default_factory=list)
@@ -481,7 +484,7 @@ class RouteDecision(BaseModel):
     agent_id: AgentSpecialistId
     agent_name: str
     status: RouteDecisionStatus = "selected"
-    execution_mode: Literal["role_routing_overlay"] = "role_routing_overlay"
+    execution_mode: AgentExecutionMode = "specialist_worker"
     mode: Literal["external", "internal", "hybrid"] = "hybrid"
     selected_tools: list[ResearchToolName] = Field(default_factory=list)
     reason: str = ""
@@ -545,10 +548,14 @@ class BenchmarkRunSummary(BaseModel):
     route_recall: float = 0.0
     specialist_completion_rate: float = 0.0
     tool_success_rate: float = 0.0
+    tool_completed_success_rate: float = 0.0
+    expected_tool_coverage: float = 0.0
+    expected_evidence_coverage: float = 0.0
     evidence_utilization: float = 0.0
     citation_precision: float = 0.0
     constraint_coverage: float = 0.0
     replay_fidelity: float = 0.0
+    execution_mode: AgentExecutionMode = "specialist_worker"
     latency_ms: int = 0
     cost_usd: float = 0.0
     passed: bool = False

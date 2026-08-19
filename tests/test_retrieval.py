@@ -120,7 +120,7 @@ def test_document_store_returns_contextual_chunks():
 
     assert hits
     assert hits[0].kind == "document-chunk"
-    assert hits[0].metadata["retrieval_strategy"] == "light_rag_inspired_parent_child_dense_bm25_graph_rerank"
+    assert hits[0].metadata["retrieval_strategy"] == "parent_child_dense_bm25_optional_graph_rerank"
     assert hits[0].metadata["parent_child_retrieval"] is True
     assert hits[0].metadata["parent_id"] == document.metadata["document_id"]
     assert hits[0].metadata["retrieval_backend"].endswith("_embedding_hybrid")

@@ -16,14 +16,14 @@ session -> memory -> plan -> confirm -> tool loop -> report -> trace/eval -> exp
 
 - `workflow node`：LangGraph 里的控制流节点，负责什么时候该跑下一步。
 - `agent`：模型能力封装，负责一次规划、监督、研究、写作或验证。
-- `specialist lane`：RepoSignal / ArchitectureFit / OpsRisk 三个责任边界，只负责路由和证据账本，不会再启动第二套研究执行。
+- `specialist worker`：RepoSignal / ArchitectureFit / OpsRisk 三个责任边界，在 research stage 内真正执行各自的工具循环和证据收集。
 
 你可以把它理解成：
 
 ```text
-node 负责调度
-agent 负责决策或执行
-lane 负责说明谁该看什么
+node 负责调度和持久化状态
+agent capability 负责规划、监督、写作或验证
+specialist worker 负责某个责任边界下的工具循环和证据归属
 ```
 
 ## 先读什么
@@ -55,8 +55,7 @@ uvicorn agentic_research_copilot.server:create_app --factory --host 127.0.0.1 --
 
 ## 读文档时别混的点
 
-- `agent` 不是“又起了一轮隐藏执行”。
-- `specialist lane` 不是独立在线模型 worker。
+- `agent` 不是“节点后再跑一套隐藏 workflow”。
+- `specialist worker` 是在线执行单元，但它运行在同一条 LangGraph research stage 内。
 - `memory precision` 和 `constraint coverage` 多半是工程 proxy，不是学术 benchmark。
 - `MCP unavailable` 不是故障，缺 token 时本来就应该显式降级。
-

@@ -1,35 +1,42 @@
 {
   "summary": {
     "case_count": 24,
-    "pass_rate": 1.0,
+    "pass_rate": 0.4583,
     "avg_route_precision": 1.0,
     "avg_route_recall": 1.0,
     "avg_specialist_completion_rate": 1.0,
     "avg_tool_success_rate": 1.0,
+    "avg_tool_completed_success_rate": 1.0,
+    "avg_expected_tool_coverage": 0.7083,
+    "avg_expected_evidence_coverage": 0.8125,
     "avg_evidence_utilization": 1.0,
     "avg_citation_precision": 1.0,
     "avg_constraint_coverage": 1.0,
     "avg_replay_fidelity": 0.0,
-    "avg_source_count": 4.4583,
-    "avg_latency_ms": 31.875
+    "avg_source_count": 4.0,
+    "avg_latency_ms": 24.0
   },
   "results": [
     {
       "task_id": "adopt-langgraph-runtime",
       "scenario": "open_source_adoption_review",
       "topic": "Evaluate langchain-ai/langgraph as the workflow runtime for a 5-person Python/FastAPI research agent team using single-node Docker Compose and rollback requirements.",
-      "run_id": "86cabb6e-ff8a-47e4-8206-115c2ed7fb24",
+      "run_id": "883ad95e-250a-4c5d-aaea-d4a5c5911404",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.3333,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 37,
+      "latency_ms": 28,
       "expected_agent_ids": [
         "repo_signal",
         "architecture_fit",
@@ -47,6 +54,17 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "LangGraph",
@@ -63,24 +81,31 @@
         "rollback"
       ],
       "source_count": 4,
-      "notes": []
+      "notes": [
+        "Expected tool coverage is incomplete: missing mcp_tool, web_search.",
+        "Expected evidence coverage is incomplete: missing web."
+      ]
     },
     {
       "task_id": "adopt-qdrant-vector-store",
       "scenario": "open_source_adoption_review",
       "topic": "Assess whether Qdrant is a good vector store for local knowledge base retrieval in the Research Desk with Python/FastAPI and low-maintenance deployment constraints.",
-      "run_id": "edee0d1d-f257-417e-bddb-7452ed8c3183",
+      "run_id": "032d5b42-3aaa-4172-a052-c2571e0348d8",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 39,
+      "latency_ms": 26,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
@@ -96,6 +121,17 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "Qdrant",
         "vector",
@@ -108,25 +144,32 @@
         "retrieval",
         "deployment"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search.",
+        "Expected evidence coverage is incomplete: missing web."
+      ]
     },
     {
       "task_id": "adopt-openhands-boundary",
       "scenario": "open_source_adoption_review",
       "topic": "Review OpenHands as a reference design for tool boundaries and observability, but decide whether this project should avoid becoming a general coding agent.",
-      "run_id": "d8d9ae7d-2d1d-4b68-b0cc-53f373d0bf41",
+      "run_id": "301f0285-04fa-411f-8289-4202f2bae8ef",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.3333,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 36,
+      "latency_ms": 26,
       "expected_agent_ids": [
         "repo_signal",
         "architecture_fit",
@@ -144,6 +187,17 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "OpenHands",
@@ -156,25 +210,32 @@
         "observability",
         "coding agent"
       ],
-      "source_count": 4,
-      "notes": []
+      "source_count": 5,
+      "notes": [
+        "Expected tool coverage is incomplete: missing mcp_tool, web_search.",
+        "Expected evidence coverage is incomplete: missing web."
+      ]
     },
     {
       "task_id": "adopt-openclaw-mini-runtime",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Compare openclaw-mini style sessionKey event stream and heartbeat design with this Research Desk session runtime.",
-      "run_id": "b5626662-f8b4-4a80-9d0d-d06222449df4",
+      "run_id": "d83e6b05-66b4-4a41-980f-35ec5bdfb818",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 22,
+      "latency_ms": 23,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
@@ -189,6 +250,17 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "sessionKey",
@@ -202,32 +274,39 @@
         "heartbeat",
         "context"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search.",
+        "Expected evidence coverage is incomplete: missing web."
+      ]
     },
     {
       "task_id": "adopt-hermes-skill-memory",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Evaluate Hermes-style skills and memory reuse for Research Desk without turning it into a generic personal assistant.",
-      "run_id": "9557c47d-98e2-4152-98e2-0b581f15fa67",
+      "run_id": "3ba0193e-92f5-4c89-8776-924d9627bfbc",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 40,
+      "latency_ms": 26,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "web_search",
@@ -235,6 +314,17 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "skill",
@@ -247,38 +337,55 @@
         "memory",
         "reuse"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search.",
+        "Expected evidence coverage is incomplete: missing web."
+      ]
     },
     {
       "task_id": "demo-readiness-risk-review",
       "scenario": "demo_readiness_risk_review",
       "topic": "Review whether Research Desk is ready for an autumn recruiting demo, focusing on risks around hard-sounding technology, evaluation evidence, and live provider failures.",
-      "run_id": "7653ea14-57d7-4898-aade-5d120a4898f1",
+      "run_id": "8f7f1e1a-7658-4e70-8b17-576c253a9565",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 24,
+      "latency_ms": 25,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "vector_retrieval"
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "demo",
@@ -300,32 +407,49 @@
       "task_id": "mcp-token-unavailable",
       "scenario": "open_source_adoption_review",
       "topic": "Plan how Research Desk should behave when GitHub MCP is configured for repository evidence but the token is missing.",
-      "run_id": "dbbb2db9-ca83-46c9-b1f1-36aa46805d9d",
-      "status": "completed",
-      "passed": true,
+      "run_id": "4723ac77-17a4-4f1b-a5c8-ebcda4c9f29b",
+      "status": "failed",
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 23,
+      "latency_ms": 22,
       "expected_agent_ids": [
         "repo_signal",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "repo_signal",
-        "ops_risk"
+        "ops_risk",
+        "repo_signal"
       ],
       "expected_tools": [
         "mcp_tool",
         "web_search"
       ],
       "selected_tools": [
-        "vector_retrieval"
+        "vector_retrieval",
+        "web_search"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval",
+        "web_search"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "GitHub MCP",
@@ -338,31 +462,41 @@
         "token"
       ],
       "source_count": 4,
-      "notes": []
+      "notes": [
+        "Plan coverage is weak; at least one research unit has no evidence.",
+        "Evidence sufficiency is weak; at least one research unit missed its route threshold.",
+        "Expected tool coverage is incomplete: missing mcp_tool.",
+        "Expected evidence coverage is incomplete: missing web.",
+        "Unresolved conflicts remain in the harness output."
+      ]
     },
     {
       "task_id": "constraint-coverage-gate",
       "scenario": "open_source_adoption_review",
       "topic": "Evaluate whether hard team constraints are consistently covered in adoption memos and how constraint coverage should fail or warn.",
-      "run_id": "b5cfb896-ce6c-4454-b685-355775e3df2d",
+      "run_id": "0f862f35-9837-41d8-9aba-6947d8a9c691",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 38,
+      "latency_ms": 24,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "vector_retrieval",
@@ -370,6 +504,16 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "constraint coverage",
@@ -381,38 +525,54 @@
         "constraint coverage",
         "evaluation"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search."
+      ]
     },
     {
       "task_id": "frozen-replay-fidelity",
       "scenario": "demo_readiness_risk_review",
       "topic": "Assess frozen replay fidelity for Research Desk: replay should reuse saved artifacts instead of re-calling web, MCP, or model tools.",
-      "run_id": "5f2b1aa9-5a8a-4f6c-bde1-fe2641fb7eb1",
+      "run_id": "3ba50eda-6b1d-4970-b262-e99575b90e6a",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 22,
+      "latency_ms": 23,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "vector_retrieval"
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "replay",
@@ -433,25 +593,29 @@
       "task_id": "tool-registry-boundary",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Evaluate tool registry design for web search, vector retrieval, and GitHub MCP, including auth status, risk, and approval requirements.",
-      "run_id": "324468d6-b84c-4e69-aa1d-63495dd7de6e",
+      "run_id": "cbb29936-bb13-446c-954c-95982369842d",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.3333,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 37,
+      "latency_ms": 23,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "web_search",
@@ -460,6 +624,16 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "tool registry",
@@ -473,25 +647,31 @@
         "risk",
         "approval"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing mcp_tool, web_search."
+      ]
     },
     {
       "task_id": "repo-signal-maintenance",
       "scenario": "open_source_adoption_review",
       "topic": "For a GitHub repository adoption review, decide which maintenance signals matter: releases, issues, PR activity, license, docs, and community health.",
-      "run_id": "b11a2146-b370-47fe-b1b1-203e41e145e7",
-      "status": "completed",
-      "passed": true,
+      "run_id": "b86c2850-83a5-4d43-9c41-cc3eb4d6a453",
+      "status": "failed",
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 0.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 38,
+      "latency_ms": 10,
       "expected_agent_ids": [
         "repo_signal",
         "ops_risk"
@@ -505,7 +685,16 @@
         "mcp_tool"
       ],
       "selected_tools": [
-        "vector_retrieval"
+        "web_search"
+      ],
+      "actual_completed_tools": [
+        "web_search"
+      ],
+      "expected_evidence_kinds": [
+        "web"
+      ],
+      "actual_evidence_kinds": [
+        "run-artifact"
       ],
       "expected_terms": [
         "release",
@@ -520,25 +709,37 @@
         "license",
         "maintenance"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 1,
+      "notes": [
+        "Plan coverage is weak; at least one research unit has no evidence.",
+        "Evidence sufficiency is weak; at least one research unit missed its route threshold.",
+        "Evidence source diversity is thin.",
+        "Expected tool coverage is incomplete: missing mcp_tool.",
+        "Expected evidence coverage is incomplete: missing web.",
+        "Source count 1 is below required minimum 2.",
+        "Unresolved conflicts remain in the harness output."
+      ]
     },
     {
       "task_id": "architecture-fit-fastapi",
       "scenario": "open_source_adoption_review",
       "topic": "Review how an agent workflow library should fit a Python/FastAPI service boundary and background job execution model.",
-      "run_id": "12143990-de13-4740-b83a-85cc2a0d7e7e",
+      "run_id": "17ba654d-a878-42fd-b4be-3454f83ec081",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 37,
+      "latency_ms": 24,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
@@ -554,6 +755,16 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "FastAPI",
         "background job",
@@ -567,24 +778,30 @@
         "service"
       ],
       "source_count": 4,
-      "notes": []
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search."
+      ]
     },
     {
       "task_id": "single-node-deployment-risk",
       "scenario": "open_source_adoption_review",
       "topic": "Assess operational risks for running Research Desk as a single-node local workbench with SQLite, Qdrant local mode, and optional Celery.",
-      "run_id": "814e2014-ac6e-424c-bf07-7b9a661f4652",
+      "run_id": "36178b7c-9348-437e-bf3d-b18861bdd27e",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 38,
+      "latency_ms": 25,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
@@ -600,6 +817,16 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "SQLite",
         "Qdrant",
@@ -614,20 +841,26 @@
         "Celery",
         "risk"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search."
+      ]
     },
     {
       "task_id": "memory-extraction-quality",
       "scenario": "demo_readiness_risk_review",
       "topic": "Evaluate memory extraction quality for project constraints, including precision, recall proxy, accepted and rejected memory candidates.",
-      "run_id": "decf3d1e-4474-4775-85c8-8742821e01ba",
+      "run_id": "724bbac3-337f-44e8-bf05-d1c85ab6ad8f",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
@@ -644,6 +877,16 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "memory extraction",
@@ -664,18 +907,22 @@
       "task_id": "local-kb-vs-web-search",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Compare local knowledge base retrieval with web search for open-source adoption review evidence and explain when each evidence source is necessary.",
-      "run_id": "aa6abf9c-363d-4a1f-a3d8-499604e7ab23",
+      "run_id": "b6cd4bed-6927-41b9-a567-8dfc285dbdf4",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 0.5,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 37,
+      "latency_ms": 24,
       "expected_agent_ids": [
         "architecture_fit",
         "repo_signal"
@@ -691,6 +938,17 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "web",
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "local knowledge base",
         "web search",
@@ -703,20 +961,27 @@
         "evidence",
         "retrieval"
       ],
-      "source_count": 5,
-      "notes": []
+      "source_count": 4,
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search.",
+        "Expected evidence coverage is incomplete: missing web."
+      ]
     },
     {
       "task_id": "skill-pack-boundary",
       "scenario": "demo_readiness_risk_review",
       "topic": "Explain the boundary of Research Desk skill packs: manifest, SKILL.md instructions, optional scripts, preflight, and why it is not a plugin marketplace.",
-      "run_id": "f7918472-dc46-4e5c-91ef-263e269a34de",
+      "run_id": "ccdadf1a-6f0b-4e33-b4e3-5173b5f939b0",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
@@ -727,14 +992,24 @@
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "vector_retrieval"
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "skill.json",
@@ -747,25 +1022,29 @@
         "preflight",
         "plugin marketplace"
       ],
-      "source_count": 4,
+      "source_count": 5,
       "notes": []
     },
     {
       "task_id": "planner-route-precision",
       "scenario": "architecture_tradeoff_memo",
-      "topic": "Evaluate whether planner route decisions choose the right specialist lanes for repo signal, architecture fit, and ops risk instead of running everything every time.",
-      "run_id": "5344c88f-3110-4c8b-b4ca-2730fc040757",
+      "topic": "Evaluate whether planner route decisions choose the right specialist workers for repo signal, architecture fit, and ops risk instead of running everything every time.",
+      "run_id": "28693e7e-5d1d-463e-9390-e001cda83603",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 35,
+      "latency_ms": 24,
       "expected_agent_ids": [
         "repo_signal",
         "architecture_fit",
@@ -782,6 +1061,16 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "planner",
         "route",
@@ -793,25 +1082,29 @@
         "route",
         "specialist"
       ],
-      "source_count": 5,
+      "source_count": 4,
       "notes": []
     },
     {
       "task_id": "writer-verifier-boundary",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Explain why Writer and Verifier are separate: Writer synthesizes the adoption memo while Verifier checks evidence coverage, conflicts, and constraints.",
-      "run_id": "eb18d859-e721-40ac-b294-c7002b17493b",
+      "run_id": "dc3d49f0-fb2a-47e6-9984-96f71e85f91d",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 22,
+      "latency_ms": 26,
       "expected_agent_ids": [
         "architecture_fit"
       ],
@@ -823,6 +1116,16 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "Writer",
@@ -843,18 +1146,22 @@
       "task_id": "trace-field-design",
       "scenario": "demo_readiness_risk_review",
       "topic": "Review trace field design for agent steps, tool calls, route decisions, evidence counts, and replay debugging.",
-      "run_id": "f8e3a819-4275-4df5-909c-f03a454e7152",
+      "run_id": "c67ead19-bd5b-4c30-a125-93992464919d",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 26,
+      "latency_ms": 25,
       "expected_agent_ids": [
         "architecture_fit"
       ],
@@ -866,6 +1173,16 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "trace",
@@ -879,38 +1196,52 @@
         "tool call",
         "evidence count"
       ],
-      "source_count": 5,
+      "source_count": 4,
       "notes": []
     },
     {
       "task_id": "benchmark-design",
       "scenario": "demo_readiness_risk_review",
       "topic": "Design a benchmark for Research Desk that measures route precision, tool success, evidence utilization, constraint coverage, citation precision, and replay fidelity.",
-      "run_id": "53cfac4e-aed0-44e8-bfc4-3ec79bb5fa10",
+      "run_id": "3a691330-7edc-412e-b2c1-a96ab50a82e3",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 36,
+      "latency_ms": 26,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "vector_retrieval"
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "benchmark",
@@ -924,25 +1255,29 @@
         "tool success",
         "replay fidelity"
       ],
-      "source_count": 5,
+      "source_count": 4,
       "notes": []
     },
     {
       "task_id": "rag-retrieval-quality",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Evaluate the RAG retrieval pipeline with dense vectors, BM25, graph signal, RRF or DBSF fusion, parent context expansion, and reranking.",
-      "run_id": "cacd299c-af0a-4cda-8e67-d8b34cb6d7b9",
+      "run_id": "6713224b-e91d-4608-9811-a50bbb57463c",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 38,
+      "latency_ms": 25,
       "expected_agent_ids": [
         "architecture_fit"
       ],
@@ -954,6 +1289,16 @@
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "BM25",
@@ -976,18 +1321,22 @@
       "task_id": "agent-vs-workflow",
       "scenario": "architecture_tradeoff_memo",
       "topic": "Explain the difference between agent and workflow in Research Desk and why the project uses a workflow harness rather than only direct model calls.",
-      "run_id": "3a658e47-a69a-41c5-9af5-6dcf276f09d8",
+      "run_id": "55418dfd-7146-4024-af09-8a4222ee6725",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 25,
+      "latency_ms": 24,
       "expected_agent_ids": [
         "architecture_fit"
       ],
@@ -1000,6 +1349,16 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "agent",
         "workflow",
@@ -1008,27 +1367,32 @@
       ],
       "matched_terms": [
         "agent",
-        "workflow"
+        "workflow",
+        "state"
       ],
-      "source_count": 4,
+      "source_count": 5,
       "notes": []
     },
     {
       "task_id": "cost-latency-optimization",
       "scenario": "demo_readiness_risk_review",
       "topic": "Analyze how to reduce cost and latency when Research Desk runs long research tasks with multiple tool calls and evaluation passes.",
-      "run_id": "cf48b52d-0897-4111-acda-bc20d0fc1b1d",
+      "run_id": "f9270d77-7a29-4883-bffe-c09cbe81f984",
       "status": "completed",
-      "passed": true,
+      "passed": false,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 0.5,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
       "replay_fidelity": 0.0,
-      "latency_ms": 43,
+      "latency_ms": 25,
       "expected_agent_ids": [
         "architecture_fit",
         "ops_risk"
@@ -1044,6 +1408,16 @@
       "selected_tools": [
         "vector_retrieval"
       ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
+      ],
       "expected_terms": [
         "latency",
         "cost",
@@ -1056,19 +1430,25 @@
         "tool call"
       ],
       "source_count": 4,
-      "notes": []
+      "notes": [
+        "Expected tool coverage is incomplete: missing web_search."
+      ]
     },
     {
       "task_id": "overclaim-risk",
       "scenario": "demo_readiness_risk_review",
       "topic": "Review the risk of overclaiming this project as a Codex or Deep Research replacement and prepare an honest interview answer.",
-      "run_id": "9db3de10-a416-4eeb-9298-f8349ed5f498",
+      "run_id": "819e1e96-b809-4122-83e3-e139d488e807",
       "status": "completed",
       "passed": true,
       "route_precision": 1.0,
       "route_recall": 1.0,
       "specialist_completion_rate": 1.0,
       "tool_success_rate": 1.0,
+      "tool_completed_success_rate": 1.0,
+      "expected_tool_coverage": 1.0,
+      "expected_evidence_coverage": 1.0,
+      "execution_mode": "specialist_worker",
       "evidence_utilization": 1.0,
       "citation_precision": 1.0,
       "constraint_coverage": 1.0,
@@ -1079,14 +1459,24 @@
         "architecture_fit"
       ],
       "selected_agent_ids": [
-        "architecture_fit",
-        "ops_risk"
+        "ops_risk",
+        "architecture_fit"
       ],
       "expected_tools": [
         "vector_retrieval"
       ],
       "selected_tools": [
         "vector_retrieval"
+      ],
+      "actual_completed_tools": [
+        "vector_retrieval"
+      ],
+      "expected_evidence_kinds": [
+        "document-chunk"
+      ],
+      "actual_evidence_kinds": [
+        "document-chunk",
+        "run-artifact"
       ],
       "expected_terms": [
         "Codex",

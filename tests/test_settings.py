@@ -7,7 +7,7 @@ from agentic_research_copilot.settings import (
 )
 
 
-def test_default_reranker_uses_dashscope_with_local_fallback(monkeypatch):
+def test_default_reranker_is_local_with_optional_provider_upgrade(monkeypatch):
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.delenv("ARC_RERANK_PROVIDER", raising=False)
     monkeypatch.delenv("ARC_RERANK_BASE_URL", raising=False)
@@ -16,7 +16,7 @@ def test_default_reranker_uses_dashscope_with_local_fallback(monkeypatch):
 
     settings = load_settings()
 
-    assert settings.rerank_provider == "dashscope"
+    assert settings.rerank_provider == "rule"
     assert settings.rerank_base_url == DASHSCOPE_COMPATIBLE_BASE_URL
     assert settings.rerank_api_key == ""
     assert settings.search_include_raw_content is True
@@ -30,7 +30,7 @@ def test_default_reranker_uses_dashscope_with_local_fallback(monkeypatch):
     assert settings.source_reader_strategy == "extract"
     assert settings.source_reader_chunk_context_window == 1
     assert settings.research_max_iterations == 3
-    assert settings.rag_graph_enabled is True
+    assert settings.rag_graph_enabled is False
     assert settings.rag_graph_max_entities_per_chunk == 12
     assert settings.rag_graph_max_relationships_per_chunk == 16
     assert settings.rag_graph_neighbor_limit == 8
