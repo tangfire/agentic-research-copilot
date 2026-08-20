@@ -273,9 +273,9 @@ Open the local workbench at `http://127.0.0.1:8002/`. The script starts a clean 
 新建会话 -> 输入问题和团队约束 -> 发送 -> 查看计划 -> 确认并开始研究 -> 查看结果
 ```
 
-页面默认只展示下一步、计划、记忆和结果。路由、工具、Skill、trace 和质量明细都收在“高级信息”里。
+页面默认只展示下一步、会话、报告和运行摘要。详细的 specialist worker、tool loop、trace 和 evaluation 通过 Langfuse 或本地 Trace JSON 查看，不再在右侧重复铺开完整调试面板。
 
-完整的中文操作说明见 [Usage Guide](docs/usage-guide.zh-CN.md)。
+完整的中文操作说明见 [Usage Guide](docs/usage-guide.zh-CN.md)，Langfuse 观测配置见 [Observability Design](docs/observability-design.zh-CN.md)。
 
 ## Study Path
 

@@ -173,6 +173,7 @@ class ConversationalResearchAgent:
             active_job=active_job,
             active_run=active_run,
             mcp_status=self.mcp_status(),
+            observability=self.copilot.observability.status(),
         )
 
     def export_session_bundle(self, session_id: str) -> dict[str, Any]:
@@ -203,6 +204,7 @@ class ConversationalResearchAgent:
             "active_job": bundle.active_job.model_dump(mode="json") if bundle.active_job else None,
             "active_run": bundle.active_run.model_dump(mode="json") if bundle.active_run else None,
             "mcp_status": bundle.mcp_status,
+            "observability": bundle.observability,
         }
 
     def receive_message(

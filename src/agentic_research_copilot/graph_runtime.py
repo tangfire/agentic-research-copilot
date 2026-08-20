@@ -811,15 +811,16 @@ class LangGraphResearchRuntime:
         revision_reason = assessment.revision_reason or "; ".join(evaluation.notes[:2]) or None
 
         usable_report = bool(report.citations) and evaluation.passed
+        strict_mode = bool(getattr(self.copilot.settings, "strict_providers", False))
         if should_revise and revision_count < request.max_revisions:
             final_status = "completed"
             failure_reason = None
             needs_revision = True
-        elif should_revise and revision_count >= request.max_revisions and not usable_report:
+        elif should_revise and revision_count >= request.max_revisions and not usable_report and strict_mode:
             final_status = "failed"
             failure_reason = revision_reason or "Maximum revision budget reached."
             needs_revision = False
-        elif assessment.critical_issues and not report.citations:
+        elif assessment.critical_issues and not report.citations and strict_mode:
             final_status = "failed"
             failure_reason = assessment.revision_reason or "Citation-backed report could not be produced."
             needs_revision = False
@@ -891,9 +892,22 @@ class LangGraphResearchRuntime:
             started_at=start.isoformat(),
             finished_at=end.isoformat(),
             duration_ms=duration_ms,
+            metadata=state.get("metadata", {}),
         )
         self.copilot.ledger.record(run)
         self.copilot.storage.save_run(run)
+        observability_result = self.copilot.observability.publish_run(run)
+        if observability_result.trace_url or observability_result.error:
+            run = run.model_copy(
+                update={
+                    "metadata": {
+                        **run.metadata,
+                        "observability": observability_result.as_dict(),
+                    }
+                }
+            )
+            self.copilot.ledger.record(run)
+            self.copilot.storage.save_run(run)
         self.copilot.telemetry.emit(
             "run.finish",
             request.topic,

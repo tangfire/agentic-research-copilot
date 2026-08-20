@@ -791,6 +791,7 @@ class AgentSessionBundle(BaseModel):
     active_job: ResearchJob | None = None
     active_run: ResearchRun | None = None
     mcp_status: dict[str, Any] = Field(default_factory=dict)
+    observability: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentTurnResponse(BaseModel):

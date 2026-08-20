@@ -971,6 +971,12 @@ def _primary_assignment_for_item(
     if not assignments:
         return None
     text = f"{request.topic} {_plan_item_text(item)}"
+    repo_candidates = [assignment for assignment in assignments if assignment.agent_id == "repo_signal"]
+    if repo_candidates and _has_repo_signal(text):
+        return max(repo_candidates, key=lambda assignment: _score_role_for_text(assignment.agent_id, text))
+    ops_candidates = [assignment for assignment in assignments if assignment.agent_id == "ops_risk"]
+    if ops_candidates and _has_ops_signal(text):
+        return max(ops_candidates, key=lambda assignment: _score_role_for_text(assignment.agent_id, text))
     return max(assignments, key=lambda assignment: _score_role_for_text(assignment.agent_id, text))
 
 

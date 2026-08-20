@@ -42,7 +42,8 @@ def test_root_page_includes_simple_workbench_controls(tmp_path: Path, monkeypatc
     assert "AI Research Copilot" in response.text
     assert "/docs" in response.text
     assert "下一步" in response.text
-    assert "高级信息" in response.text
+    assert "运行摘要" in response.text
+    assert "查看 Langfuse Trace" in response.text
     assert "发送" in response.text
 
 

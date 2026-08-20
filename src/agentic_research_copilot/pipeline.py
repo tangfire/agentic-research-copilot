@@ -25,6 +25,7 @@ from .multi_agent_harness import (
     enrich_research_run,
     replay_from_frozen_run,
 )
+from .observability import ObservabilityPublisher
 from .providers import build_embedding_provider, build_model_provider
 from .provider_base import ResearchModelProvider
 from .provider_validation import provider_runtime_report, require_real_provider_config
@@ -122,6 +123,7 @@ class ResearchCopilot:
         )
         self.document_reader = DocumentReader()
         self.telemetry = TelemetryLog()
+        self.observability = ObservabilityPublisher(self.settings)
         self.ledger = RunLedger()
         self.jobs = JobLedger()
         self.storage = storage or SQLiteStore(resolve_storage_path(self.settings.storage_path))
@@ -331,6 +333,7 @@ class ResearchCopilot:
             self._job_executor = None
         if executor is not None:
             executor.shutdown(wait=False, cancel_futures=True)
+        self.observability.close()
         self.documents.close()
 
     def refresh_state(self) -> None:
@@ -715,6 +718,7 @@ class ResearchCopilot:
                 "corpus_profile": corpus_profile.model_dump(),
             },
             "observability": {
+                "provider": self.observability.status(),
                 "trace_fields": [
                     "handoff",
                     "tool_call",
@@ -724,6 +728,7 @@ class ResearchCopilot:
                     "evaluation",
                 ],
                 "stores": ["telemetry", "run checkpoints", "run trace", "run ledger"],
+                "external_sink": "Optional Langfuse publisher; disabled by default and never the source of truth.",
             },
             "evaluation": {
                 "metrics": [
@@ -1473,12 +1478,26 @@ class ResearchCopilot:
             request=request,
             corpus_profile=corpus_profile,
         )
+        repository_hint = parse_github_repository_hint(
+            request.metadata,
+            request.topic,
+            research_brief,
+            item.question,
+            item.purpose,
+            item.search_query,
+        )
         if not selected_tools and route_hint is not None:
             selected_tools = self._normalize_supervisor_tools(
                 route_hint.selected_tools,
                 request=request,
                 corpus_profile=corpus_profile,
             )
+        if (
+            self.mcp_tool is not None
+            and repository_hint is not None
+            and "mcp_tool" not in selected_tools
+        ):
+            selected_tools.append("mcp_tool")
         if not selected_tools:
             if request.include_private_docs and corpus_profile.has_private_docs:
                 selected_tools = ["vector_retrieval"]
@@ -1807,7 +1826,7 @@ class ResearchCopilot:
                 for item in value:
                     if isinstance(item, str):
                         texts.extend(extract_constraint_texts(item, fallback_to_full_text=True))
-        for item in document_hits[:8]:
+        for item in document_hits:
             text = "\n".join(
                 part
                 for part in [item.snippet or "", item.content or ""]

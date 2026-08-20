@@ -60,22 +60,16 @@ http://127.0.0.1:8002/docs
 
 左侧每个会话都有“删除”按钮。删除会清理这次会话的消息、计划、步骤、工具调用记录和 `session` 临时记忆；不会删除长期的 `user/project` 记忆，也不会删除已经完成的 run 历史。
 
-## 3. 右侧区域怎么看
+## 3. 页面怎么读
 
-默认只需要看四个区域：
+主页面只保留真正需要操作的内容：
 
 - `下一步`：告诉你当前应该补充信息、确认计划、等待运行，还是查看报告。
-- `计划`：研究 brief、计划项和确认按钮。
-- `记忆`：保存团队约束、偏好和决策，后续 session 会自动使用。
-- `结果`：报告正文、来源数量和基本质量指标。
+- 中间会话：输入、计划确认、运行状态和最终报告。
+- 右侧运行摘要：状态、专家数量、来源数、工具完成数、约束覆盖和质量分数。
+- 过程观测入口：优先打开 Langfuse Trace；没有 Langfuse 时打开本地 Trace JSON。
 
-不需要一开始就打开“高级信息”。只有想学习或排错时，再展开：
-
-- 工作区：团队背景、技术栈、部署约束、偏好来源。
-- Skill：当前选择的场景 playbook 和可执行脚本。
-- 工具：web、vector、GitHub MCP 的状态和调用记录。
-- 路由：RepoSignal / ArchitectureFit / OpsRisk 三个 specialist worker 为什么被选中、各自用了哪些工具。
-- 质量：引用、忠实度、上下文召回和约束覆盖。
+右侧不再重复展示完整计划、完整报告和全部工具日志。详细过程统一放在 Langfuse；本地 SQLite 仍保留完整 trace、checkpoint 和 replay。
 
 如果前端断线或刷新，`/events` 也可以按最后一个 `event_id` 继续拉后续事件，不需要从头重跑。
 
@@ -142,6 +136,18 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 
 注意：如果本地已经配置了 GitHub token，默认启动会自动启用 MCP；如果你想强制关闭，可以加 `-NoMcp`。
 
+实验脚本也会遵循这个规则：真实模式检测到 GitHub token 时默认启用 MCP。要明确做 web/local 对照组时，使用：
+
+```powershell
+python scripts/run_adoption_memo_experiment.py --clean --mode real --max-sections 2 --no-mcp
+```
+
+需要真实 GitHub MCP 的实验可以直接运行：
+
+```powershell
+python scripts/run_adoption_memo_experiment.py --clean --mode real --max-sections 2
+```
+
 ## 6. 研究完成后做什么
 
 先看：
@@ -182,10 +188,10 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 
 ### 想学习 agent 是怎么工作的
 
-打开“高级信息”，按这个顺序看：
+按这个顺序看：
 
 ```text
-路由 -> 工具 -> 步骤 -> 质量 -> trace
+会话 -> 计划 -> specialist worker -> 工具 -> 报告 -> 质量 -> Langfuse/local trace
 ```
 
 这条顺序对应 agent 的核心链路：
@@ -206,3 +212,7 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 2. 再保存一条 project constraint，观察下一次计划是否自动使用。
 3. 再打开高级信息，理解 route、tool loop 和 trace。
 4. 最后运行 benchmark 或 real provider experiment，先看 `adoption-memo.bundle.md/json`，再看 route precision / recall、selection vs execution 和 constraint coverage。
+
+## 9. Langfuse 观测
+
+Langfuse 是可选的外部过程观测层，配置、隐私边界和面试讲法见 [observability-design.zh-CN.md](observability-design.zh-CN.md)。本地学习时不配置 Langfuse 也可以，右侧会提供本地 Trace JSON 和会话事件入口。

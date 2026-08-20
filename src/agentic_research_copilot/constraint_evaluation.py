@@ -150,14 +150,42 @@ def apply_constraint_coverage_gate(run: ResearchRun, coverage: list[ConstraintCo
 
 
 def extract_constraint_coverage_from_run(run: ResearchRun) -> list[ConstraintCoverage]:
-    constraints = [
-        ConstraintTextSource(content=text, source_id=f"run:{index}")
+    constraints: list[ConstraintTextSource] = [
+        ConstraintTextSource(content=text, source_id=f"topic:{index}")
         for index, text in enumerate(extract_constraint_texts(run.request.topic))
     ]
+    metadata = run.request.metadata or {}
+    metadata_values = [
+        metadata.get("workspace_context"),
+        metadata.get("team_context"),
+        metadata.get("default_stack"),
+        metadata.get("deployment_constraints"),
+        metadata.get("risk_policy"),
+        metadata.get("memory_context"),
+        metadata.get("hard_constraints"),
+        metadata.get("constraints"),
+    ]
+    for value in metadata_values:
+        if isinstance(value, str):
+            for index, text in enumerate(extract_constraint_texts(value, fallback_to_full_text=True)):
+                constraints.append(ConstraintTextSource(content=text, source_id=f"metadata:{index}"))
+        elif isinstance(value, (list, tuple)):
+            for entry_index, item in enumerate(value):
+                if not isinstance(item, str):
+                    continue
+                for text_index, text in enumerate(extract_constraint_texts(item, fallback_to_full_text=True)):
+                    constraints.append(
+                        ConstraintTextSource(content=text, source_id=f"metadata:{entry_index}:{text_index}")
+                    )
+    if run.report is not None:
+        for section in run.report.sections:
+            if section.heading and section.heading.strip().lower() in {"team constraint coverage", "团队约束覆盖"}:
+                for index, text in enumerate(extract_constraint_texts(section.content, fallback_to_full_text=True)):
+                    constraints.append(ConstraintTextSource(content=text, source_id=f"report:{index}"))
     return evaluate_constraint_coverage(
         run_id=run.run_id,
         session_id=None,
-        constraints=constraints,
+        constraints=_dedupe_constraint_sources(constraints),
         report=run.report or ResearchReport(title="", summary=""),
         evidence=run.evidence,
     )
@@ -188,5 +216,17 @@ def _dedupe(values: Iterable[str]) -> list[str]:
         if value in seen:
             continue
         seen.add(value)
+        result.append(value)
+    return result
+
+
+def _dedupe_constraint_sources(values: Iterable[ConstraintTextSource]) -> list[ConstraintTextSource]:
+    seen: set[tuple[str, str]] = set()
+    result: list[ConstraintTextSource] = []
+    for value in values:
+        key = (value.source_id, " ".join(value.content.split()))
+        if key in seen:
+            continue
+        seen.add(key)
         result.append(value)
     return result

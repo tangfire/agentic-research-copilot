@@ -152,7 +152,7 @@
       margin: 0 auto;
       padding: 14px clamp(12px, 3vw, 24px) 24px;
       display: grid;
-      grid-template-columns: 220px minmax(0, 1fr) 330px;
+      grid-template-columns: 220px minmax(0, 1fr) 280px;
       gap: 14px;
       height: 100%;
       min-height: 0;
@@ -500,6 +500,64 @@
     .metric strong {
       display: block;
       margin-top: 3px;
+    }
+
+    .summary-line {
+      display: grid;
+      gap: 3px;
+      padding-top: 2px;
+    }
+
+    .summary-line span {
+      color: #2a3547;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .summary-alert {
+      display: grid;
+      gap: 4px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      line-height: 1.45;
+    }
+
+    .summary-alert.bad {
+      color: var(--bad);
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+    }
+
+    .observation-links {
+      display: grid;
+      gap: 7px;
+    }
+
+    .compact-link {
+      display: block;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 12px;
+      text-decoration: none;
+      line-height: 1.35;
+    }
+
+    .compact-link:hover {
+      border-color: #9bd2ca;
+      background: #f1faf8;
+    }
+
+    .compact-link.primary-link {
+      color: #fff;
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+
+    .compact-link.primary-link:hover {
+      background: var(--accent-strong);
     }
 
     .memory-form,
@@ -1092,12 +1150,102 @@
       }
       el.inspector.innerHTML = [
         renderQuickStart(bundle),
-        renderPlan(bundle),
-        renderMemorySummary(bundle),
-        renderRun(bundle.active_run),
-        renderAdvanced(bundle),
+        renderRunSummary(bundle),
       ].join("");
       bindInspectorActions();
+    }
+
+    function renderRunSummary(bundle) {
+      const run = bundle.active_run;
+      const evaluation = run && run.evaluation ? run.evaluation : {};
+      const coverage = bundle.constraint_coverage || [];
+      const coveredCount = coverage.filter((item) => item.covered).length;
+      const coverageScore = coverage.length ? coveredCount / coverage.length : null;
+      const assignments = bundle.role_assignments || [];
+      const invocations = bundle.tool_invocations || [];
+      const completedTools = invocations.filter((item) => item.status === "completed").length;
+      const pendingApprovals = (bundle.approval_requests || []).filter((item) => item.status === "pending");
+      const provider = bundle.observability || {};
+      const published = run && run.metadata && run.metadata.observability
+        ? run.metadata.observability
+        : {};
+      const traceUrl = published.trace_url || "";
+      const statusText = provider.enabled
+        ? "Langfuse 已连接"
+        : provider.provider === "langfuse"
+          ? "Langfuse 未配置"
+          : "本地观测已启用";
+      const statusClassName = provider.enabled ? "good" : provider.provider === "langfuse" ? "warn" : "";
+      const selectedNames = assignments
+        .filter((assignment) => assignment.status !== "skipped")
+        .map((assignment) => assignment.agent_name)
+        .filter(Boolean);
+
+      return `
+        <section class="block run-summary">
+          <h3>运行摘要</h3>
+          <div class="metric-grid">
+            ${metric("状态", statusLabel(bundle.session.status))}
+            ${metric("专家", assignments.length || "待规划")}
+            ${metric("来源", run && run.report ? run.report.source_count : "n/a")}
+            ${metric("工具完成", invocations.length ? `${completedTools}/${invocations.length}` : "n/a")}
+            ${metric("约束覆盖", coverageScore === null ? "n/a" : coverageScore.toFixed(2))}
+            ${metric("引用准确", evaluation.citation_precision)}
+          </div>
+          ${selectedNames.length ? `
+            <div class="summary-line">
+              <strong>本次参与</strong>
+              <span>${escapeHtml(selectedNames.join(" / "))}</span>
+            </div>
+          ` : ""}
+          ${run && run.failure_reason ? `
+            <div class="summary-alert bad">
+              <strong>运行失败</strong>
+              <span>${escapeHtml(short(run.failure_reason, 260))}</span>
+            </div>
+          ` : ""}
+        </section>
+
+        <section class="block observability-summary">
+          <h3>过程观测</h3>
+          <p class="subtle">主区域看结论；详细 trace、工具链和评估分数在专业观测层查看。</p>
+          <div class="settings">
+            <span class="pill ${statusClassName}">${escapeHtml(statusText)}</span>
+            ${run && run.run_id ? `<span class="pill">Run ${escapeHtml(short(run.run_id, 12))}</span>` : ""}
+          </div>
+          <div class="observation-links">
+            ${traceUrl ? `
+              <a class="compact-link primary-link" href="${escapeHtml(traceUrl)}" target="_blank" rel="noreferrer">查看 Langfuse Trace</a>
+            ` : ""}
+            ${run && run.run_id ? `
+              <a class="compact-link" href="/v1/research/runs/${encodeURIComponent(run.run_id)}/trace" target="_blank" rel="noreferrer">查看本地 Trace JSON</a>
+            ` : ""}
+            ${bundle.session && bundle.session.session_id ? `
+              <a class="compact-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events" target="_blank" rel="noreferrer">查看会话事件</a>
+            ` : ""}
+          </div>
+          <p class="subtle">${escapeHtml(provider.reason || "SQLite 保留本地事件、checkpoint 和 replay 数据。")}</p>
+        </section>
+
+        ${pendingApprovals.length ? `
+          <section class="block">
+            <h3>待处理</h3>
+            ${pendingApprovals.slice(-3).map((approval) => `
+              <div class="approval-row">
+                <div class="row-head">
+                  <strong>${escapeHtml(short(approval.requested_action, 80))}</strong>
+                  <span class="pill warn">等待确认</span>
+                </div>
+                <span>${escapeHtml(short(approval.reason, 160))}</span>
+                <div class="settings">
+                  <button class="compact primary" data-approve="${escapeHtml(approval.approval_id)}">通过</button>
+                  <button class="compact danger" data-reject="${escapeHtml(approval.approval_id)}">拒绝</button>
+                </div>
+              </div>
+            `).join("")}
+          </section>
+        ` : ""}
+      `;
     }
 
     function renderQuickStart(bundle) {
@@ -1134,34 +1282,18 @@
         return "计划已经生成。先检查计划和约束，没问题就点“确认并开始研究”。";
       }
       if (status === "researching") {
-        return "研究正在运行。可以等结果出来，或者展开高级信息看步骤、工具和路由。";
+        return "研究正在运行。右侧只显示摘要，详细过程会进入 Trace。";
       }
       if (status === "completed") {
         return "报告已经完成。先看结果和质量指标，需要复盘时再导出会话。";
       }
       if (status === "failed") {
-        return "这次运行失败了。展开高级信息看失败步骤和工具状态。";
+        return "这次运行失败了。先看右侧失败摘要，再打开本地 Trace 定位问题。";
       }
       if (status === "collecting") {
         return "信息还不够。继续补充 repo、技术问题、团队规模、技术栈和部署约束。";
       }
       return "输入一个技术采用问题，系统会先生成研究计划，不会直接开跑。";
-    }
-
-    function renderAdvanced(bundle) {
-      return `
-        <details class="advanced-panel">
-          <summary>高级信息：工作区 / Skill / 工具 / 路由 / 质量</summary>
-          <div class="advanced-content">
-            ${renderWorkspaceEditor(bundle)}
-            ${renderMemoryEditor(bundle)}
-            ${renderSkills(bundle)}
-            ${renderHarness(bundle)}
-            ${renderTools(bundle)}
-            ${renderQuality(bundle)}
-          </div>
-        </details>
-      `;
     }
 
     function renderPlan(bundle) {
@@ -1269,7 +1401,7 @@
             </div>
           `).join("") : '<p>还没有记忆。</p>'}
           ${extractionResults.length ? `
-            <p class="subtle">最近提取：${escapeHtml(extractionResults.slice(-1)[0].accepted.length)} 条接受，${escapeHtml(extractionResults.slice(-1)[0].rejected.length)} 条拒绝。更多编辑在“高级信息”里。</p>
+            <p class="subtle">最近提取：${escapeHtml(extractionResults.slice(-1)[0].accepted.length)} 条接受，${escapeHtml(extractionResults.slice(-1)[0].rejected.length)} 条拒绝。详细数据通过本地 API 或导出包查看。</p>
           ` : ""}
         </section>
       `;
@@ -1529,20 +1661,6 @@
     }
 
     function bindInspectorActions() {
-      const inlineConfirm = document.getElementById("confirmPlanInline");
-      if (inlineConfirm) inlineConfirm.addEventListener("click", confirmPlan);
-      const continueBtn = document.getElementById("continueConstraintsBtn");
-      if (continueBtn) continueBtn.addEventListener("click", () => el.messageInput.focus());
-      const saveBtn = document.getElementById("saveMemoryBtn");
-      if (saveBtn) saveBtn.addEventListener("click", saveMemory);
-      const saveWorkspaceBtn = document.getElementById("saveWorkspaceBtn");
-      if (saveWorkspaceBtn) saveWorkspaceBtn.addEventListener("click", saveWorkspace);
-      el.inspector.querySelectorAll("[data-run-skill]").forEach((button) => {
-        button.addEventListener("click", () => runSkillScript(button.dataset.runSkill, button.dataset.scriptName));
-      });
-      el.inspector.querySelectorAll("[data-delete-memory]").forEach((button) => {
-        button.addEventListener("click", () => deleteMemory(button.dataset.deleteMemory));
-      });
       el.inspector.querySelectorAll("[data-approve]").forEach((button) => {
         button.addEventListener("click", () => resolveApproval(button.dataset.approve, true));
       });

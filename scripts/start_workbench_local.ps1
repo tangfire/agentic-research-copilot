@@ -105,7 +105,7 @@ $args = @(
 $process = Start-Process -FilePath python.exe -ArgumentList $args -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru
 
 $health = $null
-for ($i = 0; $i -lt 30; $i++) {
+for ($i = 0; $i -lt 90; $i++) {
   try {
     $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2
     break
@@ -115,7 +115,7 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 
 if (-not $health) {
-  throw "Workbench did not become healthy at $healthUrl within 30 seconds. Process id: $($process.Id)"
+  throw "Workbench did not become healthy at $healthUrl within 90 seconds. Process id: $($process.Id)"
 }
 
 [pscustomobject]@{

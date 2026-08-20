@@ -24,22 +24,11 @@ http://127.0.0.1:8002/
 
 ## 3. 演示顺序
 
-### Step 1：看 Workspace
+### Step 1：输入研究目标
 
-先指给面试官看右侧 `Workspace`：
+先说明团队约束会自动从输入中提取，并写入 workspace profile：
 
-- team context
-- stack
-- deployment constraints
-- risk policy
-- preferred sources
-- disabled tools
-
-讲法：
-
-> 我不想让团队约束每次都手工贴 prompt，所以把它做成 workspace profile。
-
-### Step 2：输入研究目标
+> 我不想让团队约束每次都手工贴 prompt，所以把它做成 workspace profile。页面不把所有底层字段铺在右侧，运行过程通过 Trace 查看。
 
 推荐输入：
 
@@ -55,7 +44,7 @@ http://127.0.0.1:8002/
 - skill 会选到 `open_source_adoption_review`
 - session 会先生成 plan draft，而不是直接跑
 
-### Step 3：看 Plan
+### Step 2：看 Plan
 
 重点看：
 
@@ -69,13 +58,9 @@ http://127.0.0.1:8002/
 
 > 我做的是 interactive planning。研究前先出 plan，再让用户确认，避免一上来就长跑。
 
-如果面试官问 skill，可以顺手点右侧 `Skills`：
+如果面试官问 skill，直接说明它是场景 playbook，定义输入要求、计划模板和评测重点；具体 manifest 和脚本在代码与文档中维护，不把右侧做成第二个管理后台。
 
-- 看 `Open Source Adoption Review` 的 manifest 和说明摘要
-- 点 `preflight` 脚本
-- 说明这不是 prompt 片段，而是一个受控 skill pack
-
-### Step 4：确认并开始研究
+### Step 3：确认并开始研究
 
 点击 `确认并开始研究`。
 
@@ -86,21 +71,23 @@ http://127.0.0.1:8002/
 - steps 开始流动
 - tool policy / approval 会可见
 
-### Step 5：看结果
+### Step 4：看结果
 
-重点切右侧：
+先看中间报告和右侧运行摘要，再点击 `查看 Langfuse Trace`。没有 Langfuse 时，打开 `查看本地 Trace JSON`。
 
-- `Tools`：tool registry / invocation / approval
-- `Harness`：RepoSignalAgent / ArchitectureFitAgent / OpsRiskAgent 三个 specialist worker、route decisions、conflicts、evidence ledger、benchmark summary
-- `Quality`：citation precision / context recall / constraint coverage
-- `Run Result`：report / source index / recommendation
-- `Export`：导出整个 session bundle
+在 Langfuse 里看：
+
+- `research_run` 根链路；
+- RepoSignal / ArchitectureFit / OpsRisk specialist worker；
+- web/vector/GitHub MCP tool observation；
+- Verifier/evaluator observation；
+- citation precision / context recall / faithfulness / plan coverage 分数。
 
 讲法：
 
 > 这里的 multi-agent 不是为了把 agent 数量堆上去，而是把开源引入评审拆成三个稳定责任边界：仓库事实、架构适配、运维风险。Harness 区能看到每个 worker 负责哪些 plan item、用了哪些工具、拿到多少证据，以及 Verifier 发现了哪些冲突或覆盖缺口。
 
-### Step 6：收尾
+### Step 5：收尾
 
 讲一句：
 
@@ -109,6 +96,22 @@ http://127.0.0.1:8002/
 如果演示 replay：
 
 > Replay 不是重新联网再跑一次，而是基于冻结的 run artifact 生成一个新 run id，用来复盘当时的工具结果、报告、trace 和质量指标。
+
+## 4.1 Langfuse 配置
+
+Langfuse 是可选项。安装：
+
+```powershell
+python -m pip install -e ".[observability]"
+```
+
+然后在 `.env` 配置 `ARC_OBSERVABILITY_PROVIDER=langfuse`、`ARC_LANGFUSE_PUBLIC_KEY` 和 `ARC_LANGFUSE_SECRET_KEY`，重启服务：
+
+```powershell
+.\scripts\start_workbench_local.ps1 -Port 8002 -UseMcp -Restart
+```
+
+Langfuse 不可用时，演示仍然使用本地 SQLite trace；不要为了演示伪造外部 trace。
 
 ## 4. 如果 GitHub MCP 没配置
 

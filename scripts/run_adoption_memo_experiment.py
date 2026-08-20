@@ -104,21 +104,41 @@ def main() -> None:
         choices=["real", "fixture"],
         help="Use real configured providers, or explicit fixture injection for local regression checks.",
     )
-    parser.add_argument("--use-mcp", action="store_true", help="Use configured MCP tools for this run.")
+    mcp_group = parser.add_mutually_exclusive_group()
+    mcp_group.add_argument(
+        "--use-mcp",
+        dest="use_mcp",
+        action="store_true",
+        help="Use GitHub MCP for this run. If omitted, real mode enables it when a token is configured.",
+    )
+    mcp_group.add_argument(
+        "--no-mcp",
+        dest="use_mcp",
+        action="store_false",
+        help="Disable MCP for this run and make an explicit web/local comparison run.",
+    )
     parser.add_argument(
         "--full-real-indexing",
         action="store_true",
         help="Use the configured chat provider for document contextualization and graph extraction.",
     )
     parser.add_argument("--max-sections", type=int, default=3)
+    parser.set_defaults(use_mcp=None)
     args = parser.parse_args()
+
+    configured_settings = load_settings()
+    use_mcp = (
+        args.use_mcp
+        if args.use_mcp is not None
+        else args.mode == "real" and bool(configured_settings.mcp_auth_token)
+    )
 
     if args.clean:
         _clean_lab_artifacts()
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    settings = _experiment_settings(use_mcp=args.use_mcp, mode=args.mode)
-    _validate_experiment_settings(settings, mode=args.mode, use_mcp=args.use_mcp)
+    settings = _experiment_settings(use_mcp=use_mcp, mode=args.mode)
+    _validate_experiment_settings(settings, mode=args.mode, use_mcp=use_mcp)
     _clear_experiment_store(settings)
 
     fixture_provider = (
@@ -164,7 +184,7 @@ def _experiment_settings(*, use_mcp: bool, mode: str) -> AppSettings:
         "job_queue_backend": "in_process",
         "mcp_enabled": use_mcp,
         "seed_reference_knowledge": False,
-        "research_max_iterations": 1 if mode == "real" else min(2, max(1, settings.research_max_iterations)),
+        "research_max_iterations": 2 if mode == "real" else min(2, max(1, settings.research_max_iterations)),
         "research_max_workers": 1,
         "rag_min_evidence_per_item": 1,
         "rag_min_source_diversity": 1,

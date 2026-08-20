@@ -638,4 +638,8 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
     def provider_check():
         return copilot.runtime_config()["provider_readiness"]
 
+    @app.get("/v1/observability/status")
+    def observability_status():
+        return copilot.observability.status()
+
     return app
