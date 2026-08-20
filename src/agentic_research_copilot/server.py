@@ -674,7 +674,8 @@ def _render_agent_events_page(
     session_title = getattr(session, "title", "") or session_id
     session_status = getattr(session, "status", "") or "unknown"
     workspace_id = getattr(session, "workspace_id", "") or "n/a"
-    rendered_events = "\n".join(_render_agent_event_card(event) for event in events) or "<div class='empty'>当前没有事件。</div>"
+    rendered_events = "\n".join(_render_agent_event_card(event, index=index) for index, event in enumerate(events)) or "<div class='empty'>当前没有事件。</div>"
+    rendered_overview = _render_agent_event_overview(events)
     continuation = f"&after_event_id={escape(after_event_id)}" if after_event_id else ""
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -822,14 +823,178 @@ def _render_agent_events_page(
         border-radius: 12px;
         color: var(--muted);
       }}
+      .back-link {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 18px;
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 650;
+      }}
+      .back-link:hover {{ text-decoration: underline; }}
+      .overview {{
+        margin: 18px 0 22px;
+        padding: 16px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+      }}
+      .section-head {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }}
+      .section-head h2 {{ margin: 0; font-size: 16px; }}
+      .section-actions {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+      .action {{
+        appearance: none;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--accent);
+        padding: 7px 10px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+      }}
+      .action:hover {{ background: var(--accent-soft); }}
+      .phase-list {{
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 2px 2px 6px;
+      }}
+      .phase {{
+        flex: 1 0 118px;
+        min-width: 118px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fafcff;
+        color: var(--text);
+        text-decoration: none;
+      }}
+      .phase:hover {{ border-color: var(--accent); background: var(--accent-soft); }}
+      .phase-top {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 11px;
+      }}
+      .phase-dot {{
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #aab6c7;
+        box-shadow: 0 0 0 4px #edf1f6;
+      }}
+      .phase.done .phase-dot {{ background: var(--accent); box-shadow: 0 0 0 4px #d8f5ef; }}
+      .phase.running .phase-dot {{ background: #d97706; box-shadow: 0 0 0 4px #fff0cf; }}
+      .phase.failed .phase-dot {{ background: #dc2626; box-shadow: 0 0 0 4px #fee2e2; }}
+      .phase strong {{ display: block; font-size: 13px; }}
+      .phase span:last-child {{ display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }}
+      .timeline {{
+        position: relative;
+        display: grid;
+        gap: 10px;
+        padding-left: 34px;
+      }}
+      .timeline::before {{
+        content: "";
+        position: absolute;
+        top: 12px;
+        bottom: 12px;
+        left: 10px;
+        width: 2px;
+        background: #dbe3ed;
+      }}
+      .event-node {{
+        position: relative;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+        overflow: hidden;
+      }}
+      .event-node::before {{
+        content: "";
+        position: absolute;
+        left: -30px;
+        top: 18px;
+        width: 12px;
+        height: 12px;
+        border: 3px solid var(--bg);
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 1px #b7c6d8;
+        z-index: 1;
+      }}
+      .event-node.failed::before {{ background: #dc2626; }}
+      .event-node.running::before {{ background: #d97706; }}
+      .event-node.pending::before {{ background: #94a3b8; }}
+      .node-summary {{
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        cursor: pointer;
+        list-style: none;
+      }}
+      .node-summary::-webkit-details-marker {{ display: none; }}
+      .node-summary:hover {{ background: #fbfdff; }}
+      .node-main {{ min-width: 0; }}
+      .node-title {{
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }}
+      .node-title strong {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+      .node-kind {{
+        flex: 0 0 auto;
+        padding: 3px 7px;
+        border-radius: 5px;
+        background: #eef3f8;
+        color: var(--muted);
+        font-size: 11px;
+      }}
+      .node-meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+      }}
+      .chevron {{ color: var(--muted); font-size: 18px; transition: transform 0.15s ease; }}
+      .event-node[open] .chevron {{ transform: rotate(180deg); }}
+      .node-detail {{ padding: 0 16px 16px; border-top: 1px solid #edf1f5; }}
+      .detail-summary {{ margin: 14px 0; line-height: 1.65; white-space: pre-wrap; }}
+      @media (max-width: 700px) {{
+        .wrap {{ padding: 16px 14px 30px; }}
+        .head {{ display: block; }}
+        .chips {{ margin-top: 14px; }}
+        .node-summary {{ grid-template-columns: minmax(0, 1fr) auto; }}
+        .node-summary > .pill {{ grid-column: 1; justify-self: start; }}
+        .node-summary .chevron {{ grid-column: 2; grid-row: 1; }}
+      }}
     </style>
   </head>
   <body>
     <main class="wrap">
+      <a class="back-link" href="/">← 返回研究台</a>
       <div class="head">
         <div>
           <h1>会话事件</h1>
-          <p class="subtle">{escape(session_title)} 的事件时间线。这里按本机时间展示；Langfuse 表格有时按 UTC 展示，所以会看起来差 8 小时。</p>
+          <p class="subtle">{escape(session_title)} 的执行过程。先看上方阶段，再点击下面的节点查看详情。</p>
         </div>
         <div class="chips">
           <span class="pill">会话 {escape(session_id)}</span>
@@ -839,7 +1004,19 @@ def _render_agent_events_page(
           {f"<span class='pill'>after {escape(after_event_id)}</span>" if after_event_id else ""}
         </div>
       </div>
-      <section class="grid">
+      <section class="overview">
+        <div class="section-head">
+          <h2>流程概览</h2>
+          <div class="section-actions">
+            <button class="action" type="button" data-expand-all>全部展开</button>
+            <button class="action" type="button" data-collapse-all>全部收起</button>
+          </div>
+        </div>
+        <div class="phase-list">
+          {rendered_overview}
+        </div>
+      </section>
+      <section class="timeline" aria-label="会话事件节点">
         {rendered_events}
       </section>
       <a class="footer-link" href="/v1/agent/sessions/{escape(session_id)}/events?format=json&limit={limit}{continuation}">打开原始 JSON</a>
@@ -858,12 +1035,18 @@ def _render_agent_events_page(
           hour12: false,
         }}).format(date).replaceAll("/", "-");
       }});
+      document.querySelector("[data-expand-all]")?.addEventListener("click", () => {{
+        document.querySelectorAll(".event-node").forEach((node) => {{ node.open = true; }});
+      }});
+      document.querySelector("[data-collapse-all]")?.addEventListener("click", () => {{
+        document.querySelectorAll(".event-node").forEach((node) => {{ node.open = false; }});
+      }});
     </script>
   </body>
 </html>"""
 
 
-def _render_agent_event_card(event: object) -> str:
+def _render_agent_event_card(event: object, *, index: int) -> str:
     payload = getattr(event, "payload", {}) or {}
     payload_json = escape(json.dumps(payload, ensure_ascii=False, indent=2))
     kind = str(getattr(event, "kind", "event") or "event")
@@ -876,32 +1059,80 @@ def _render_agent_event_card(event: object) -> str:
     run_id = str(getattr(event, "run_id", "") or "n/a")
     job_id = str(getattr(event, "job_id", "") or "n/a")
     event_id = str(getattr(event, "event_id", "") or "")
+    phase = _event_phase(event)
+    detail_id = f"event-{event_id or index}"
+    node_status = status if status in {"failed", "running", "pending"} else "done"
     return f"""
-        <article class="card">
-          <div class="event-head">
-            <div>
-              <h2>{escape(title)}</h2>
-              <div class="meta">
+        <details class="event-node {node_status}" id="{escape(detail_id)}">
+          <summary class="node-summary">
+            <span class="node-main">
+              <span class="node-title"><strong>{escape(title)}</strong><span class="node-kind">{escape(_display_kind(phase))}</span></span>
+              <span class="node-meta">
                 <span class="event-time" data-iso="{escape(created_at)}">{escape(created_at or "n/a")}</span>
-                <span>actor: {escape(actor)}</span>
-                <span>kind: {escape(_display_kind(kind))}</span>
-              </div>
-            </div>
+                <span>执行者：{escape(actor)}</span>
+                {f"<span>工具：{escape(tool_name)}</span>" if tool_name != "n/a" else ""}
+              </span>
+            </span>
             <span class="pill">{escape(_display_status(status))}</span>
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <div class="node-detail">
+            <p class="detail-summary">{escape(summary)}</p>
+            <div class="facts">
+              <div class="fact"><span class="label">运行</span>{escape(run_id)}</div>
+              <div class="fact"><span class="label">任务</span>{escape(job_id)}</div>
+              <div class="fact"><span class="label">节点 ID</span>{escape(event_id)}</div>
+              <div class="fact"><span class="label">事件类型</span>{escape(_display_kind(kind))}</div>
+            </div>
+            <details>
+              <summary>查看原始 JSON</summary>
+              <pre>{payload_json}</pre>
+            </details>
           </div>
-          <p class="summary">{escape(summary)}</p>
-          <div class="facts">
-            <div class="fact"><span class="label">tool</span>{escape(tool_name)}</div>
-            <div class="fact"><span class="label">run</span>{escape(run_id)}</div>
-            <div class="fact"><span class="label">job</span>{escape(job_id)}</div>
-            <div class="fact"><span class="label">event</span>{escape(event_id)}</div>
-          </div>
-          <details>
-            <summary>查看原始 JSON</summary>
-            <pre>{payload_json}</pre>
-          </details>
-        </article>
+        </details>
     """
+
+
+def _render_agent_event_overview(events: list[object]) -> str:
+    phase_order = ["message", "planning", "tool_call", "retrieval", "research", "report", "verification", "evaluation"]
+    grouped: dict[str, list[object]] = {phase: [] for phase in phase_order}
+    for event in events:
+        phase = _event_phase(event)
+        if phase in grouped:
+            grouped[phase].append(event)
+    rendered: list[str] = []
+    for phase in phase_order:
+        phase_events = grouped[phase]
+        if not phase_events:
+            continue
+        status = _phase_status(phase_events)
+        first_event_id = str(getattr(phase_events[0], "event_id", "") or "")
+        target = f"#event-{escape(first_event_id)}" if first_event_id else "#event-timeline"
+        rendered.append(
+            f"<a class='phase {status}' href='{target}'>"
+            f"<div class='phase-top'><span class='phase-dot'></span><span>{len(phase_events)} 个节点</span></div>"
+            f"<strong>{escape(_display_kind(phase))}</strong>"
+            f"<span>{escape(_display_status(status))}</span>"
+            "</a>"
+        )
+    return "".join(rendered) or "<div class='empty'>当前没有可展示的流程节点。</div>"
+
+
+def _event_phase(event: object) -> str:
+    kind = str(getattr(event, "kind", "message") or "message")
+    if kind in {"message", "planning", "tool_call", "retrieval", "research", "report", "verification", "evaluation"}:
+        return kind
+    event_type = str(getattr(event, "type", "") or "")
+    return "tool_call" if event_type == "tool_invocation" else "message"
+
+
+def _phase_status(events: list[object]) -> str:
+    statuses = {str(getattr(event, "status", "completed") or "completed") for event in events}
+    if "failed" in statuses:
+        return "failed"
+    if "running" in statuses or "pending" in statuses:
+        return "running"
+    return "done"
 
 
 def _display_event_title(title: str) -> str:
@@ -925,6 +1156,7 @@ def _display_status(status: str) -> str:
         "pending": "待处理",
         "failed": "失败",
         "skipped": "跳过",
+        "done": "完成",
         "plan": "计划",
         "clarify": "追问",
         "research": "研究",
@@ -941,6 +1173,7 @@ def _display_kind(kind: str) -> str:
         "report": "报告",
         "verification": "验证",
         "evaluation": "评估",
+        "approval": "审批",
         "failure": "失败",
         "heartbeat": "心跳",
     }.get(kind, kind)

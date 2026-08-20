@@ -349,7 +349,10 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert html_events_response.status_code == 200
         assert "text/html" in html_events_response.headers.get("content-type", "")
         assert "会话事件" in html_events_response.text
-        assert "<article" in html_events_response.text
+        assert "返回研究台" in html_events_response.text
+        assert "流程概览" in html_events_response.text
+        assert "event-node" in html_events_response.text
+        assert "data-expand-all" in html_events_response.text
         assert "format=json" in html_events_response.text
 
         json_events_response = client.get(
