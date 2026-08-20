@@ -31,6 +31,11 @@ def create_fixture_app():
     )
 
 
+class FailingPlannerProvider(FixtureResearchModelProvider):
+    def draft_plan(self, *args, **kwargs):
+        raise RuntimeError("planner unavailable token=secret-value")
+
+
 def test_root_page_includes_simple_workbench_controls(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "root.sqlite"))
@@ -337,6 +342,24 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         if len(events_data) > 1:
             assert resumed_events[0]["event_id"] == events_data[1]["event_id"]
 
+        html_events_response = client.get(
+            f"/v1/agent/sessions/{session_id}/events",
+            headers={"accept": "text/html"},
+        )
+        assert html_events_response.status_code == 200
+        assert "text/html" in html_events_response.headers.get("content-type", "")
+        assert "会话事件" in html_events_response.text
+        assert "<article" in html_events_response.text
+        assert "format=json" in html_events_response.text
+
+        json_events_response = client.get(
+            f"/v1/agent/sessions/{session_id}/events?format=json",
+            headers={"accept": "text/html"},
+        )
+        assert json_events_response.status_code == 200
+        assert "application/json" in json_events_response.headers.get("content-type", "")
+        assert isinstance(json_events_response.json(), list)
+
         export_response = client.get(f"/v1/agent/sessions/{session_id}/export")
         assert export_response.status_code == 200
         export_data = export_response.json()
@@ -361,6 +384,51 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert harness_data["role_assignments"]
         assert harness_data["route_decisions"]
         assert harness_data["evidence_ledger"]["total_evidence_count"] >= 1
+
+
+def test_agent_session_surfaces_planning_failure(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
+    monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "agent-planning-failure.sqlite"))
+    monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "agent-planning-failure-checkpoints.sqlite"))
+    provider = FailingPlannerProvider()
+    client = TestClient(
+        create_app(
+            copilot=ResearchCopilot(
+                model_provider=provider,
+                embedding_provider=provider,
+            )
+        )
+    )
+
+    session_response = client.post("/v1/agent/sessions", json={"title": "Planner failure"})
+    assert session_response.status_code == 200
+    session_id = session_response.json()["session_id"]
+
+    turn_response = client.post(
+        f"/v1/agent/sessions/{session_id}/messages",
+        json={
+            "content": (
+                "我们团队是 5 人 Python/FastAPI，单机 Docker Compose 部署，必须可回滚。"
+                "请评估 langchain-ai/langgraph 是否适合引入。"
+            ),
+            "max_sections": 2,
+            "max_revisions": 0,
+        },
+    )
+
+    assert turn_response.status_code == 200
+    data = turn_response.json()
+    assert data["session"]["status"] == "failed"
+    assert data["assistant_message"]["intent"] == "plan"
+    assert "规划阶段失败" in data["assistant_message"]["content"]
+    assert "secret-value" not in data["assistant_message"]["content"]
+    assert any(step["kind"] == "planning" and step["status"] == "failed" for step in data["steps"])
+
+    bundle_response = client.get(f"/v1/agent/sessions/{session_id}")
+    assert bundle_response.status_code == 200
+    bundle = bundle_response.json()
+    assert bundle["session"]["status"] == "failed"
+    assert any(step["kind"] == "planning" and step["status"] == "failed" for step in bundle["steps"])
 
 
 def test_agent_session_can_be_deleted_without_losing_project_memory(tmp_path: Path, monkeypatch):

@@ -728,7 +728,7 @@ class ResearchCopilot:
                     "evaluation",
                 ],
                 "stores": ["telemetry", "run checkpoints", "run trace", "run ledger"],
-                "external_sink": "Optional Langfuse publisher; disabled by default and never the source of truth.",
+                "external_sink": "Langfuse publisher enabled by default when configured; SQLite remains the source of truth.",
             },
             "evaluation": {
                 "metrics": [

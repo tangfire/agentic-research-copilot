@@ -26,6 +26,10 @@ def test_default_reranker_is_local_with_optional_provider_upgrade(monkeypatch):
     assert settings.mcp_auth_required is False
     assert settings.mcp_auth_token == ""
     assert settings.mcp_prompt == ""
+    assert settings.observability_provider == "langfuse"
+    assert settings.langfuse_host == "https://cloud.langfuse.com"
+    assert settings.langfuse_environment == "local"
+    assert settings.langfuse_release == "research-desk"
     assert settings.source_reader_enabled is True
     assert settings.source_reader_strategy == "extract"
     assert settings.source_reader_chunk_context_window == 1

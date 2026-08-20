@@ -949,6 +949,22 @@
       return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
     }
 
+    function formatTime(value) {
+      const text = String(value || "").trim();
+      if (!text) return "n/a";
+      const date = new Date(text);
+      if (Number.isNaN(date.getTime())) return short(text, 24);
+      return new Intl.DateTimeFormat("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(date).replaceAll("/", "-");
+    }
+
     function label(map, value, fallback = "n/a") {
       if (value === undefined || value === null || value === "") return fallback;
       return map[value] || value;
@@ -1030,7 +1046,7 @@
         <div class="session-row ${session.session_id === state.activeSessionId ? "active" : ""}">
           <button class="session-main" data-session="${session.session_id}">
             <strong>${escapeHtml(session.title)}</strong>
-            <span>${escapeHtml(statusLabel(session.status))} · ${escapeHtml(workspaceMap.get(session.workspace_id || "")?.name || session.workspace_id || "默认工作区")} · ${escapeHtml(short(session.updated_at, 28))}</span>
+            <span>${escapeHtml(statusLabel(session.status))} · ${escapeHtml(workspaceMap.get(session.workspace_id || "")?.name || session.workspace_id || "默认工作区")} · ${escapeHtml(formatTime(session.updated_at))}</span>
           </button>
           <button class="compact danger session-delete" data-delete-session="${session.session_id}" title="删除这个会话">删除</button>
         </div>
@@ -1089,7 +1105,7 @@
     }
 
     function renderTimeline(bundle) {
-      const pendingHtml = renderLocalActivity(bundle);
+      const pendingHtml = renderLocalActivity(bundle) || renderServerProgress(bundle);
       if (!bundle) {
         if (pendingHtml) {
           el.timeline.innerHTML = pendingHtml;
@@ -1107,7 +1123,7 @@
         <article class="message ${message.role}">
           <header>
             <strong>${escapeHtml(label(ROLE_LABELS, message.role, "消息"))}</strong>
-            <span>${escapeHtml(label(INTENT_LABELS, message.intent, "对话"))} · ${escapeHtml(short(message.created_at, 24))}</span>
+            <span>${escapeHtml(label(INTENT_LABELS, message.intent, "对话"))} · ${escapeHtml(formatTime(message.created_at))}</span>
           </header>
           <pre>${escapeHtml(message.content)}</pre>
         </article>
@@ -1136,9 +1152,49 @@
         <article class="message assistant pending">
           <header>
             <strong>${escapeHtml(activity.title || "正在处理")}</strong>
-            <span>${escapeHtml(activity.stage || "运行中")}</span>
+            <span>${escapeHtml(activity.stage || "运行中")} · ${escapeHtml(activityElapsed(activity))}</span>
           </header>
-          <pre>${escapeHtml(activity.content || "系统正在处理，请稍等。")}</pre>
+          <pre>${escapeHtml(activityProgressText(activity))}</pre>
+        </article>
+      `;
+    }
+
+    function activityElapsed(activity) {
+      if (!activity || !activity.startedAt) return "运行中";
+      const seconds = Math.max(0, Math.floor((Date.now() - activity.startedAt) / 1000));
+      return `已等待 ${seconds} 秒`;
+    }
+
+    function activityProgressText(activity) {
+      const base = activity && activity.content ? activity.content : "系统正在处理，请稍等。";
+      if (!activity || !activity.startedAt) return base;
+      const seconds = Math.max(0, Math.floor((Date.now() - activity.startedAt) / 1000));
+      if (seconds < 30) return base;
+      return `${base}\n\n模型响应较慢，但服务器仍在执行；可以打开“会话事件”查看 planning step。`;
+    }
+
+    function renderServerProgress(bundle) {
+      if (!bundle || !bundle.session) return "";
+      const status = bundle.session.status;
+      if (!["planning", "researching"].includes(status)) return "";
+      const steps = [...(bundle.steps || [])];
+      const activeStep = steps.reverse().find((step) => ["running", "pending"].includes(step.status)) || steps[0] || null;
+      const title = status === "planning" ? "正在生成研究计划" : "研究正在运行";
+      const stage = activeStep
+        ? `${label(KIND_LABELS, activeStep.kind, "阶段")} · ${statusLabel(activeStep.status)}`
+        : statusLabel(status);
+      const content = activeStep
+        ? `${activeStep.title || title}\n${activeStep.summary || "页面会自动刷新当前阶段。"}`
+        : (status === "planning"
+          ? "系统已收到输入，正在判断是否需要追问，并生成需要确认的研究计划。"
+          : "研究任务正在后台执行，页面会自动刷新报告、trace 和评价指标。");
+      return `
+        <article class="message assistant pending">
+          <header>
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(stage)}</span>
+          </header>
+          <pre>${escapeHtml(content)}</pre>
         </article>
       `;
     }
@@ -1208,7 +1264,7 @@
 
         <section class="block observability-summary">
           <h3>过程观测</h3>
-          <p class="subtle">主区域看结论；详细 trace、工具链和评估分数在专业观测层查看。</p>
+          <p class="subtle">主区域看结论；详细 trace、工具链和评估分数在专业观测层查看。页面按本机时间显示，Langfuse 表格可能按 UTC 展示。</p>
           <div class="settings">
             <span class="pill ${statusClassName}">${escapeHtml(statusText)}</span>
             ${run && run.run_id ? `<span class="pill">Run ${escapeHtml(short(run.run_id, 12))}</span>` : ""}
@@ -1284,6 +1340,9 @@
       if (status === "researching") {
         return "研究正在运行。右侧只显示摘要，详细过程会进入 Trace。";
       }
+      if (status === "planning") {
+        return "正在生成研究计划。页面会自动刷新；需要看细节可以打开“会话事件”。";
+      }
       if (status === "completed") {
         return "报告已经完成。先看结果和质量指标，需要复盘时再导出会话。";
       }
@@ -1344,7 +1403,7 @@
           <div class="metric-grid">
             ${metric("工作区 ID", workspaceId || "默认")}
             ${metric("会话 key", bundle.session.session_key || bundle.session.session_id)}
-            ${metric("更新时间", short(workspace.updated_at, 24))}
+            ${metric("更新时间", formatTime(workspace.updated_at))}
             ${metric("来源偏好数", (workspace.preferred_sources || []).length)}
           </div>
         </section>
@@ -1446,7 +1505,7 @@
                 <button class="compact danger" data-delete-memory="${escapeHtml(item.memory_id)}">删除</button>
               </div>
               <span>${escapeHtml(item.content)}</span>
-              <span class="subtle">${escapeHtml(item.metadata && item.metadata.hard_constraint ? "硬约束" : "记忆")} · ${escapeHtml(short(item.updated_at, 24))}</span>
+              <span class="subtle">${escapeHtml(item.metadata && item.metadata.hard_constraint ? "硬约束" : "记忆")} · ${escapeHtml(formatTime(item.updated_at))}</span>
             </div>
           `).join("") : '<p>还没有记忆。</p>'}
           ${extractionResults.length ? `
@@ -1693,6 +1752,7 @@
         badge: "正在规划",
         userContent: content,
         content: "系统已收到输入，正在写入会话、抽取团队约束，并判断是需要追问还是生成研究计划。",
+        startedAt: Date.now(),
       });
       let turnPollTimer = null;
       let turnPollBusy = false;

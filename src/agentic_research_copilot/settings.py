@@ -107,7 +107,7 @@ class AppSettings(BaseModel):
     seed_reference_knowledge: bool = False
     skill_paths: list[str] = Field(default_factory=lambda: ["skills"])
     skill_script_timeout_seconds: float = 10.0
-    observability_provider: Literal["none", "langfuse"] = "none"
+    observability_provider: Literal["none", "langfuse"] = "langfuse"
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
@@ -201,7 +201,7 @@ def load_settings() -> AppSettings:
         seed_reference_knowledge=_env_bool("ARC_SEED_REFERENCE_KNOWLEDGE", False),
         skill_paths=_env_list("ARC_SKILL_PATHS") or ["skills"],
         skill_script_timeout_seconds=float(os.getenv("ARC_SKILL_SCRIPT_TIMEOUT_SECONDS", "10")),
-        observability_provider=os.getenv("ARC_OBSERVABILITY_PROVIDER", "none").lower(),
+        observability_provider=os.getenv("ARC_OBSERVABILITY_PROVIDER", "langfuse").lower(),
         langfuse_public_key=_first_env("ARC_LANGFUSE_PUBLIC_KEY", "LANGFUSE_PUBLIC_KEY"),
         langfuse_secret_key=_first_env("ARC_LANGFUSE_SECRET_KEY", "LANGFUSE_SECRET_KEY"),
         langfuse_host=os.getenv("ARC_LANGFUSE_HOST", os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")).rstrip("/"),

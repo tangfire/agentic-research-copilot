@@ -73,7 +73,7 @@ http://127.0.0.1:8002/
 
 ### Step 4：看结果
 
-先看中间报告和右侧运行摘要，再点击 `查看 Langfuse Trace`。没有 Langfuse 时，打开 `查看本地 Trace JSON`。
+先看中间报告和右侧运行摘要，再点击 `查看 Langfuse Trace`。没有 key 或连接失败时，打开 `查看本地 Trace JSON`。
 
 在 Langfuse 里看：
 
@@ -99,19 +99,19 @@ http://127.0.0.1:8002/
 
 ## 4.1 Langfuse 配置
 
-Langfuse 是可选项。安装：
+Langfuse 是默认观测层。安装：
 
 ```powershell
 python -m pip install -e ".[observability]"
 ```
 
-然后在 `.env` 配置 `ARC_OBSERVABILITY_PROVIDER=langfuse`、`ARC_LANGFUSE_PUBLIC_KEY` 和 `ARC_LANGFUSE_SECRET_KEY`，重启服务：
+然后在 `.env` 配置 `ARC_LANGFUSE_PUBLIC_KEY` 和 `ARC_LANGFUSE_SECRET_KEY`，重启服务：
 
 ```powershell
 .\scripts\start_workbench_local.ps1 -Port 8002 -UseMcp -Restart
 ```
 
-Langfuse 不可用时，演示仍然使用本地 SQLite trace；不要为了演示伪造外部 trace。
+如果没有 key，演示仍然使用本地 SQLite trace；不要为了演示伪造外部 trace。
 
 ## 4. 如果 GitHub MCP 没配置
 

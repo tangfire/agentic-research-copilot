@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import json
+from html import escape
 from pathlib import Path
 from typing import Literal
 import uuid
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -222,13 +224,28 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
     @app.get("/v1/agent/sessions/{session_id}/events")
     def list_agent_events(
         session_id: str,
+        request: Request,
         limit: int = Query(default=80, ge=1, le=500),
         after_event_id: str | None = None,
+        format: Literal["html", "json"] | None = None,
     ):
         try:
-            return agent.list_events(session_id, limit=limit, after_event_id=after_event_id)
+            events = agent.list_events(session_id, limit=limit, after_event_id=after_event_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Agent session not found") from exc
+        accept = (request.headers.get("accept") or "").lower()
+        if format != "json" and (format == "html" or ("text/html" in accept and "application/json" not in accept)):
+            bundle = agent.get_session_bundle(session_id)
+            return HTMLResponse(
+                _render_agent_events_page(
+                    session_id=session_id,
+                    bundle=bundle,
+                    events=events,
+                    limit=limit,
+                    after_event_id=after_event_id,
+                )
+            )
+        return events
 
     @app.get("/v1/agent/sessions/{session_id}/tool-invocations")
     def list_agent_tool_invocations(session_id: str):
@@ -643,3 +660,287 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
         return copilot.observability.status()
 
     return app
+
+
+def _render_agent_events_page(
+    *,
+    session_id: str,
+    bundle: object | None,
+    events: list[object],
+    limit: int,
+    after_event_id: str | None,
+) -> str:
+    session = getattr(bundle, "session", None)
+    session_title = getattr(session, "title", "") or session_id
+    session_status = getattr(session, "status", "") or "unknown"
+    workspace_id = getattr(session, "workspace_id", "") or "n/a"
+    rendered_events = "\n".join(_render_agent_event_card(event) for event in events) or "<div class='empty'>当前没有事件。</div>"
+    continuation = f"&after_event_id={escape(after_event_id)}" if after_event_id else ""
+    return f"""<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>会话事件 - {escape(session_title)}</title>
+    <style>
+      :root {{
+        color-scheme: light;
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --line: #d9e1ec;
+        --text: #162033;
+        --muted: #5d6b82;
+        --accent: #0f766e;
+        --accent-soft: #e6fffb;
+      }}
+      body {{
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }}
+      .wrap {{
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 24px;
+      }}
+      .head {{
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+        margin-bottom: 20px;
+      }}
+      .head h1 {{
+        margin: 0 0 8px;
+        font-size: 24px;
+      }}
+      .subtle {{
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }}
+      .chips {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }}
+      .pill {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--text);
+        font-size: 12px;
+      }}
+      .grid {{
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }}
+      .card {{
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      }}
+      .event-head {{
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        margin-bottom: 10px;
+      }}
+      .event-head h2 {{
+        margin: 0 0 6px;
+        font-size: 18px;
+      }}
+      .meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }}
+      .summary {{
+        margin: 0 0 12px;
+        line-height: 1.65;
+        white-space: pre-wrap;
+      }}
+      .facts {{
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }}
+      .fact {{
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fafcff;
+      }}
+      .fact .label {{
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 4px;
+      }}
+      details {{
+        border-top: 1px dashed var(--line);
+        padding-top: 10px;
+      }}
+      summary {{
+        cursor: pointer;
+        color: var(--accent);
+        font-weight: 600;
+      }}
+      pre {{
+        margin: 10px 0 0;
+        padding: 12px;
+        background: #0f172a;
+        color: #dbeafe;
+        border-radius: 10px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }}
+      .footer-link {{
+        display: inline-block;
+        margin-top: 14px;
+        color: var(--accent);
+        text-decoration: none;
+      }}
+      .empty {{
+        padding: 20px;
+        background: var(--panel);
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        color: var(--muted);
+      }}
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="head">
+        <div>
+          <h1>会话事件</h1>
+          <p class="subtle">{escape(session_title)} 的事件时间线。这里按本机时间展示；Langfuse 表格有时按 UTC 展示，所以会看起来差 8 小时。</p>
+        </div>
+        <div class="chips">
+          <span class="pill">会话 {escape(session_id)}</span>
+          <span class="pill">状态 {escape(session_status)}</span>
+          <span class="pill">Workspace {escape(workspace_id)}</span>
+          <span class="pill">limit {limit}</span>
+          {f"<span class='pill'>after {escape(after_event_id)}</span>" if after_event_id else ""}
+        </div>
+      </div>
+      <section class="grid">
+        {rendered_events}
+      </section>
+      <a class="footer-link" href="/v1/agent/sessions/{escape(session_id)}/events?format=json&limit={limit}{continuation}">打开原始 JSON</a>
+    </main>
+    <script>
+      document.querySelectorAll(".event-time").forEach((node) => {{
+        const date = new Date(node.dataset.iso || "");
+        if (Number.isNaN(date.getTime())) return;
+        node.textContent = new Intl.DateTimeFormat("zh-CN", {{
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }}).format(date).replaceAll("/", "-");
+      }});
+    </script>
+  </body>
+</html>"""
+
+
+def _render_agent_event_card(event: object) -> str:
+    payload = getattr(event, "payload", {}) or {}
+    payload_json = escape(json.dumps(payload, ensure_ascii=False, indent=2))
+    kind = str(getattr(event, "kind", "event") or "event")
+    title = _display_event_title(str(getattr(event, "title", "事件") or "事件"))
+    summary = str(getattr(event, "summary", "") or "无摘要")
+    actor = str(getattr(event, "actor", "agent") or "agent")
+    status = str(getattr(event, "status", "completed") or "completed")
+    tool_name = str(getattr(event, "tool_name", "") or "n/a")
+    created_at = str(getattr(event, "created_at", "") or "")
+    run_id = str(getattr(event, "run_id", "") or "n/a")
+    job_id = str(getattr(event, "job_id", "") or "n/a")
+    event_id = str(getattr(event, "event_id", "") or "")
+    return f"""
+        <article class="card">
+          <div class="event-head">
+            <div>
+              <h2>{escape(title)}</h2>
+              <div class="meta">
+                <span class="event-time" data-iso="{escape(created_at)}">{escape(created_at or "n/a")}</span>
+                <span>actor: {escape(actor)}</span>
+                <span>kind: {escape(_display_kind(kind))}</span>
+              </div>
+            </div>
+            <span class="pill">{escape(_display_status(status))}</span>
+          </div>
+          <p class="summary">{escape(summary)}</p>
+          <div class="facts">
+            <div class="fact"><span class="label">tool</span>{escape(tool_name)}</div>
+            <div class="fact"><span class="label">run</span>{escape(run_id)}</div>
+            <div class="fact"><span class="label">job</span>{escape(job_id)}</div>
+            <div class="fact"><span class="label">event</span>{escape(event_id)}</div>
+          </div>
+          <details>
+            <summary>查看原始 JSON</summary>
+            <pre>{payload_json}</pre>
+          </details>
+        </article>
+    """
+
+
+def _display_event_title(title: str) -> str:
+    mapping = {
+        "user message": "用户消息",
+        "assistant message": "助手消息",
+        "User message received": "收到用户消息",
+        "Clarification required": "需要补充信息",
+        "Research cancellation requested": "研究取消请求",
+    }
+    if title.startswith("Skill preflight:"):
+        return title.replace("Skill preflight:", "Skill 预检：", 1)
+    return mapping.get(title, title)
+
+
+def _display_status(status: str) -> str:
+    return {
+        "chat": "对话",
+        "completed": "完成",
+        "running": "运行中",
+        "pending": "待处理",
+        "failed": "失败",
+        "skipped": "跳过",
+        "plan": "计划",
+        "clarify": "追问",
+        "research": "研究",
+    }.get(status, status)
+
+
+def _display_kind(kind: str) -> str:
+    return {
+        "message": "消息",
+        "planning": "规划",
+        "tool_call": "工具调用",
+        "retrieval": "检索",
+        "research": "研究",
+        "report": "报告",
+        "verification": "验证",
+        "evaluation": "评估",
+        "failure": "失败",
+        "heartbeat": "心跳",
+    }.get(kind, kind)

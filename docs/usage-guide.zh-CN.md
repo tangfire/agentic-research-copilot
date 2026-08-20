@@ -42,7 +42,7 @@ http://127.0.0.1:8002/docs
    - 研究对象是什么，例如 `owner/repo`、技术库或架构方案；
    - 团队有哪些约束，例如 Python/FastAPI、单机部署、预算、回滚要求。
 3. 点击“发送”。
-4. 查看右侧的“计划”。
+4. 查看中间会话里的计划和右侧“下一步”。
 5. 计划没问题时点击“确认并开始研究”。
 6. 等待状态变成 `completed`，然后查看“结果”。
 
@@ -67,7 +67,7 @@ http://127.0.0.1:8002/docs
 - `下一步`：告诉你当前应该补充信息、确认计划、等待运行，还是查看报告。
 - 中间会话：输入、计划确认、运行状态和最终报告。
 - 右侧运行摘要：状态、专家数量、来源数、工具完成数、约束覆盖和质量分数。
-- 过程观测入口：优先打开 Langfuse Trace；没有 Langfuse 时打开本地 Trace JSON。
+- 过程观测入口：默认打开 Langfuse Trace；没有 key 或未安装时打开本地 Trace JSON。
 
 右侧不再重复展示完整计划、完整报告和全部工具日志。详细过程统一放在 Langfuse；本地 SQLite 仍保留完整 trace、checkpoint 和 replay。
 
@@ -171,9 +171,11 @@ python scripts/run_adoption_memo_experiment.py --clean --mode real --max-section
 
 如果你刚改过代码但页面没有变化，优先怀疑旧进程还在跑。关闭旧的 `uvicorn`/`python` 服务后重新执行上面的启动脚本。
 
-### 一直停在计划阶段
+### 一直显示“规划中”
 
-检查是否已经点击“确认并开始研究”。系统设计上不会在计划生成后自动开始。
+`planning` 表示模型还在生成计划，不是等待你点击确认。页面会显示“正在生成研究计划”，并每 2 秒刷新会话步骤；如果模型响应超过约 30 秒，会提示“模型响应较慢”，你也可以打开“会话事件”查看 `planning:running`。
+
+模型请求成功后状态会变成 `awaiting_confirmation`，这时才点击“确认并开始研究”。如果模型调用真正失败，系统会把会话标记为 `failed`，写入失败消息和失败步骤，不会伪装成成功。
 
 ### MCP 显示不可用
 
@@ -204,6 +206,18 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 -> 出问题时如何回放
 ```
 
+发送问题后，建议先观察这几个状态：
+
+```text
+planning:running
+-> planning:completed
+-> awaiting_confirmation
+-> researching
+-> report / evaluation
+```
+
+如果刷新页面，服务器端的 step 仍然保留；如果打开“会话事件”，可以看到同一条阶段记录以及原始 JSON。
+
 ## 8. 最小学习路径
 
 第一次不要同时研究所有技术。建议按下面顺序：
@@ -215,4 +229,6 @@ GITHUB_PERSONAL_ACCESS_TOKEN
 
 ## 9. Langfuse 观测
 
-Langfuse 是可选的外部过程观测层，配置、隐私边界和面试讲法见 [observability-design.zh-CN.md](observability-design.zh-CN.md)。本地学习时不配置 Langfuse 也可以，右侧会提供本地 Trace JSON 和会话事件入口。
+Langfuse 是默认的外部过程观测层，配置、隐私边界和面试讲法见 [observability-design.zh-CN.md](observability-design.zh-CN.md)。本地学习时即使不配 key 也可以，右侧会提供本地 Trace JSON 和会话事件入口。
+
+主页面和会话事件页按本机时间显示；Langfuse 自托管界面可能按 UTC 展示。因此同一条运行在 Langfuse 表格里通常会比页面早 8 小时，这不是运行顺序错乱。看时间线时以 trace 内部的先后关系为准。

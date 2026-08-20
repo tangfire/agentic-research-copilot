@@ -29,6 +29,7 @@ class ObservabilityPublisher:
         self.host = str(getattr(settings, "langfuse_host", "") or "").rstrip("/")
         self.environment = str(getattr(settings, "langfuse_environment", "local") or "local")
         self.release = str(getattr(settings, "langfuse_release", "research-desk") or "research-desk")
+        self.capture_content = bool(getattr(settings, "langfuse_capture_content", False))
         self._client: Any | None = None
         self._installed = False
         self._import_error = ""
@@ -55,6 +56,7 @@ class ObservabilityPublisher:
                 host=self.host or "https://cloud.langfuse.com",
                 environment=self.environment,
                 release=self.release,
+                additional_headers={"x-langfuse-ingestion-version": "4"},
             )
         except Exception as exc:  # pragma: no cover - provider SDK/runtime dependent
             self._import_error = str(exc)
@@ -78,6 +80,7 @@ class ObservabilityPublisher:
             "host": self.host or ("https://cloud.langfuse.com" if self.provider == "langfuse" else ""),
             "environment": self.environment,
             "release": self.release,
+            "capture_content": self.capture_content,
             "reason": reason,
         }
 
@@ -106,6 +109,7 @@ class ObservabilityPublisher:
                     "execution_mode": "specialist_worker",
                     "status": run.status,
                     "revision_count": run.revision_count,
+                    "capture_content": self.capture_content,
                 },
                 level="ERROR" if run.status == "failed" else "DEFAULT",
                 status_message=run.failure_reason or None,
@@ -146,12 +150,8 @@ class ObservabilityPublisher:
         with self._client.start_as_current_observation(
             name=f"{event.actor}.{event.kind}",
             as_type=kind,
-            input={
-                "step": event.step,
-                "tool_name": event.tool_name,
-                "metadata": _safe_value(event.metadata),
-            },
-            output={"message": _trim(event.message, 500), "status": event.status},
+            input=self._event_input(event),
+            output=self._event_output(event),
             metadata={
                 "actor": event.actor,
                 "provider": event.provider,
@@ -190,12 +190,8 @@ class ObservabilityPublisher:
     @staticmethod
     def _run_input(run: ResearchRun) -> dict[str, Any]:
         return {
-            "topic": _trim(run.request.topic, 1000),
             "depth": run.request.depth,
-            "plan_items": [
-                {"id": item.id, "question": _trim(item.question, 240)}
-                for item in run.plan
-            ],
+            "plan_count": len(run.plan),
             "metadata": _safe_value(run.request.metadata),
         }
 
@@ -205,8 +201,6 @@ class ObservabilityPublisher:
         evaluation = run.evaluation
         return {
             "status": run.status,
-            "title": _trim(report.title if report else "", 240),
-            "summary": _trim(report.summary if report else "", 1000),
             "source_count": report.source_count if report else 0,
             "evaluation": (
                 {
@@ -219,6 +213,21 @@ class ObservabilityPublisher:
                 else None
             ),
         }
+
+    def _event_input(self, event: RunTraceEvent) -> dict[str, Any]:
+        payload = {
+            "step": event.step,
+            "tool_name": event.tool_name,
+            "metadata": _safe_value(event.metadata),
+        }
+        if self.capture_content:
+            payload["message"] = _trim(event.message, 500)
+        return payload
+
+    def _event_output(self, event: RunTraceEvent) -> dict[str, Any]:
+        if not self.capture_content:
+            return {"status": event.status}
+        return {"message": _trim(event.message, 500), "status": event.status}
 
 
 def _trim(value: Any, limit: int) -> str:

@@ -280,20 +280,52 @@ class ConversationalResearchAgent:
                 "skill_name": selected_skill.name,
             },
         )
-        if missing_inputs:
-            clarification = ClarificationContract(
-                need_clarification=True,
-                question=self._skill_clarification_question(
-                    selected_skill,
-                    missing_inputs,
-                    workspace=workspace,
-                ),
-                verification="",
-                missing_dimensions=missing_inputs,
-                confidence=0.95,
+        session = self._save_session_status(session, "planning")
+        planning_step = self._save_step(
+            session_id=session_id,
+            kind="planning",
+            status="running",
+            title="正在生成研究计划",
+            summary="正在判断信息是否足够，并准备生成需要用户确认的研究计划。",
+            actor="planner",
+            input_preview=_trim(content, 500),
+            metadata={
+                "stage": "clarify_or_plan",
+                "skill_id": selected_skill.skill_id,
+                "workspace_id": workspace.workspace_id,
+                "message_id": user_message.message_id,
+            },
+            step_id=_stable_id("planning_turn", session_id, user_message.message_id),
+        )
+        try:
+            if missing_inputs:
+                clarification = ClarificationContract(
+                    need_clarification=True,
+                    question=self._skill_clarification_question(
+                        selected_skill,
+                        missing_inputs,
+                        workspace=workspace,
+                    ),
+                    verification="",
+                    missing_dimensions=missing_inputs,
+                    confidence=0.95,
+                )
+            else:
+                clarification = self.copilot.clarify(raw_request)
+        except Exception as exc:  # pragma: no cover - provider/network dependent
+            return self._planning_failure_response(
+                session=session,
+                workspace=workspace,
+                selected_skill=selected_skill,
+                user_message=user_message,
+                memory_updates=memory_updates,
+                extraction_result=extraction_result,
+                message_step=message_step,
+                skill_preflight_step=skill_preflight_step,
+                planning_step=planning_step,
+                exc=exc,
+                stage="clarifier",
             )
-        else:
-            clarification = self.copilot.clarify(raw_request)
         research_request = self._build_research_request(
             session_id=session_id,
             latest_content=content,
@@ -321,7 +353,7 @@ class ConversationalResearchAgent:
                 session_id=session_id,
                 kind="planning",
                 status="skipped",
-                title="Clarification required",
+                title="需要补充研究信息",
                 summary=clarification.question,
                 actor="clarifier",
                 input_preview=_trim(content, 260),
@@ -333,6 +365,8 @@ class ConversationalResearchAgent:
                     "workspace_id": workspace.workspace_id,
                     "skill_preflight": skill_preflight.model_dump(mode="json") if skill_preflight is not None else None,
                 },
+                step_id=planning_step.step_id,
+                created_at=planning_step.created_at,
             )
             return AgentTurnResponse(
                 session=session,
@@ -346,9 +380,23 @@ class ConversationalResearchAgent:
                 mcp_status=self.mcp_status(),
             )
 
-        session = self._save_session_status(session, "planning")
-        corpus_profile = self.copilot.documents.profile()
-        planner_contract = self.copilot.planner.draft(research_request, corpus_profile=corpus_profile)
+        try:
+            corpus_profile = self.copilot.documents.profile()
+            planner_contract = self.copilot.planner.draft(research_request, corpus_profile=corpus_profile)
+        except Exception as exc:  # pragma: no cover - provider/network dependent
+            return self._planning_failure_response(
+                session=session,
+                workspace=workspace,
+                selected_skill=selected_skill,
+                user_message=user_message,
+                memory_updates=memory_updates,
+                extraction_result=extraction_result,
+                message_step=message_step,
+                skill_preflight_step=skill_preflight_step,
+                planning_step=planning_step,
+                exc=exc,
+                stage="planner",
+            )
         role_preview = role_preview_for_plan(
             research_request,
             planner_contract.plan,
@@ -402,6 +450,8 @@ class ConversationalResearchAgent:
                 "role_preview": role_preview,
                 "skill_preflight": skill_preflight.model_dump(mode="json") if skill_preflight is not None else None,
             },
+            step_id=planning_step.step_id,
+            created_at=planning_step.created_at,
         )
         assistant_message = self._save_message(
             session_id=session_id,
@@ -516,6 +566,72 @@ class ConversationalResearchAgent:
             metadata={"cancel_requested": True, "job_id": job_id},
         )
         return self._save_session_status(session, "failed")
+
+    def _planning_failure_response(
+        self,
+        *,
+        session: AgentSession,
+        workspace: WorkspaceProfile,
+        selected_skill: ResearchSkill,
+        user_message: AgentMessage,
+        memory_updates: list[MemoryItem],
+        extraction_result: MemoryExtractionResult,
+        message_step: AgentRunStep,
+        skill_preflight_step: AgentRunStep | None,
+        planning_step: AgentRunStep,
+        exc: Exception,
+        stage: str,
+    ) -> AgentTurnResponse:
+        public_error = _public_error(exc)
+        failure_text = (
+            f"规划阶段失败：{public_error}\n\n"
+            "这次没有启动研究任务，也没有伪装成成功。你可以稍后重试；"
+            "如果连续失败，优先检查模型中转站、模型超时和结构化 JSON 输出。"
+        )
+        failed_step = self._save_step(
+            session_id=session.session_id,
+            kind="planning",
+            status="failed",
+            title="研究计划生成失败",
+            summary=public_error,
+            actor=stage,
+            input_preview=_trim(user_message.content, 500),
+            output_preview=_trim(failure_text, 600),
+            metadata={
+                "stage": stage,
+                "error_type": exc.__class__.__name__,
+                "skill_id": selected_skill.skill_id,
+                "workspace_id": workspace.workspace_id,
+                "message_id": user_message.message_id,
+            },
+            step_id=planning_step.step_id,
+            created_at=planning_step.created_at,
+        )
+        assistant_message = self._save_message(
+            session_id=session.session_id,
+            role="assistant",
+            content=failure_text,
+            intent="plan",
+            metadata={
+                "planning_failure": True,
+                "stage": stage,
+                "error_type": exc.__class__.__name__,
+                "skill_id": selected_skill.skill_id,
+                "workspace_id": workspace.workspace_id,
+            },
+        )
+        session = self._save_session_status(session, "failed")
+        return AgentTurnResponse(
+            session=session,
+            workspace=workspace,
+            selected_skill=selected_skill,
+            user_message=user_message,
+            assistant_message=assistant_message,
+            memory_updates=memory_updates,
+            steps=[step for step in [message_step, skill_preflight_step, failed_step] if step is not None],
+            memory_extraction_result=extraction_result,
+            mcp_status=self.mcp_status(),
+        )
 
     def delete_session(self, session_id: str) -> dict[str, Any]:
         session = self.store.load_agent_session(session_id)
@@ -854,6 +970,7 @@ class ConversationalResearchAgent:
         evidence_count: int = 0,
         metadata: dict[str, Any] | None = None,
         step_id: str | None = None,
+        created_at: str | None = None,
     ) -> AgentRunStep:
         now = _utc_now()
         step = AgentRunStep(
@@ -870,7 +987,7 @@ class ConversationalResearchAgent:
             input_preview=_trim(input_preview, 600),
             output_preview=_trim(output_preview, 600),
             evidence_count=evidence_count,
-            created_at=now,
+            created_at=created_at or now,
             updated_at=now,
             metadata=metadata or {},
         )
@@ -1495,6 +1612,8 @@ class ConversationalResearchAgent:
         if updates:
             session = session.model_copy(update={**updates, "updated_at": _utc_now()})
             self.store.save_agent_session(session)
+        if session.status == "planning":
+            return self._expire_stale_planning_session(session)
         if session.status != "researching":
             return session
         job = self._active_job(session)
@@ -1538,6 +1657,41 @@ class ConversationalResearchAgent:
             )
             return heartbeat_session
         return session
+
+    def _expire_stale_planning_session(self, session: AgentSession) -> AgentSession:
+        updated_at = _parse_utc_timestamp(session.updated_at)
+        if updated_at is None:
+            return session
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        timeout_seconds = max(90.0, float(getattr(self.copilot.settings, "model_timeout_seconds", 30.0)) * 3 + 15)
+        if (datetime.now(timezone.utc) - updated_at).total_seconds() < timeout_seconds:
+            return session
+
+        existing_messages = self.store.load_agent_messages(session.session_id)
+        if not any(message.metadata.get("planning_failure") == "stale_timeout" for message in existing_messages):
+            self._save_message(
+                session_id=session.session_id,
+                role="assistant",
+                content=(
+                    "规划阶段超时：模型规划调用没有在预期时间内完成。\n\n"
+                    "这次没有启动研究任务，也没有把失败伪装成成功。请检查模型中转站、模型超时配置，"
+                    "然后重新发送这条问题。"
+                ),
+                intent="plan",
+                metadata={"planning_failure": "stale_timeout"},
+            )
+        self._save_step(
+            session_id=session.session_id,
+            kind="planning",
+            status="failed",
+            title="规划阶段超时",
+            summary="模型规划调用没有在预期时间内完成。",
+            actor="planner",
+            metadata={"planning_failure": "stale_timeout", "timeout_seconds": timeout_seconds},
+            step_id=_stable_id("planning_stale_timeout", session.session_id),
+        )
+        return self._save_session_status(session, "failed")
 
     def _heartbeat_due(self, session: AgentSession, job: ResearchJob) -> bool:
         if job.status not in {"queued", "running"}:
@@ -1949,6 +2103,14 @@ def _trim(value: object, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _public_error(exc: Exception) -> str:
+    text = str(exc).strip() or exc.__class__.__name__
+    text = re.sub(r"(?i)(authorization:\s*bearer\s+)[A-Za-z0-9._\-]+", r"\1***", text)
+    text = re.sub(r"(?i)(api[_-]?key|token|secret|password)([=:]\s*)[^\s,;]+", r"\1\2***", text)
+    text = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._\-]+", r"\1***", text)
+    return _trim(text, 420)
 
 
 def _step_kind_for_trace(kind: str, actor: str) -> str:

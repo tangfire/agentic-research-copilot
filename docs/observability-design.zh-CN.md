@@ -23,7 +23,19 @@ SQLite 本地 ledger
   -> 保存完整 run、checkpoint、trace、replay 和 export bundle
 ```
 
-Langfuse 是可选的外部观测层，不是运行依赖，也不是事实源。没有 Langfuse 时，项目仍然可以正常研究、回放和导出。
+Langfuse 是默认的外部观测层，不是运行依赖，也不是事实源。就算没有配置 key，项目仍然可以正常研究、回放和导出，只是不会把 trace 发到 Langfuse。
+
+如果你不想用 Cloud，也可以自托管 Langfuse。Langfuse 官方提供开源自托管，核心功能免费，适合本地学习、校招展示和小团队内网部署。此时把 `ARC_LANGFUSE_HOST` 改成你的自托管地址即可。
+
+本地最简单的方式是：
+
+```powershell
+git clone https://github.com/langfuse/langfuse.git
+cd langfuse
+docker compose up
+```
+
+如果你用的是我们这份本地自托管栈，默认打开 `http://localhost:13001`。创建 project 后，把本地项目的 `ARC_LANGFUSE_HOST` 改成这个地址即可。Docker Desktop 在 Windows 上就能直接跑。
 
 ## 2. 安装
 
@@ -57,13 +69,7 @@ ARC_LANGFUSE_CAPTURE_CONTENT=false
 - publisher 会过滤 token、secret、password、api key 和 authorization 字段，并截断事件文本；
 - GitHub token 和模型 provider key 不会被发送到 Langfuse。
 
-如果暂时没有 Langfuse key，保持：
-
-```text
-ARC_OBSERVABILITY_PROVIDER=none
-```
-
-页面会显示“本地观测已启用”，这不是错误。
+如果暂时没有 Langfuse key，也保持 `ARC_OBSERVABILITY_PROVIDER=langfuse`，只是页面会显示“Langfuse 未配置 public key / secret key；不会发送外部 trace。”这不是错误。
 
 ## 4. 启动并验证
 
@@ -81,6 +87,15 @@ Invoke-RestMethod http://127.0.0.1:8002/v1/observability/status
 
 配置成功时，结果中的 `enabled` 应该是 `True`。如果是 `False`，先看 `reason`，常见原因是 key 没有配置、Langfuse extra 没安装或旧服务没有重启。
 
+补充一句：Langfuse v4 的 trace 事件更适合看 UI 或 `events_core` / `events_full` 这类事件表，不要只盯老的 `traces` 表做验收。
+
+时间显示说明：
+
+- Research Desk 主页面和会话事件页会把 ISO 时间转换为本机时间；
+- Langfuse 自托管 UI 可能按 UTC 展示；
+- 中国本地页面与 Langfuse 表格相差 8 小时是正常的时区显示差异，不代表事件乱序；
+- 判断流程时，优先看同一个 trace 内的相对顺序、状态和 duration。
+
 ## 5. 一次完整使用
 
 1. 打开 `http://127.0.0.1:8002/`。
@@ -91,6 +106,13 @@ Invoke-RestMethod http://127.0.0.1:8002/v1/observability/status
 6. 研究完成后，右侧只看运行摘要和质量概览。
 7. 点击“查看 Langfuse Trace”进入详细过程。
 8. 如果 Langfuse 未启用，点击“查看本地 Trace JSON”或“查看会话事件”。
+
+如果发送后暂时没有计划：
+
+1. 先看主页面是否显示 `正在生成研究计划`；
+2. 打开“会话事件”，确认是否有 `planning / 运行中`；
+3. 超过约 30 秒时，页面会提示模型响应较慢；
+4. 如果后端请求最终失败，会话会进入 `failed`，并显示失败原因，不会停留在一个没有解释的 `planning` 状态。
 
 本地 trace 和 Langfuse 的对应关系：
 
