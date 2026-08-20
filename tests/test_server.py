@@ -321,8 +321,20 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
 
         events_response = client.get(f"/v1/agent/sessions/{session_id}/events")
         assert events_response.status_code == 200
-        assert any(event["type"] == "step" for event in events_response.json())
-        assert any(event["kind"] == "message" for event in events_response.json())
+        events_data = events_response.json()
+        assert any(event["type"] == "step" for event in events_data)
+        assert any(event["kind"] == "message" for event in events_data)
+        first_event_id = events_data[0]["event_id"]
+        resumed_events_response = client.get(
+            f"/v1/agent/sessions/{session_id}/events",
+            params={"after_event_id": first_event_id, "limit": 3},
+        )
+        assert resumed_events_response.status_code == 200
+        resumed_events = resumed_events_response.json()
+        assert 0 < len(resumed_events) <= 3
+        assert all(event["event_id"] != first_event_id for event in resumed_events)
+        if len(events_data) > 1:
+            assert resumed_events[0]["event_id"] == events_data[1]["event_id"]
 
         export_response = client.get(f"/v1/agent/sessions/{session_id}/export")
         assert export_response.status_code == 200

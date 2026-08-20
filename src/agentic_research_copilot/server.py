@@ -220,9 +220,13 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Agent session not found") from exc
 
     @app.get("/v1/agent/sessions/{session_id}/events")
-    def list_agent_events(session_id: str, limit: int = Query(default=80, ge=1, le=500)):
+    def list_agent_events(
+        session_id: str,
+        limit: int = Query(default=80, ge=1, le=500),
+        after_event_id: str | None = None,
+    ):
         try:
-            return agent.list_events(session_id, limit=limit)
+            return agent.list_events(session_id, limit=limit, after_event_id=after_event_id)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Agent session not found") from exc
 

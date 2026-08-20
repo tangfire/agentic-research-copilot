@@ -174,7 +174,7 @@ Future direction: this project itself is a reasonable MCP Server candidate, but 
 - `GET /v1/agent/sessions/{session_id}/memory`
 - `GET /v1/agent/sessions/{session_id}/memory/evaluation`
 - `GET /v1/agent/sessions/{session_id}/steps`
-- `GET /v1/agent/sessions/{session_id}/events`
+- `GET /v1/agent/sessions/{session_id}/events?after_event_id=...&limit=...`
 - `GET /v1/agent/sessions/{session_id}/tool-invocations`
 - `POST /v1/agent/sessions/{session_id}/approvals/{approval_id}/approve`
 - `POST /v1/agent/sessions/{session_id}/approvals/{approval_id}/reject`

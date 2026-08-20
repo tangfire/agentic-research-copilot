@@ -564,7 +564,7 @@ class ConversationalResearchAgent:
         self._require_session(session_id)
         return self.store.load_agent_steps(session_id)
 
-    def list_events(self, session_id: str, *, limit: int = 80) -> list[AgentEvent]:
+    def list_events(self, session_id: str, *, limit: int = 80, after_event_id: str | None = None) -> list[AgentEvent]:
         self._require_session(session_id)
         events: list[AgentEvent] = []
         for message in self.store.load_agent_messages(session_id):
@@ -575,7 +575,11 @@ class ConversationalResearchAgent:
             events.append(self._event_from_approval(approval))
         for invocation in self.store.load_tool_invocations(session_id):
             events.append(self._event_from_tool_invocation(invocation))
-        events.sort(key=lambda item: item.created_at)
+        events.sort(key=lambda item: (item.created_at, item.event_id))
+        if after_event_id:
+            for index, event in enumerate(events):
+                if event.event_id == after_event_id:
+                    return events[index + 1 : index + 1 + max(1, limit)]
         return events[-max(1, limit) :]
 
     def tool_definitions(self, *, workspace: WorkspaceProfile | None = None) -> list[AgentToolDefinition]:

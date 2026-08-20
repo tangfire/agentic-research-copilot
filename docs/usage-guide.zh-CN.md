@@ -77,6 +77,8 @@ http://127.0.0.1:8002/docs
 - 路由：RepoSignal / ArchitectureFit / OpsRisk 三个 specialist worker 为什么被选中、各自用了哪些工具。
 - 质量：引用、忠实度、上下文召回和约束覆盖。
 
+如果前端断线或刷新，`/events` 也可以按最后一个 `event_id` 继续拉后续事件，不需要从头重跑。
+
 ## 4. 记忆怎么用
 
 在“记忆”区域保存长期有效的信息，例如：

@@ -305,3 +305,79 @@ team constraints / repo / technical question
 30 秒答法：
 
 > 因为这个任务有三个稳定子问题：仓库事实、架构适配、运维风险。拆出来以后，路由、证据和评测都更清楚；如果不清楚，我宁愿退回单 Agent。
+
+## 10. 后端协议与工程补充
+
+### Q31: 如何做接口鉴权，如果不想把 token 暴露给 agent，一般怎么处理？
+
+考察点：安全边界是否清楚。
+
+30 秒答法：
+
+> token 不应该进入 agent prompt，也不应该进入 trace。正确做法是把凭证留在后端配置层或 secret manager 里，agent 只看到工具状态和 schema，由后端 tool adapter 代为调用。
+
+对应 artifact：`src/agentic_research_copilot/settings.py`、`src/agentic_research_copilot/agent.py`
+
+### Q32: 怎么理解 MCP 协议，和 function calling 的区别是什么？
+
+考察点：是否理解工具标准化。
+
+30 秒答法：
+
+> function calling 是模型侧的工具调用接口，MCP 是把工具、资源和 prompt 统一暴露给 agent host 的开放协议。前者偏“模型怎么调函数”，后者偏“外部系统怎么标准化接入 agent”。
+
+2 分钟答法：
+
+> 我会把 function calling 理解成模型能力层，而把 MCP 理解成 agent 工具层的通信协议。MCP 的优点是跨模型、跨 host、跨工具更统一，缺点是引入了协议、服务器和权限边界，工程复杂度更高。这个项目里我把 GitHub MCP 当成外部证据源，和本地 web / vector tool 分层处理。
+
+对应 artifact：`src/agentic_research_copilot/agent.py`、`docs/architecture.md`
+
+### Q33: SSE 断联后怎么恢复？
+
+考察点：事件流和断点续传。
+
+30 秒答法：
+
+> 我们项目当前主路径不是 SSE，而是 polling + durable event log。前端断了以后，只要带上最后看到的 event id 重新请求 `/events`，后端就可以从 SQLite 事件时间线里补发后续事件。
+
+2 分钟答法：
+
+> 如果真要上 SSE，我会让服务端给每个 event 一个稳定的 event_id，并让前端保存 last seen id；恢复时先走 `after_event_id` 补拉，再继续订阅实时流。这样中断不会丢状态。现在项目里已经有 `AgentEvent`、`AgentRunStep`、`ToolInvocation`、`ApprovalRequest` 这些持久化事件，只差把 cursor 恢复做成明确协议。
+
+对应 artifact：`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/server.py`
+
+### Q34: MySQL 和 Redis 数据不一致要怎么解决？
+
+考察点：通用后端一致性。
+
+30 秒答法：
+
+> 这是分布式后端题，不是我们项目主线。我们的项目是单机 SQLite workbench，所以不该硬凑 MySQL/Redis。一旦业务真的需要分布式缓存，常见做法是缓存失效、版本号、幂等重试、延迟双删和最终一致性。
+
+### Q35: 如果让你设计一个评测系统，你会怎么设计？
+
+考察点：是否能把 agent 过程指标化。
+
+30 秒答法：
+
+> 我会把评测拆成三层：结果层、过程层、质量门。结果层看报告是否回答问题；过程层看工具调用、路由、记忆和步骤；质量门看 citation precision、constraint coverage、tool success rate、replay fidelity 这些可解释指标。
+
+2 分钟答法：
+
+> 在这个项目里我已经把它拆成了 benchmark summary、route decisions、evidence ledger、memory evaluation 和 constraint coverage。真正可讲的不是“模型输出了答案”，而是“它有没有按预期路由工具、有没有覆盖约束、有没有把证据用对、失败后能不能回放”。如果要继续加强，我会加 labeled fixture、cursor replay、单步回归和异常样本集。
+
+对应 artifact：`src/agentic_research_copilot/pipeline.py`、`src/agentic_research_copilot/agent.py`
+
+### Q36: Claude Code 的记忆机制和长期记忆压缩机制怎么理解？
+
+考察点：是否理解产品级记忆。
+
+30 秒答法：
+
+> 我理解它主要是文件化的持久上下文，比如项目级和用户级记忆文件，再配合会话压缩，让长期偏好和临时上下文分层保存。这个项目里我对应实现的是 user/project/session 三层 memory 和 context_summary。
+
+2 分钟答法：
+
+> Claude Code 的思路更像“把长期知识落成可编辑文件，把短期上下文压成摘要”。我们项目没有直接照搬那个实现，而是自己做了一版 SQLite memory：session memory 管当前对话，project memory 管团队约束，user memory 管长期偏好，context summary 负责长会话压缩。区别是我们更强调 research workbench 的可观测和可评测，而不是个人助理式自动记忆。
+
+对应 artifact：`src/agentic_research_copilot/agent.py`、`docs/memory-and-constraint-eval.zh-CN.md`
