@@ -170,6 +170,7 @@ Future direction: this project itself is a reasonable MCP Server candidate, but 
 - `POST /v1/agent/sessions/{session_id}/messages`
 - `POST /v1/agent/sessions/{session_id}/confirm-plan`
 - `POST /v1/agent/sessions/{session_id}/cancel`
+- `DELETE /v1/agent/sessions/{session_id}`
 - `GET /v1/agent/sessions/{session_id}/memory`
 - `GET /v1/agent/sessions/{session_id}/memory/evaluation`
 - `GET /v1/agent/sessions/{session_id}/steps`

@@ -313,7 +313,25 @@ DELETE /v1/memory/{memory_id}
 
 已经完成的旧 run 不会被重写，因为旧报告和旧 trace 是历史事实。
 
-## 10. 面试讲法
+## 10. 删除 Session 后会发生什么
+
+删除接口：
+
+```text
+DELETE /v1/agent/sessions/{session_id}
+```
+
+效果：
+
+- 清理该 session 的 messages、plan draft、steps、tool invocations、approval requests 和 memory extraction results。
+- 清理 `scope=session` 的临时记忆。
+- 如果 session 还在跑 job，会先请求 cancel。
+- 不删除 `scope=user` / `scope=project` 的长期记忆。
+- 不删除已经完成的 research run 历史。
+
+这个边界很重要：删除会话是在整理对话，不是在抹掉工作区长期知识。团队约束、长期偏好和已完成的研究历史应该继续可复用、可复盘。
+
+## 11. 面试讲法
 
 一句话：
 

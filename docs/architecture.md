@@ -247,7 +247,7 @@ That future server should call the stable FastAPI/application services. It shoul
 
 ## API Surface
 
-- Agent: create/list/get sessions, post messages, confirm plan, cancel session, inspect session memory.
+- Agent: create/list/get/delete sessions, post messages, confirm plan, cancel session, inspect session memory.
 - Agent maturity: inspect steps/events, tool registry, tool invocation history, approval requests, memory evaluation, and constraint coverage.
 - Memory: add/list/delete user/project/session memory.
 - Research: `clarify`, `runs`, `jobs`, `status`, `result`, `trace`, `evaluation`, `replay`.
@@ -263,6 +263,7 @@ The exact agent endpoints are:
 - `POST /v1/agent/sessions/{session_id}/messages`
 - `POST /v1/agent/sessions/{session_id}/confirm-plan`
 - `POST /v1/agent/sessions/{session_id}/cancel`
+- `DELETE /v1/agent/sessions/{session_id}`
 - `GET /v1/agent/sessions/{session_id}/memory`
 - `GET /v1/agent/sessions/{session_id}/memory/evaluation`
 - `GET /v1/agent/sessions/{session_id}/steps`

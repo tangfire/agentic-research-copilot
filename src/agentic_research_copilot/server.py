@@ -205,6 +205,13 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(status_code=404, detail="Agent session not found") from exc
 
+    @app.delete("/v1/agent/sessions/{session_id}")
+    def delete_agent_session(session_id: str):
+        deleted = agent.delete_session(session_id)
+        if not deleted.get("deleted"):
+            raise HTTPException(status_code=404, detail="Agent session not found")
+        return deleted
+
     @app.get("/v1/agent/sessions/{session_id}/steps")
     def list_agent_steps(session_id: str):
         try:

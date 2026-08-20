@@ -350,6 +350,61 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert harness_data["evidence_ledger"]["total_evidence_count"] >= 1
 
 
+def test_agent_session_can_be_deleted_without_losing_project_memory(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
+    monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "agent-delete.sqlite"))
+    monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "agent-delete-checkpoints.sqlite"))
+    monkeypatch.setenv("ARC_SEED_REFERENCE_KNOWLEDGE", "true")
+    client = TestClient(create_fixture_app())
+
+    session_response = client.post("/v1/agent/sessions", json={"title": "Delete me"})
+    assert session_response.status_code == 200
+    session_id = session_response.json()["session_id"]
+
+    turn_response = client.post(
+        f"/v1/agent/sessions/{session_id}/messages",
+        json={
+            "content": (
+                "我们团队是 5 人 Python/FastAPI，单机 Docker Compose 部署，必须可回滚。"
+                "请评估 langchain-ai/langgraph 是否适合引入。"
+            ),
+            "max_sections": 2,
+            "max_revisions": 0,
+        },
+    )
+    assert turn_response.status_code == 200
+    turn_data = turn_response.json()
+    assert turn_data["memory_updates"]
+
+    project_memory_before = client.get("/v1/memory?scope=project").json()
+    assert any("Python/FastAPI" in item["content"] for item in project_memory_before)
+    assert all(item["session_id"] is None for item in project_memory_before)
+    session_memory_before = client.get("/v1/memory?scope=session").json()
+    assert any(item["session_id"] == session_id for item in session_memory_before)
+
+    delete_response = client.delete(f"/v1/agent/sessions/{session_id}")
+    assert delete_response.status_code == 200
+    delete_data = delete_response.json()
+    assert delete_data["deleted"] is True
+    assert delete_data["counts"]["sessions"] == 1
+    assert delete_data["counts"]["messages"] >= 1
+    assert delete_data["counts"]["steps"] >= 1
+    assert delete_data["counts"]["session_memory_items"] >= 1
+
+    assert client.get(f"/v1/agent/sessions/{session_id}").status_code == 404
+    assert all(session["session_id"] != session_id for session in client.get("/v1/agent/sessions").json())
+    session_memory_after = client.get("/v1/memory?scope=session").json()
+    assert all(item["session_id"] != session_id for item in session_memory_after)
+    project_memory_after = client.get("/v1/memory?scope=project").json()
+    assert any("Python/FastAPI" in item["content"] for item in project_memory_after)
+    documents_response = client.get("/v1/documents")
+    assert documents_response.status_code == 200
+    assert any(doc["metadata"].get("kind") == "agent_memory" for doc in documents_response.json())
+
+    missing_delete_response = client.delete(f"/v1/agent/sessions/{session_id}")
+    assert missing_delete_response.status_code == 404
+
+
 def test_memory_endpoint_can_add_list_and_delete_items(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
     monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "memory.sqlite"))

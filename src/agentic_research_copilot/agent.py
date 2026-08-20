@@ -515,6 +515,51 @@ class ConversationalResearchAgent:
         )
         return self._save_session_status(session, "failed")
 
+    def delete_session(self, session_id: str) -> dict[str, Any]:
+        session = self.store.load_agent_session(session_id)
+        if session is None:
+            return {"deleted": False, "session_id": session_id, "counts": {}}
+        job_id = session.metadata.get("active_job_id")
+        job_cancel_requested = False
+        if isinstance(job_id, str) and job_id:
+            job = self.copilot.get_job(job_id)
+            if job is not None and job.status not in {"completed", "failed", "cancelled"}:
+                self.copilot.cancel_job(job_id)
+                job_cancel_requested = True
+        linked_memories = [
+            memory
+            for memory in self.store.load_memory_items(session_id=session_id)
+            if memory.session_id == session_id
+        ]
+        promoted_memory_ids: list[str] = []
+        session_memory_ids: list[str] = []
+        for memory in linked_memories:
+            if memory.scope == "session":
+                session_memory_ids.append(memory.memory_id)
+                continue
+            self.store.save_memory_item(
+                memory.model_copy(
+                    update={
+                        "session_id": None,
+                        "updated_at": _utc_now(),
+                        "metadata": {
+                            **memory.metadata,
+                            "promoted_from_deleted_session_id": session_id,
+                        },
+                    }
+                )
+            )
+            promoted_memory_ids.append(memory.memory_id)
+        counts = self.store.delete_agent_session(session_id)
+        return {
+            "deleted": counts.get("sessions", 0) > 0,
+            "session_id": session_id,
+            "job_cancel_requested": job_cancel_requested,
+            "session_memory_ids": session_memory_ids,
+            "promoted_memory_ids": promoted_memory_ids,
+            "counts": counts,
+        }
+
     def list_steps(self, session_id: str) -> list[AgentRunStep]:
         self._require_session(session_id)
         return self.store.load_agent_steps(session_id)
@@ -697,12 +742,13 @@ class ConversationalResearchAgent:
         session_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> MemoryItem:
+        memory_session_id = session_id if scope == "session" else None
         memory = MemoryItem(
             memory_id=str(uuid.uuid4()),
             scope=scope,  # type: ignore[arg-type]
             kind=kind,  # type: ignore[arg-type]
             content=content.strip(),
-            session_id=session_id,
+            session_id=memory_session_id,
             confidence=0.9,
             metadata={
                 **(metadata or {}),
@@ -1637,7 +1683,7 @@ def _extract_memory_candidates(content: str, session_id: str, message_id: str) -
                 scope="project",
                 kind="constraint",
                 content=item,
-                session_id=session_id,
+                session_id=None,
                 message_id=message_id,
                 confidence=0.82,
             )

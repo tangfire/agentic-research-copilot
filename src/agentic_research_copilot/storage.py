@@ -136,6 +136,30 @@ class SQLiteStore:
                 (session.session_id, payload, session.updated_at),
             )
 
+    def delete_agent_session(self, session_id: str) -> dict[str, int]:
+        with self._connect() as conn:
+            counts: dict[str, int] = {}
+            cursor = conn.execute("DELETE FROM agent_sessions WHERE session_id = ?", (session_id,))
+            counts["sessions"] = cursor.rowcount
+            cursor = conn.execute("DELETE FROM agent_messages WHERE session_id = ?", (session_id,))
+            counts["messages"] = cursor.rowcount
+            cursor = conn.execute("DELETE FROM agent_plan_drafts WHERE session_id = ?", (session_id,))
+            counts["plan_drafts"] = cursor.rowcount
+            cursor = conn.execute("DELETE FROM agent_run_steps WHERE session_id = ?", (session_id,))
+            counts["steps"] = cursor.rowcount
+            cursor = conn.execute("DELETE FROM tool_invocations WHERE session_id = ?", (session_id,))
+            counts["tool_invocations"] = cursor.rowcount
+            cursor = conn.execute("DELETE FROM approval_requests WHERE session_id = ?", (session_id,))
+            counts["approval_requests"] = cursor.rowcount
+            cursor = conn.execute("DELETE FROM memory_extraction_results WHERE session_id = ?", (session_id,))
+            counts["memory_extraction_results"] = cursor.rowcount
+            cursor = conn.execute(
+                "DELETE FROM memory_items WHERE session_id = ? AND scope = 'session'",
+                (session_id,),
+            )
+            counts["session_memory_items"] = cursor.rowcount
+        return counts
+
     def load_workspaces(self) -> list[WorkspaceProfile]:
         with self._connect() as conn:
             rows = conn.execute("SELECT payload FROM agent_workspaces ORDER BY updated_at DESC").fetchall()
