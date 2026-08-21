@@ -239,9 +239,10 @@ API：
 ```text
 GET /v1/agent/sessions/{session_id}/steps
 GET /v1/agent/sessions/{session_id}/events
+GET /v1/agent/sessions/{session_id}/events/stream
 ```
 
-Workbench 现在用 polling，每 2 秒刷新一次 session bundle。
+Workbench 主路径使用 SSE：服务端先把 step、tool invocation、approval、message 等事件落到 SQLite，再通过 `/events/stream` 推送。前端保存最后收到的 `event_id`，断线后用 `after_event_id` 续接；如果浏览器不支持 SSE 或连接关闭，就退回每 2 秒轮询 session bundle。
 
 ## 6. 面试讲法
 
@@ -256,4 +257,3 @@ Workbench 现在用 polling，每 2 秒刷新一次 session bundle。
 被问“approval 有什么实际用”：
 
 > 实际用处是让 agent 在不确定或缺权限时诚实降级。比如 GitHub MCP 缺 token，系统不会编造 GitHub evidence，而是把这个状态写入 tool registry、approval request、tool invocation 和 UI。
-

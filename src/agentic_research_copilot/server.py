@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 import json
 from html import escape
@@ -8,7 +9,7 @@ from typing import Literal
 import uuid
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .agent import ConversationalResearchAgent
@@ -246,6 +247,60 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
                 )
             )
         return events
+
+    @app.get("/v1/agent/sessions/{session_id}/events/stream")
+    async def stream_agent_events(
+        session_id: str,
+        request: Request,
+        limit: int = Query(default=120, ge=1, le=500),
+        after_event_id: str | None = None,
+        poll_interval_ms: int = Query(default=1000, ge=250, le=5000),
+        once: bool = False,
+    ):
+        if agent.get_session_bundle(session_id) is None:
+            raise HTTPException(status_code=404, detail="Agent session not found")
+        cursor = after_event_id or request.headers.get("last-event-id") or request.headers.get("Last-Event-ID")
+        interval_seconds = poll_interval_ms / 1000
+
+        async def event_stream():
+            nonlocal cursor
+            yield _format_sse(event="ready", data={"session_id": session_id, "after_event_id": cursor})
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    events = agent.list_events(session_id, limit=limit, after_event_id=cursor)
+                except KeyError:
+                    yield _format_sse(event="error", data={"detail": "Agent session not found"})
+                    break
+
+                if events:
+                    for event in events:
+                        cursor = event.event_id
+                        yield _format_sse(
+                            event="agent_event",
+                            event_id=event.event_id,
+                            data=event.model_dump(mode="json"),
+                        )
+                else:
+                    yield _format_sse(
+                        event="heartbeat",
+                        data={"session_id": session_id, "after_event_id": cursor},
+                    )
+                if once:
+                    break
+                await asyncio.sleep(interval_seconds)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/v1/agent/sessions/{session_id}/tool-invocations")
     def list_agent_tool_invocations(session_id: str):
@@ -661,6 +716,30 @@ def create_app(copilot: ResearchCopilot | None = None) -> FastAPI:
 
     return app
 
+
+def _format_sse(
+    *,
+    event: str | None = None,
+    event_id: str | None = None,
+    data: object | None = None,
+    retry: int | None = None,
+) -> str:
+    lines: list[str] = []
+    if event_id is not None:
+        lines.append(f"id: {event_id}")
+    if event is not None:
+        lines.append(f"event: {event}")
+    if retry is not None:
+        lines.append(f"retry: {retry}")
+    if data is None:
+        payload = "{}"
+    elif isinstance(data, str):
+        payload = data
+    else:
+        payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    for part in payload.splitlines() or [""]:
+        lines.append(f"data: {part}")
+    return "\n".join(lines) + "\n\n"
 
 def _render_agent_events_page(
     *,

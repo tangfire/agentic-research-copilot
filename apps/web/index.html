@@ -822,6 +822,10 @@
       activeWorkspaceId: null,
       bundle: null,
       pollTimer: null,
+      eventSource: null,
+      eventSourceSessionId: null,
+      streamRefreshTimer: null,
+      streamCursor: null,
       localActivity: null,
     };
 
@@ -1015,13 +1019,15 @@
       }
     }
 
-    async function loadBundle(sessionId) {
+    async function loadBundle(sessionId, options = {}) {
+      const { syncLive = true } = options;
       try {
         state.bundle = await api(`/v1/agent/sessions/${sessionId}`);
       } catch (error) {
         if (/not found/i.test(error.message || "")) {
           state.activeSessionId = null;
           state.bundle = null;
+          stopLiveStream(true);
           renderSessions();
           renderAll();
           return;
@@ -1033,7 +1039,9 @@
         state.activeWorkspaceId = state.bundle.workspace.workspace_id;
       }
       renderAll();
-      syncPolling();
+      if (syncLive) {
+        syncLiveUpdates();
+      }
     }
 
     function renderSessions() {
@@ -1754,9 +1762,8 @@
         content: "系统已收到输入，正在写入会话、抽取团队约束，并判断是需要追问还是生成研究计划。",
         startedAt: Date.now(),
       });
-      let turnPollTimer = null;
-      let turnPollBusy = false;
       try {
+        syncLiveUpdates({ force: true });
         const turnRequest = api(`/v1/agent/sessions/${state.activeSessionId}/messages`, {
           method: "POST",
           body: JSON.stringify({
@@ -1765,17 +1772,6 @@
             max_sections: Number(el.maxSectionsInput.value || 4),
           }),
         });
-        turnPollTimer = setInterval(async () => {
-          if (!state.activeSessionId || turnPollBusy) return;
-          turnPollBusy = true;
-          try {
-            await loadBundle(state.activeSessionId);
-          } catch (_) {
-            // The final request handler will surface the user-visible error.
-          } finally {
-            turnPollBusy = false;
-          }
-        }, 2000);
         await turnRequest;
         state.localActivity = null;
         el.messageInput.value = "";
@@ -1786,7 +1782,6 @@
         renderTimeline(state.bundle);
         showError(error.message);
       } finally {
-        if (turnPollTimer) clearInterval(turnPollTimer);
         el.sendBtn.disabled = false;
         el.sendBtn.textContent = "发送";
         renderStatus(state.bundle);
@@ -1805,6 +1800,7 @@
         content: "计划已确认，正在提交后台研究任务。启动后页面会每 2 秒刷新步骤、工具调用和结果状态。",
       });
       try {
+        syncLiveUpdates({ force: true });
         await api(`/v1/agent/sessions/${state.activeSessionId}/confirm-plan`, { method: "POST" });
         state.localActivity = null;
         await loadSessions();
@@ -1904,6 +1900,9 @@
       if (!window.confirm(`确定删除「${title}」吗？会话消息、步骤、计划和 session 级记忆会一起清掉。`)) return;
       try {
         await api(`/v1/agent/sessions/${sessionId}`, { method: "DELETE" });
+        if (state.activeSessionId === sessionId) {
+          stopLiveStream(true);
+        }
         await loadSessions();
         if (!state.activeSessionId && state.sessions.length) {
           await loadBundle(state.sessions[0].session_id);
@@ -1943,13 +1942,136 @@
       }
     }
 
+    function isLiveStatus(status) {
+      return status === "planning" || status === "researching";
+    }
+
+    function stopLiveStream(resetCursor = false) {
+      if (state.streamRefreshTimer) {
+        clearTimeout(state.streamRefreshTimer);
+        state.streamRefreshTimer = null;
+      }
+      if (state.eventSource) {
+        state.eventSource.close();
+        state.eventSource = null;
+      }
+      state.eventSourceSessionId = null;
+      if (resetCursor) {
+        state.streamCursor = null;
+      }
+    }
+
+    function scheduleStreamRefresh() {
+      if (!state.activeSessionId) return;
+      if (state.streamRefreshTimer) {
+        clearTimeout(state.streamRefreshTimer);
+      }
+      state.streamRefreshTimer = setTimeout(async () => {
+        state.streamRefreshTimer = null;
+        if (!state.activeSessionId) return;
+        try {
+          await loadBundle(state.activeSessionId, { syncLive: false });
+          if (!state.bundle || !isLiveStatus(state.bundle.session.status)) {
+            stopLiveStream();
+            syncPolling();
+          }
+        } catch (error) {
+          if (/not found/i.test(error.message || "")) {
+            stopLiveStream(true);
+            state.activeSessionId = null;
+            state.bundle = null;
+            renderSessions();
+            renderAll();
+            return;
+          }
+          stopLiveStream();
+          syncPolling();
+        }
+      }, 250);
+    }
+
+    function startLiveStream() {
+      if (!state.activeSessionId || typeof window.EventSource === "undefined") return false;
+      if (state.eventSource && state.eventSourceSessionId === state.activeSessionId && state.eventSource.readyState !== EventSource.CLOSED) {
+        return true;
+      }
+      stopLiveStream();
+      const url = new URL(`/v1/agent/sessions/${encodeURIComponent(state.activeSessionId)}/events/stream`, window.location.origin);
+      if (state.streamCursor) {
+        url.searchParams.set("after_event_id", state.streamCursor);
+      }
+      const source = new EventSource(url.toString());
+      state.eventSource = source;
+      state.eventSourceSessionId = state.activeSessionId;
+      source.addEventListener("ready", (event) => {
+        try {
+          const payload = JSON.parse(event.data || "{}");
+          if (payload.after_event_id) {
+            state.streamCursor = payload.after_event_id;
+          }
+        } catch (_) {
+          // keep the stream alive even if ready payload is malformed
+        }
+      });
+      source.addEventListener("agent_event", (event) => {
+        try {
+          const payload = JSON.parse(event.data || "{}");
+          if (payload.event_id) {
+            state.streamCursor = payload.event_id;
+          }
+        } catch (_) {
+          // ignore parse errors and keep listening
+        }
+        scheduleStreamRefresh();
+      });
+      source.addEventListener("heartbeat", (event) => {
+        try {
+          const payload = JSON.parse(event.data || "{}");
+          if (payload.after_event_id) {
+            state.streamCursor = payload.after_event_id;
+          }
+        } catch (_) {
+          // heartbeat is best-effort
+        }
+      });
+      source.onerror = () => {
+        if (source.readyState === EventSource.CLOSED) {
+          stopLiveStream();
+          syncPolling();
+        }
+      };
+      return true;
+    }
+
+    function syncLiveUpdates({ force = false } = {}) {
+      const status = state.bundle && state.bundle.session.status;
+      const shouldWatch = force || isLiveStatus(status) || Boolean(state.localActivity);
+      if (!shouldWatch) {
+        stopLiveStream();
+        syncPolling();
+        return;
+      }
+      if (typeof window.EventSource !== "undefined") {
+        const started = startLiveStream();
+        if (started) {
+          if (state.pollTimer) {
+            clearInterval(state.pollTimer);
+            state.pollTimer = null;
+          }
+          return;
+        }
+      }
+      stopLiveStream();
+      syncPolling();
+    }
+
     function syncPolling() {
       if (state.pollTimer) {
         clearInterval(state.pollTimer);
         state.pollTimer = null;
       }
       const status = state.bundle && state.bundle.session.status;
-      if (status === "planning" || status === "researching") {
+      if (isLiveStatus(status)) {
         state.pollTimer = setInterval(async () => {
           try {
             await loadBundle(state.activeSessionId);
@@ -1979,6 +2101,7 @@
     el.confirmBtn.addEventListener("click", confirmPlan);
     el.exportBtn.addEventListener("click", exportSession);
     el.refreshBtn.addEventListener("click", () => state.activeSessionId ? loadBundle(state.activeSessionId) : loadSessions());
+    window.addEventListener("beforeunload", () => stopLiveStream(true));
     el.messageInput.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
         sendMessage();

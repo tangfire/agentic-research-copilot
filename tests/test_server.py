@@ -363,6 +363,28 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert "application/json" in json_events_response.headers.get("content-type", "")
         assert isinstance(json_events_response.json(), list)
 
+        stream_response = client.get(
+            f"/v1/agent/sessions/{session_id}/events/stream",
+            params={"once": "true", "poll_interval_ms": 250},
+        )
+        assert stream_response.status_code == 200
+        assert "text/event-stream" in stream_response.headers.get("content-type", "")
+        stream_text = stream_response.text
+        assert "event: ready" in stream_text
+        assert "event: agent_event" in stream_text
+        assert f"id: {events_data[0]['event_id']}" in stream_text
+        assert f'"event_id":"{events_data[0]["event_id"]}"' in stream_text
+
+        resumed_stream_response = client.get(
+            f"/v1/agent/sessions/{session_id}/events/stream",
+            params={"after_event_id": first_event_id, "once": "true", "poll_interval_ms": 250},
+        )
+        assert resumed_stream_response.status_code == 200
+        resumed_stream_text = resumed_stream_response.text
+        assert f"id: {first_event_id}" not in resumed_stream_text
+        if len(events_data) > 1:
+            assert f"id: {events_data[1]['event_id']}" in resumed_stream_text
+
         export_response = client.get(f"/v1/agent/sessions/{session_id}/export")
         assert export_response.status_code == 200
         export_data = export_response.json()

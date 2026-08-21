@@ -338,13 +338,13 @@ team constraints / repo / technical question
 
 30 秒答法：
 
-> 我们项目当前主路径不是 SSE，而是 polling + durable event log。前端断了以后，只要带上最后看到的 event id 重新请求 `/events`，后端就可以从 SQLite 事件时间线里补发后续事件。
+> 我们项目现在主路径是 SSE + durable event log，polling 只是降级。前端保存最后看到的 event id，断线后用 `after_event_id` 重连 `/events/stream`，后端从 SQLite 事件时间线补发后续事件。
 
 2 分钟答法：
 
-> 如果真要上 SSE，我会让服务端给每个 event 一个稳定的 event_id，并让前端保存 last seen id；恢复时先走 `after_event_id` 补拉，再继续订阅实时流。这样中断不会丢状态。现在项目里已经有 `AgentEvent`、`AgentRunStep`、`ToolInvocation`、`ApprovalRequest` 这些持久化事件，只差把 cursor 恢复做成明确协议。
+> 设计上不是把事件只放内存里直接推，而是执行节点先写 `AgentEvent`、`AgentRunStep`、`ToolInvocation`、`ApprovalRequest` 等持久化记录。SSE 只负责传输，恢复时按 `Last-Event-ID` 或 `after_event_id` 从 durable ledger 继续发；大 payload 只在事件里放摘要和 artifact id，避免 Redis 或 SSE 消息过大。
 
-对应 artifact：`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/server.py`
+对应 artifact：`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/server.py`、`apps/web/index.html`
 
 ### Q34: MySQL 和 Redis 数据不一致要怎么解决？
 
@@ -381,3 +381,205 @@ team constraints / repo / technical question
 > Claude Code 的思路更像“把长期知识落成可编辑文件，把短期上下文压成摘要”。我们项目没有直接照搬那个实现，而是自己做了一版 SQLite memory：session memory 管当前对话，project memory 管团队约束，user memory 管长期偏好，context summary 负责长会话压缩。区别是我们更强调 research workbench 的可观测和可评测，而不是个人助理式自动记忆。
 
 对应 artifact：`src/agentic_research_copilot/agent.py`、`docs/memory-and-constraint-eval.zh-CN.md`
+
+## 11. 基础与平台工程追问
+
+这一组题不是全部都要硬套到 Research Desk 上。正确策略是：agent / MCP / trace / evaluation / SSE 恢复可以接回项目；进程线程协程、数据库索引、语言数据结构、Redis/MySQL 一致性属于通用基础题，单独准备，面试时不要强行说“我项目里用了”。
+
+### Q37: 进程、线程、协程有什么区别？
+
+考察点：基础并发模型。
+
+30 秒答法：
+
+> 进程是资源隔离单位，有独立地址空间；线程是 CPU 调度单位，同进程线程共享内存；协程是用户态调度的轻量执行单元，适合 I/O 密集场景，用事件循环在单线程里切换任务。
+
+2 分钟答法：
+
+> 进程隔离强但切换和通信成本高，适合服务隔离和多核并行；线程共享内存，通信方便但要处理锁和竞态；协程靠主动让出执行权，开销小，适合网络请求、数据库访问、LLM 调用这种大量等待 I/O 的场景。Python 里常见是 multiprocessing、threading、asyncio；Java 里是 Thread、线程池，新的虚拟线程也属于轻量并发模型。
+
+诚实边界：
+
+> Research Desk 主链路是 FastAPI + in-process job + LangGraph，不是一个高并发服务项目。这里能讲的是为什么 agent 的长任务适合异步任务、状态持久化和可恢复，而不是吹自己做了复杂并发框架。
+
+### Q38: 数据库索引是什么？为什么能加速查询？
+
+考察点：数据库基础。
+
+30 秒答法：
+
+> 索引是额外的数据结构，常见是 B+Tree。它通过有序结构减少全表扫描，让查询从扫描所有行变成按索引定位范围或主键。
+
+2 分钟答法：
+
+> B+Tree 适合范围查询、排序和前缀匹配；哈希索引适合等值查询但不适合范围。索引不是越多越好，因为会增加写入和维护成本。联合索引要注意最左前缀，查询条件、排序字段和选择性都会影响索引是否有效。
+
+接回项目：
+
+> 项目里本地持久化用 SQLite，核心不是大规模 OLTP，而是保存 session、message、run、trace、memory、tool invocation。面试时可以说：如果要产品化到多用户，我会给 `session_id`、`run_id`、`created_at`、`workspace_id` 这类查询路径加索引，并把 trace/event 的冷热数据分层。
+
+### Q39: Python 或 Java 常见数据结构有哪些？有什么特性？
+
+考察点：语言基础。
+
+30 秒答法：
+
+> Python 常用 list、tuple、dict、set、deque、heapq；Java 常用 ArrayList、LinkedList、HashMap、HashSet、TreeMap、PriorityQueue、ConcurrentHashMap。核心是知道底层复杂度和适用场景。
+
+2 分钟答法：
+
+> Python list 是动态数组，随机访问快，头部插入慢；dict/set 基于哈希，平均 O(1)，但要考虑哈希冲突和内存；deque 适合双端队列。Java ArrayList 也是动态数组，LinkedList 指针开销大，HashMap 平均 O(1)，TreeMap 基于红黑树支持有序查询，ConcurrentHashMap 用于并发访问。
+
+接回项目：
+
+> 这个项目里更常见的是 schema 化对象和 list/dict 组合，比如 `EvidenceItem`、`RunTraceEvent`、`AgentRunStep`。真正工程重点是把非结构化模型输出变成稳定数据结构，方便 trace、evaluation 和 replay。
+
+### Q40: Skill 的协议是什么？是不是只有 Markdown？
+
+考察点：是否理解 skill 不是简单 prompt。
+
+30 秒答法：
+
+> 在这个项目里 skill 是一个轻量协议：`skill.json` 描述元信息、触发词、required inputs、脚本入口；`SKILL.md` 描述操作步骤和策略；可选 `scripts/` 做受控 preflight。agent 先发现 skill，再加载说明，必要时用 JSON stdin/stdout 跑脚本。
+
+2 分钟答法：
+
+> Skill 的价值不是“把提示词写进 md”，而是把某类任务的执行经验固化成可发现、可审计、可复用的 playbook。它和 tool 不一样：skill 负责告诉 agent 这个场景应该怎么做，tool 负责执行一个具体动作。我们项目没有做插件市场，也没有给 skill 开任意 shell，只允许 manifest 声明的脚本在超时和路径限制内运行。
+
+对应 artifact：`src/agentic_research_copilot/skill_registry.py`、`skills/open_source_adoption_review/`
+
+### Q41: HTTP、SSE、WebSocket 有什么区别？
+
+考察点：前后端传输协议。
+
+30 秒答法：
+
+> HTTP 请求响应最简单，适合普通 API；SSE 是服务端到客户端的单向事件流，适合状态推送和日志；WebSocket 是双向长连接，适合实时协作、IM、多人编辑这类双向频繁通信。
+
+2 分钟答法：
+
+> SSE 基于 HTTP，浏览器原生支持 `EventSource`，可以自动重连，也有 `Last-Event-ID` 语义，但主要是单向推送；WebSocket 建立后是双向通道，灵活但心跳、鉴权、扩容和代理处理更复杂。Research Desk 现在选择 polling + durable event log，是为了先保证断线可恢复和实现简单；后续如果要更实时，可以把 `/events` 升级成 SSE。
+
+对应 artifact：`src/agentic_research_copilot/server.py`、`docs/tool-loop-and-hitl.zh-CN.md`
+
+### Q42: Agent 接口里的 SSE 应该怎么实现？断了会不会丢？
+
+考察点：实时过程流设计。
+
+30 秒答法：
+
+> 不应该只把事件写在内存里直接推。每个事件先落库，带 `event_id`、`session_id`、`run_id`、`kind`、`status`、`created_at`。SSE 只负责推送，断线后前端用 last event id 补拉。
+
+2 分钟答法：
+
+> 一个稳妥设计是：执行节点先写 durable event log，再由推送层读取并发送 SSE。前端保存最后收到的 `event_id`，重连时带上 `Last-Event-ID` 或 `after_event_id`，服务端先补发缺失事件，再继续流式发送。Redis 可以做短期 pub/sub 或 stream，但不能替代长期事实库；数据太大时只在事件里放摘要和 artifact id，完整内容放对象存储或数据库。
+
+接回项目：
+
+> Research Desk 已经把这套做成主路径：UI 用 `EventSource` 订阅 `/events/stream`，服务端按 durable event log 推送；连接异常时才回退到轮询，所以既有实时体验，也不会因为前端断线丢执行状态。
+
+### Q43: MCP 有哪几种 transport？你写 MCP 有什么要注意的？
+
+考察点：MCP 实际工程边界。
+
+30 秒答法：
+
+> 常见 MCP transport 有本地 `stdio` 和远程 HTTP 类 transport。新规范更强调 Streamable HTTP，早期很多实现用 HTTP + SSE。写 MCP 时最重要的是工具 schema、权限、超时、错误处理和不要把 token 暴露给模型。
+
+2 分钟答法：
+
+> `stdio` 适合本地工具进程，简单、延迟低，但部署在本机；Streamable HTTP 适合远程服务，方便跨机器和云端部署，也更需要鉴权和网络容错。早期 SSE transport 还会在一些服务里出现，所以项目配置里保留了 `streamable_http / sse`。在 Research Desk 里，MCP 是外部证据边界，不是让外部 agent 替代自己的 planner/reporter；GitHub MCP 只提供 repo、code、issue、PR、release 证据，结果会转成 `EvidenceItem(kind="mcp")`。
+
+对应 artifact：`src/agentic_research_copilot/mcp_tools.py`、`docs/architecture.md`
+
+### Q44: 你们的 agent 结构到底是什么？是 loop 还是 workflow？
+
+考察点：能否讲清“流动结构”。
+
+30 秒答法：
+
+> 外层是 workflow，内层是 bounded tool loop。外层负责 session、memory、skill、plan、confirm、research、report、verify、eval；内层 researcher 针对一个 plan item 决定 web、vector、MCP 或 complete。
+
+2 分钟答法：
+
+> 我把它拆成两层是为了可控。纯 ReAct loop 容易短视、循环和走偏；纯固定 workflow 又不够灵活。所以 Research Desk 用 LangGraph 管外层状态和阶段，用 researcher loop 处理局部证据缺口。三个 specialist worker 不是另一套隐藏流程，而是在 research stage 内按角色执行工具循环，并把 route decision、tool invocation 和 evidence ledger 写回统一 run artifact。
+
+对应 artifact：`src/agentic_research_copilot/graph_runtime.py`、`src/agentic_research_copilot/agents/researcher.py`
+
+### Q45: ReAct、Plan-and-Execute、Spec 这些规划方式怎么理解？
+
+考察点：agent 规划范式。
+
+30 秒答法：
+
+> ReAct 是边想边做，灵活但容易短视和循环；Plan-and-Execute 是先计划再执行，结构清晰但计划错了会传导；Spec 更像先定义目标、约束和验收标准，再执行并校验，适合工程任务和高风险任务。
+
+2 分钟答法：
+
+> Research Desk 更接近 Plan-and-Execute + Spec gate：先把研究问题、团队约束和成功标准写成 plan draft，用户确认后再执行；执行中局部使用 ReAct-like tool loop；最后用 verifier/evaluator 检查 citation、faithfulness 和 constraint coverage。这样比纯 ReAct 更适合秋招项目，因为状态、证据和质量门都能讲清楚。
+
+### Q46: 你怎么了解 agent 前沿？
+
+考察点：学习来源和判断力。
+
+30 秒答法：
+
+> 我会看三类：主流开源项目的架构和 issue，比如 LangGraph、OpenHands、Open Deep Research、Open WebUI；协议和 SDK，比如 MCP、OpenAI Agents SDK、Langfuse/OTel；真实产品的交互和失败案例，比如 Codex、Claude Code、Deep Research。
+
+2 分钟答法：
+
+> 我不会只看概念文章，而是看它们在解决什么工程问题：持久状态、人类确认、工具权限、memory、trace、eval、replay、长任务恢复。Research Desk 也是按这个思路做的，不是把热门名词都塞进去，而是围绕开源引入评审这条闭环选择需要的机制。
+
+### Q47: 简历项目里最难的点是什么？
+
+考察点：是否真做过复杂问题。
+
+30 秒答法：
+
+> 最难的是让开放式研究任务变成可控、可观测、可评测的执行链路。具体包括工具路由不乱选、MCP 失败不伪装、Reporter 结构化输出不被截断、团队约束能进入最终报告、trace 能复盘。
+
+2 分钟答法：
+
+> 一个真实例子是 Reporter 曾经因为上下文太大触发 `finish_reason=length`，表现成 `ReporterContract EOF`。我没有只加兜底，而是定位到首轮请求预算问题，把 Reporter 输入压缩到最多 8 条证据和 4 个章节草稿，增加 `finish_reason` 诊断和回归测试，并用真实 provider 验证首轮 `finish_reason=stop`。这比“失败后重试”更能说明工程问题是怎么被定位和修复的。
+
+对应 artifact：`src/agentic_research_copilot/providers.py`、`tests/test_providers.py`
+
+### Q48: Trace 上报链路怎么做？评测架构怎么做？了解 OTel 吗？
+
+考察点：可观测性和平台化视角。
+
+30 秒答法：
+
+> 项目里执行节点先写本地 SQLite ledger，包含 run、step、tool invocation、trace、evaluation；然后可选把 run-level trace 和 scores 发到 Langfuse。OTel 是更通用的观测标准，核心是 trace/span/metric/log 和 context propagation。
+
+2 分钟答法：
+
+> 我现在的设计是“本地事实库 + 外部观测 sink”。SQLite 是 source of truth，保证离线、replay 和导出；Langfuse 用来看 agent/tool/evaluator 的时间线和分数。如果企业化，我会把 `RunTraceEvent` 映射成 OTel span：session/run 是 root span，planner、worker、tool call、reporter、verifier 是 child spans，route precision、tool success、constraint coverage 是 metrics。ES 更适合存日志和检索事件，OLAP/metrics 系统更适合聚合指标，不能把所有大 payload 都塞进 Redis 或 trace event。
+
+对应 artifact：`src/agentic_research_copilot/observability.py`、`docs/observability-design.zh-CN.md`
+
+### Q49: Benchmark 数据存 ES 合理吗？
+
+考察点：评测数据架构。
+
+30 秒答法：
+
+> ES 适合检索日志和 trace 文本，不一定适合做所有 benchmark 的事实库。更合理的是任务定义、期望标签、运行结果和分数用关系库或对象存储保存，ES 用来查日志、事件和失败样本。
+
+2 分钟答法：
+
+> Agent benchmark 至少有四类数据：task spec、expected labels、run artifact、score summary。task spec 和 score summary 需要稳定结构；trace/event 适合检索；大报告和工具结果适合对象存储或本地 bundle。Research Desk 现在是单机 SQLite + export bundle，面试时可以说这是学习版；如果上生产，会把热事件、冷 artifact、聚合指标分开存。
+
+### Q50: 这些题我们项目到底覆盖到什么程度？
+
+考察点：不要过度包装。
+
+30 秒答法：
+
+> Agent 结构、Skill、MCP、tool loop、SSE 恢复思路、trace、evaluation、memory 压缩这些都能用项目讲；进程线程协程、索引、语言数据结构、MySQL/Redis 一致性、OTel 细节属于通用基础和扩展设计，需要单独背，不能说项目已经完整实现企业级方案。
+
+复习顺序：
+
+1. 先背 Q1-Q22，掌握项目主线。
+2. 再背 Q31-Q36，掌握后端协议和 agent 工程。
+3. 最后背 Q37-Q50，补基础题和平台化追问。
