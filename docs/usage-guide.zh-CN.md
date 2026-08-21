@@ -177,6 +177,20 @@ python scripts/run_adoption_memo_experiment.py --clean --mode real --max-section
 
 模型请求成功后状态会变成 `awaiting_confirmation`，这时才点击“确认并开始研究”。如果模型调用真正失败，系统会把会话标记为 `failed`，写入失败消息和失败步骤，不会伪装成成功。
 
+### 报告阶段出现 `ReporterContract` 或 `EOF`
+
+这通常不是“模型完全没有回答”，而是报告请求过大，模型在输出完整 JSON 之前触发了 `finish_reason=length`，留下半截 JSON，最后被契约校验拒绝。
+
+当前主路径会在调用 Reporter 前压缩上下文：最多传入 8 条证据、4 个章节草稿，并限制标题、摘要和章节正文长度；提示词也要求报告保持紧凑。正常情况下第一轮就应返回完整 JSON。错误信息会保留 `finish_reason`、输出字符数和尝试次数，便于确认是不是预算问题，而不是盲目重跑整条研究链路。
+
+如果仍然出现这个错误，先检查：
+
+1. `ARC_MODEL_TIMEOUT_SECONDS` 是否太小；
+2. relay 是否把 `max_tokens` 截断成更小的值；
+3. 研究问题、团队约束和证据正文是否被重复拼接，导致上下文异常膨胀。
+
+报告阶段的降级结果只用于保留已有证据和暴露失败原因，不应被当作正常产品路径；真正要修的是请求规模和 provider 的输出预算。
+
 ### MCP 显示不可用
 
 先不用处理，web + local KB 仍可以运行。只有需要 GitHub 一手证据时，才检查：

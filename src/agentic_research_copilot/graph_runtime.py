@@ -684,6 +684,21 @@ class LangGraphResearchRuntime:
         report_evidence = self.copilot._rank_evidence_for_report(evidence)
         report = self.copilot.reporter.build_report(request.topic, sections, report_evidence, confidence)
         reporter_usage = self.copilot.reporter.last_usage
+        degraded_reason = self.copilot.reporter.last_degraded_reason
+        if degraded_reason:
+            self._append_trace(
+                state,
+                kind="failure",
+                actor="reporter",
+                message=(
+                    "Reporter 结构化输出不可用，已保留研究阶段的证据和章节草稿；"
+                    "这次结果需要按降级报告复核。"
+                ),
+                step="reporting.degraded",
+                status="failed",
+                degraded=True,
+                reason=degraded_reason,
+            )
         self._append_trace(
             state,
             kind="step",

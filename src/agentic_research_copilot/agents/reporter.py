@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..provider_base import ResearchModelProvider
-from ..providers import build_model_provider
+from ..providers import StructuredOutputError, build_model_provider
 from ..schemas import EvidenceItem, ResearchReport, ReportSection, ReporterContract
 from ..settings import AppSettings, load_settings
 
@@ -15,6 +15,7 @@ class ReporterAgent:
         self.settings = settings or load_settings()
         self.model_provider = model_provider or build_model_provider(self.settings)
         self.last_usage = None
+        self.last_degraded_reason: str | None = None
 
     def compose(
         self,
@@ -23,9 +24,26 @@ class ReporterAgent:
         citations: list[EvidenceItem],
         confidence: float,
     ) -> ReporterContract:
-        contract, usage = self.model_provider.compose_report(topic, sections, citations, confidence)
-        self.last_usage = usage
-        return contract
+        self.last_degraded_reason = None
+        try:
+            contract, usage = self.model_provider.compose_report(topic, sections, citations, confidence)
+            self.last_usage = usage
+            return contract
+        except StructuredOutputError as exc:
+            self.last_usage = None
+            self.last_degraded_reason = str(exc)
+            return ReporterContract(
+                title=f"研究报告：{topic[:160]}",
+                summary=(
+                    "报告整理阶段的模型结构化输出暂时不可用，已保留研究阶段生成的证据和章节草稿。"
+                    "请重点检查下方引用和证据；这不是重新生成的模型结论。"
+                ),
+                confidence=max(0.0, min(1.0, confidence)),
+                source_index=[
+                    f"[{index}] {item.title}"
+                    for index, item in enumerate(citations[:12], start=1)
+                ],
+            )
 
     def build_report(
         self,

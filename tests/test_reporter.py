@@ -1,5 +1,6 @@
 from agentic_research_copilot.agents import ReporterAgent
 from agentic_research_copilot.provider_base import ModelUsage
+from agentic_research_copilot.providers import StructuredOutputError
 from agentic_research_copilot.schemas import (
     EvidenceItem,
     ReporterContract,
@@ -28,6 +29,19 @@ class SynthesizingProvider:
                 confidence=confidence,
             ),
             ModelUsage(provider=self.name, model="fake", prompt_tokens=1, completion_tokens=1),
+        )
+
+
+class EmptyReporterProvider:
+    name = "empty_reporter"
+    embedding_dimensions = 256
+
+    def compose_report(self, topic, sections, evidence, confidence):
+        raise StructuredOutputError(
+            response_model="ReporterContract",
+            attempts=3,
+            reason="provider returned empty message content",
+            diagnostics={"finish_reason": "stop", "content_chars": 0},
         )
 
 
@@ -83,3 +97,21 @@ def test_reporter_preserves_team_constraint_coverage_section():
         "团队约束覆盖",
     ]
     assert "one machine" in report.sections[1].content
+
+
+def test_reporter_preserves_draft_when_structured_output_is_empty():
+    fallback = [
+        ReportSection(
+            heading="证据分析",
+            content="研究阶段已经完成了引用绑定的分析草稿。",
+            citations=[EvidenceItem(title="First", source="source-a", snippet="A")],
+        )
+    ]
+    reporter = ReporterAgent(model_provider=EmptyReporterProvider())
+
+    report = reporter.build_report("agentic research", fallback, fallback[0].citations, 0.7)
+
+    assert report.sections[0].heading == "证据分析"
+    assert report.sections[0].citations[0].title == "First"
+    assert reporter.last_degraded_reason
+    assert "empty message content" in reporter.last_degraded_reason

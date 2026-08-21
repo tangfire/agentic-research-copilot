@@ -151,3 +151,15 @@ Langfuse 适合查看时间线、筛选 trace、比较运行和观察质量分�
 - 不把一次真实实验中没有出现的工具调用伪装成成功。
 
 后续如果需要更细的 provider token/cost 统计，可以在模型 provider 边界补充标准化 usage 字段；这属于观测增强，不改变研究主链路。
+
+## 9. 结构化输出失败怎么判断
+
+Reporter、Planner、Verifier 等模型调用都要求返回 JSON contract。不要只看异常末尾的 `EOF`：
+
+| 诊断字段 | 含义 |
+| --- | --- |
+| `finish_reason=length` | 输出达到 provider 的 token 上限，最常见的是 JSON 被截断 |
+| `content_chars=0` | provider 没有返回可用文本，可能是 relay 或模型响应格式问题 |
+| `choice_count=0` | 响应没有可用 choice，优先检查 provider 兼容层 |
+
+Research Desk 对结构化输出做了有限的 provider-level repair，但产品主路径不依赖兜底：Reporter 会在请求前限制证据和章节草稿规模，并要求模型输出紧凑 JSON。这样首轮请求更有机会在预算内完成；repair 只负责应对偶发的兼容层格式差异，不能替代上下文和输出预算设计。

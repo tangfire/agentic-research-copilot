@@ -69,6 +69,27 @@ VAGUE_RESEARCH_TERMS = {
 TContract = TypeVar("TContract")
 
 
+class StructuredOutputError(ValueError):
+    """A provider returned no usable contract after bounded repair attempts."""
+
+    def __init__(
+        self,
+        *,
+        response_model: str,
+        attempts: int,
+        reason: str,
+        diagnostics: dict[str, Any] | None = None,
+    ) -> None:
+        self.response_model = response_model
+        self.attempts = attempts
+        self.reason = reason
+        self.diagnostics = diagnostics or {}
+        detail = f"{response_model}: {reason}"
+        if self.diagnostics:
+            detail += f" ({', '.join(f'{key}={value}' for key, value in self.diagnostics.items())})"
+        super().__init__(detail)
+
+
 class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
     name = "openai_compatible"
 
@@ -330,31 +351,31 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         evidence_index = [
             {
                 "index": index,
-                "title": _trim_text(item.title, 180),
-                "source": _trim_text(item.source, 140),
+                "title": _trim_text(item.title, 120),
+                "source": _trim_text(item.source, 80),
                 "kind": item.kind,
-                "url": item.url,
-                "snippet": _trim_text(item.snippet or "", 420),
-                "content": _trim_text(item.content or "", 520),
+                "url": _trim_text(item.url or "", 180),
+                "snippet": _trim_text(item.snippet or "", 180),
+                "content": _trim_text(item.content or "", 260),
                 "score": item.score,
             }
-            for index, item in enumerate(evidence[:12], start=1)
+            for index, item in enumerate(evidence[:8], start=1)
         ]
         section_drafts = [
             {
-                "heading": _trim_text(section.heading, 180),
-                "content": _trim_text(section.content, 1200),
+                "heading": _trim_text(section.heading, 120),
+                "content": _trim_text(section.content, 700),
                 "evidence_count": section.evidence_count,
-                "source_summary": [_trim_text(source, 120) for source in section.source_summary[:4]],
+                "source_summary": [_trim_text(source, 80) for source in section.source_summary[:2]],
                 "citation_titles": [
-                    _trim_text(citation.title, 180)
-                    for citation in section.citations[:6]
+                    _trim_text(citation.title, 120)
+                    for citation in section.citations[:3]
                 ],
             }
-            for section in sections[:6]
+            for section in sections[:4]
         ]
         payload = {
-            "topic": _trim_text(topic, 1200),
+            "topic": _trim_text(topic, 800),
             "sections": section_drafts,
             "evidence_index": evidence_index,
             "confidence": confidence,
@@ -362,7 +383,9 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "Synthesize the final report sections from the draft sections and evidence. "
                 "Use Simplified Chinese by default unless the topic/request explicitly asks for English. "
                 "Keep established technical names such as GitHub, MCP, LangGraph, FastAPI, trace, evaluation, and worker in English when clearer. "
-                "Each section must be specific, "
+                "Return compact JSON: at most 4 sections, each section content should be no more than 600 Chinese characters, "
+                "summary no more than 300 Chinese characters, and highlights/recommendations should each contain at most 4 short items. "
+                "Do not reproduce the evidence text; synthesize it. Each section must be specific, "
                 "citation-backed, and balanced. Use citation_indexes to reference only the "
                 "provided evidence_index entries. Do not invent sources, URLs, facts, or citations."
             ),
@@ -373,8 +396,9 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "Open Deep Research pattern of synthesizing compressed findings into a "
                 "comprehensive citation-backed report. Return valid JSON only that conforms "
                 "to the supplied schema. Populate sections with rewritten section drafts and "
-                "citation_indexes that map to the provided evidence_index. User-facing text "
-                "should be Simplified Chinese unless English is explicitly requested."
+                "citation_indexes that map to the provided evidence_index. Keep the JSON compact "
+                "and finish the object within the output budget. User-facing text should be "
+                "Simplified Chinese unless English is explicitly requested."
             ),
             user_payload=payload,
             schema=ReporterContract.model_json_schema(),
@@ -583,42 +607,82 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         response_model: type[TContract],
     ) -> tuple[TContract, ModelUsage]:
         start = time.perf_counter()
+        base_messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "output_contract": _compact_schema_contract(schema),
+                        "input": user_payload,
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            },
+        ]
         payload = {
             "model": self.chat_model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "output_contract": _compact_schema_contract(schema),
-                            "input": user_payload,
-                        },
-                        ensure_ascii=False,
-                        separators=(",", ":"),
-                    ),
-                },
-            ],
+            "messages": base_messages,
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
             "max_tokens": 4096,
         }
         with self._client() as client:
             last_error: Exception | None = None
-            for attempt in range(2):
-                if attempt:
-                    payload["messages"].append(
+            last_diagnostics: dict[str, Any] = {}
+            previous_content = ""
+            for attempt in range(3):
+                attempt_payload = dict(payload)
+                attempt_payload["messages"] = list(base_messages)
+                if attempt == 1:
+                    attempt_payload["messages"].append(
                         {
                             "role": "user",
                             "content": (
-                                "The previous response was empty or invalid JSON. "
-                                "Return one complete JSON object matching output_contract, with no markdown."
+                                "上一轮没有返回可用结果。请重新生成完整结果：只输出一个 JSON object，"
+                                "严格匹配 output_contract，不要 Markdown，不要解释，不要省略必填字段。"
                             ),
                         }
                     )
-                response = self._post_chat_completion(client, payload)
+                    if previous_content:
+                        attempt_payload["messages"].append(
+                            {
+                                "role": "user",
+                                "content": f"上一轮输出片段（仅供纠错，不要照抄）：{previous_content}",
+                            }
+                        )
+                    attempt_payload["temperature"] = 0.0
+                elif attempt == 2:
+                    attempt_payload.pop("response_format", None)
+                    attempt_payload["temperature"] = 0.0
+                    attempt_payload["max_tokens"] = 6144
+                    attempt_payload["messages"].append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "这是最后一次结构化输出尝试。当前接口可能不支持 response_format，"
+                                "请直接返回一个完整、可解析的 JSON object，严格匹配 output_contract。"
+                                "只返回 JSON，不要使用 Markdown 代码块或额外文字。"
+                            ),
+                        }
+                    )
+                response = self._post_chat_completion(client, attempt_payload)
                 body = response.json()
-                content = _extract_chat_content(body)
+                try:
+                    content = _extract_chat_content(body)
+                except ValueError as exc:
+                    content = ""
+                    last_error = exc
+                last_diagnostics = _structured_output_diagnostics(body, content)
+                truncated = last_diagnostics.get("finish_reason") == "length"
+                if truncated:
+                    last_error = ValueError("provider output was truncated at the max token limit")
+                if not content.strip():
+                    if last_error is None:
+                        last_error = ValueError("provider returned empty message content")
+                    continue
+                previous_content = _trim_text(content, 2000)
                 try:
                     model = response_model.model_validate_json(_extract_json_object(content))
                 except (ValidationError, ValueError) as exc:
@@ -631,20 +695,16 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                         except (ValidationError, ValueError) as normalized_exc:
                             last_error = normalized_exc
                             exc = normalized_exc
-                    last_error = exc
-                    if content.strip():
-                        payload["messages"].append(
-                            {
-                                "role": "assistant",
-                                "content": _trim_text(content, 2000),
-                            }
-                        )
+                    if not truncated:
+                        last_error = exc
                     continue
                 usage = self._usage_from_body(body, start, self.chat_model)
                 return model, usage
-        raise ValueError(
-            f"OpenAI-compatible provider returned invalid structured output for "
-            f"{response_model.__name__}: {last_error}"
+        raise StructuredOutputError(
+            response_model=response_model.__name__,
+            attempts=3,
+            reason=str(last_error or "provider returned invalid structured output"),
+            diagnostics=last_diagnostics,
         )
 
     def _post_chat_completion(self, client: httpx.Client, payload: dict[str, Any]) -> httpx.Response:
@@ -1114,11 +1174,37 @@ def _extract_chat_content(body: dict[str, Any]) -> str:
     choices = body.get("choices") or []
     if not choices:
         raise ValueError("OpenAI-compatible response did not include choices.")
-    message = choices[0].get("message") or {}
+    choice = choices[0] if isinstance(choices[0], dict) else {}
+    message = choice.get("message") or {}
     content = message.get("content")
-    if not isinstance(content, str):
-        raise ValueError("OpenAI-compatible response did not include message content.")
-    return content
+    if isinstance(content, str) and content.strip():
+        return content
+    if isinstance(content, list):
+        parts = [
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        ]
+        joined = "".join(parts)
+        if joined.strip():
+            return joined
+    for key in ("reasoning_content", "text"):
+        alternate = message.get(key) or choice.get(key)
+        if isinstance(alternate, str) and alternate.strip():
+            return alternate
+    if isinstance(content, str):
+        return content
+    raise ValueError("OpenAI-compatible response did not include message content.")
+
+
+def _structured_output_diagnostics(body: dict[str, Any], content: str) -> dict[str, Any]:
+    choices = body.get("choices") or []
+    first_choice = choices[0] if choices and isinstance(choices[0], dict) else {}
+    return {
+        "finish_reason": first_choice.get("finish_reason") or "n/a",
+        "content_chars": len(content or ""),
+        "choice_count": len(choices),
+    }
 
 
 def _extract_json_object(content: str) -> str:
