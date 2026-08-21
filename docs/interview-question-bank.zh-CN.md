@@ -30,6 +30,10 @@ team constraints / repo / technical question
 
 > 这个项目不是普通聊天，也不是泛化 SaaS agent。我把它收束成一个非常具体的工作流：评估一个开源库是否适合团队引入。因为这个任务天然需要多轮澄清、计划确认、工具调用、证据整合和复盘，所以我把 session、memory、skill、tool policy、approval、trace、eval 都做成了一条闭环。
 
+如果面试官继续追问协同方式：
+
+> 我们主协同方式更像 Tool Call 驱动的 Orchestrator-Worker。Planner / Supervisor 保留控制权，通过结构化任务把工作派给三个 specialist worker，结果回来后由中心层汇总和验证。会话层把确认后的计划交给 research runtime，这可以算一次边界 handoff，但不是核心多 Agent 通信方式。我们没有做长期驻留 agent 之间的自由消息协作，因为这个场景更需要证据一致性、权限边界和可复盘。
+
 诚实边界：
 
 > 它不是要替代 Codex 或 Deep Research，而是在学习那类系统背后的工程机制。
