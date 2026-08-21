@@ -993,6 +993,11 @@ class ConversationalResearchAgent:
             metadata=metadata or {},
         )
         self.store.save_agent_step(step)
+        if step.run_id is None:
+            try:
+                self.copilot.observability.publish_step(step)
+            except Exception:  # pragma: no cover - observability must never break core flow
+                pass
         return step
 
     def _ensure_mcp_approval_if_unavailable(self, session: AgentSession, *, job: ResearchJob) -> list[ApprovalRequest]:

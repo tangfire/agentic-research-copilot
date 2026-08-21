@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from .schemas import ResearchRun, RunTraceEvent
+from .schemas import AgentRunStep, ResearchRun, RunTraceEvent
 
 
 @dataclass
@@ -71,7 +71,7 @@ class ObservabilityPublisher:
         elif self._client is None:
             reason = self._import_error or "Langfuse 客户端初始化失败。"
         else:
-            reason = "Langfuse 已配置，运行完成后会发送 trace 和 evaluation 分数。"
+            reason = "Langfuse 已配置，session 级步骤和完成后的 run 都会发送 trace 和 evaluation 分数。"
         return {
             "provider": self.provider,
             "enabled": self._client is not None,
@@ -96,7 +96,8 @@ class ObservabilityPublisher:
 
         trace_id: str | None = None
         try:
-            trace_context = {"trace_id": self._client.create_trace_id(seed=run.run_id)}
+            trace_id = self._trace_id_for_run(run)
+            trace_context = {"trace_id": trace_id}
             with self._client.start_as_current_observation(
                 trace_context=trace_context,
                 name="research_run",
@@ -106,6 +107,7 @@ class ObservabilityPublisher:
                 metadata={
                     "run_id": run.run_id,
                     "job_id": run.job_id,
+                    "session_id": self._request_session_id(run),
                     "execution_mode": "specialist_worker",
                     "status": run.status,
                     "revision_count": run.revision_count,
@@ -122,6 +124,50 @@ class ObservabilityPublisher:
             result.published = True
             result.trace_id = trace_id
             result.trace_url = self._client.get_trace_url(trace_id=trace_id) if trace_id else None
+            return result
+        except Exception as exc:  # pragma: no cover - provider/network dependent
+            result.trace_id = trace_id
+            result.error = str(exc)
+            return result
+
+    def publish_step(self, step: AgentRunStep) -> ObservabilityPublishResult:
+        result = ObservabilityPublishResult(
+            provider=self.provider,
+            enabled=self._client is not None,
+            configured=self._configured,
+            installed=self._installed,
+        )
+        if self._client is None:
+            return result
+
+        trace_id = self._trace_id_for_step(step)
+        try:
+            with self._client.start_as_current_observation(
+                trace_context={"trace_id": trace_id},
+                name=step.title,
+                as_type=self._observation_type_for_step(step.kind),
+                input=self._step_input(step),
+                output=self._step_output(step),
+                metadata={
+                    "step_id": step.step_id,
+                    "session_id": step.session_id,
+                    "run_id": step.run_id,
+                    "job_id": step.job_id,
+                    "kind": step.kind,
+                    "status": step.status,
+                    "actor": step.actor,
+                    "tool_name": step.tool_name,
+                    "evidence_count": step.evidence_count,
+                    "capture_content": self.capture_content,
+                },
+                level="ERROR" if step.status == "failed" else "DEFAULT",
+                status_message=step.summary or None,
+            ):
+                pass
+            self._client.flush()
+            result.published = True
+            result.trace_id = trace_id
+            result.trace_url = self._client.get_trace_url(trace_id=trace_id)
             return result
         except Exception as exc:  # pragma: no cover - provider/network dependent
             result.trace_id = trace_id
@@ -167,6 +213,61 @@ class ObservabilityPublisher:
             status_message=event.message if event.status == "failed" else None,
         ):
             pass
+
+    def _trace_id_for_run(self, run: ResearchRun) -> str:
+        session_id = self._request_session_id(run)
+        return session_id or str(run.job_id or run.run_id)
+
+    @staticmethod
+    def _request_session_id(run: ResearchRun) -> str:
+        metadata = run.request.metadata if isinstance(run.request.metadata, dict) else {}
+        return str(metadata.get("session_id") or metadata.get("session_key") or "").strip()
+
+    def _trace_id_for_step(self, step: AgentRunStep) -> str:
+        return str(step.session_id or step.run_id or step.job_id or step.step_id)
+
+    @staticmethod
+    def _observation_type_for_step(kind: str) -> str:
+        return {
+            "message": "agent",
+            "planning": "chain",
+            "routing": "span",
+            "approval": "guardrail",
+            "tool_call": "tool",
+            "retrieval": "retriever",
+            "research": "chain",
+            "report": "chain",
+            "verification": "evaluator",
+            "evaluation": "evaluator",
+            "failure": "guardrail",
+            "heartbeat": "span",
+        }.get(kind, "span")
+
+    def _step_input(self, step: AgentRunStep) -> dict[str, Any]:
+        payload = {
+            "step_id": step.step_id,
+            "session_id": step.session_id,
+            "run_id": step.run_id,
+            "job_id": step.job_id,
+            "kind": step.kind,
+            "status": step.status,
+            "actor": step.actor,
+            "tool_name": step.tool_name,
+            "evidence_count": step.evidence_count,
+            "metadata": _safe_value(step.metadata),
+        }
+        if self.capture_content:
+            payload["input_preview"] = _trim(step.input_preview, 500)
+        return payload
+
+    def _step_output(self, step: AgentRunStep) -> dict[str, Any]:
+        payload = {
+            "status": step.status,
+            "summary": _trim(step.summary, 500),
+        }
+        if self.capture_content:
+            payload["output_preview"] = _trim(step.output_preview, 500)
+        return payload
 
     def _publish_scores(self, run: ResearchRun, trace_id: str | None) -> None:
         evaluation = run.evaluation

@@ -1,9 +1,12 @@
 from pathlib import Path
 from time import sleep, time
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from agentic_research_copilot.observability import ObservabilityPublishResult, ObservabilityPublisher
 from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
+from agentic_research_copilot.agent import ConversationalResearchAgent
 from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.server import create_app
 
@@ -31,6 +34,46 @@ def create_fixture_app():
     )
 
 
+class RecordingObservability:
+    def __init__(self):
+        self.steps = []
+        self.runs = []
+
+    def status(self):
+        return {"provider": "langfuse", "enabled": True, "configured": True, "installed": True}
+
+    def publish_step(self, step):
+        self.steps.append(step)
+        return ObservabilityPublishResult(provider="langfuse", enabled=True, configured=True, installed=True, published=True, trace_id=step.session_id, trace_url=f"https://langfuse.local/traces/{step.session_id}")
+
+    def publish_run(self, run):
+        self.runs.append(run)
+        trace_id = run.request.metadata.get("session_id") if isinstance(run.request.metadata, dict) else run.run_id
+        return ObservabilityPublishResult(provider="langfuse", enabled=True, configured=True, installed=True, published=True, trace_id=str(trace_id), trace_url=f"https://langfuse.local/traces/{trace_id}")
+
+
+def test_session_steps_are_forwarded_to_langfuse_when_configured(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("ARC_LOAD_DOTENV", "false")
+    monkeypatch.setenv("ARC_STORAGE_PATH", str(tmp_path / "observability.sqlite"))
+    monkeypatch.setenv("ARC_LANGGRAPH_CHECKPOINT_PATH", str(tmp_path / "observability-checkpoints.sqlite"))
+    provider = FixtureResearchModelProvider()
+    copilot = ResearchCopilot(model_provider=provider, embedding_provider=provider)
+    copilot.observability = RecordingObservability()
+    agent = ConversationalResearchAgent(copilot)
+    session = agent.create_session(title="Langfuse observability")
+
+    response = agent.receive_message(
+        session.session_id,
+        "我们团队是 5 人 Python/FastAPI，单机 Docker Compose 部署，必须可回滚。请评估 langchain-ai/langgraph 是否适合引入。",
+        max_sections=2,
+        max_revisions=0,
+    )
+
+    assert response.session.status in {"awaiting_confirmation", "collecting"}
+    assert copilot.observability.steps
+    assert any(step.kind == "message" for step in copilot.observability.steps)
+    assert any(step.kind == "planning" for step in copilot.observability.steps)
+    assert all(step.run_id is None for step in copilot.observability.steps)
 class FailingPlannerProvider(FixtureResearchModelProvider):
     def draft_plan(self, *args, **kwargs):
         raise RuntimeError("planner unavailable token=secret-value")
