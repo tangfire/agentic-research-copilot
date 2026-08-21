@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import Any
+import uuid
 
 from .schemas import AgentRunStep, ResearchRun, RunTraceEvent
 
@@ -216,7 +217,7 @@ class ObservabilityPublisher:
 
     def _trace_id_for_run(self, run: ResearchRun) -> str:
         session_id = self._request_session_id(run)
-        return session_id or str(run.job_id or run.run_id)
+        return _langfuse_trace_id(session_id or str(run.job_id or run.run_id))
 
     @staticmethod
     def _request_session_id(run: ResearchRun) -> str:
@@ -224,7 +225,7 @@ class ObservabilityPublisher:
         return str(metadata.get("session_id") or metadata.get("session_key") or "").strip()
 
     def _trace_id_for_step(self, step: AgentRunStep) -> str:
-        return str(step.session_id or step.run_id or step.job_id or step.step_id)
+        return _langfuse_trace_id(str(step.session_id or step.run_id or step.job_id or step.step_id))
 
     @staticmethod
     def _observation_type_for_step(kind: str) -> str:
@@ -350,3 +351,13 @@ def _safe_value(value: Any) -> Any:
     if isinstance(value, str):
         return _trim(value, 800)
     return value
+
+
+def _langfuse_trace_id(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return uuid.uuid4().hex
+    try:
+        return uuid.UUID(text).hex
+    except ValueError:
+        return uuid.uuid5(uuid.NAMESPACE_URL, text).hex

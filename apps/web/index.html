@@ -1114,6 +1114,7 @@
 
     function renderTimeline(bundle) {
       const pendingHtml = renderLocalActivity(bundle) || renderServerProgress(bundle);
+      const reportHtml = bundle && bundle.active_run && bundle.active_run.report ? renderRun(bundle.active_run) : "";
       if (!bundle) {
         if (pendingHtml) {
           el.timeline.innerHTML = pendingHtml;
@@ -1135,7 +1136,7 @@
           </header>
           <pre>${escapeHtml(message.content)}</pre>
         </article>
-      `).join("") + pendingHtml;
+      `).join("") + pendingHtml + reportHtml;
       el.timeline.scrollTop = el.timeline.scrollHeight;
     }
 
@@ -1278,17 +1279,17 @@
             ${run && run.run_id ? `<span class="pill">Run ${escapeHtml(short(run.run_id, 12))}</span>` : ""}
           </div>
           <div class="observation-links">
+            ${bundle.session && bundle.session.session_id ? `
+              <a class="compact-link primary-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events" target="_blank" rel="noreferrer">查看会话事件</a>
+            ` : ""}
             ${traceUrl ? `
-              <a class="compact-link primary-link" href="${escapeHtml(traceUrl)}" target="_blank" rel="noreferrer">查看 Langfuse Trace</a>
+              <a class="compact-link" href="${escapeHtml(traceUrl)}" target="_blank" rel="noreferrer">查看 Langfuse Trace</a>
             ` : ""}
             ${run && run.run_id ? `
-              <a class="compact-link" href="/v1/research/runs/${encodeURIComponent(run.run_id)}/trace" target="_blank" rel="noreferrer">查看本地 Trace JSON</a>
-            ` : ""}
-            ${bundle.session && bundle.session.session_id ? `
-              <a class="compact-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events" target="_blank" rel="noreferrer">查看会话事件</a>
+              <a class="compact-link" href="/v1/research/runs/${encodeURIComponent(run.run_id)}/trace" target="_blank" rel="noreferrer">查看本地 Trace JSON（调试）</a>
             ` : ""}
           </div>
-          <p class="subtle">${escapeHtml(provider.reason || "SQLite 保留本地事件、checkpoint 和 replay 数据。")}</p>
+          <p class="subtle">${escapeHtml(provider.reason || "SQLite 保留本地事件、checkpoint 和 replay 数据。会话事件页是给人看的节点视图，本地 Trace JSON 只是调试入口。")}</p>
         </section>
 
         ${pendingApprovals.length ? `
