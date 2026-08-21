@@ -10,6 +10,7 @@ from .constraint_evaluation import (
     evaluate_constraint_coverage,
     summarise_constraint_coverage,
 )
+from .github_repository import canonical_repository_slug, parse_github_repository_hint
 from .schemas import (
     AgentEvent,
     AgentRunStep,
@@ -1518,6 +1519,9 @@ class ConversationalResearchAgent:
             if selected_skill.scripts:
                 parts.append(f"- scripts: {', '.join(script.name for script in selected_skill.scripts)}")
         skill_preflight = session.metadata.get("skill_preflight")
+        skill_preflight_output = skill_preflight.get("output") if isinstance(skill_preflight, dict) else None
+        repository_hint = parse_github_repository_hint(skill_preflight_output, latest_content, user_turns)
+        repository_slug = canonical_repository_slug(repository_hint)
         if isinstance(skill_preflight, dict) and skill_preflight:
             parts.extend(
                 [
@@ -1527,11 +1531,14 @@ class ConversationalResearchAgent:
                     f"- output: {_trim(skill_preflight.get('output', {}), 600)}",
                 ]
             )
+        if repository_slug:
+            parts.extend(["", "Target GitHub repository:", f"- {repository_slug}"])
         parts.extend(["", "User turns:"])
         parts.extend(f"- {turn}" for turn in user_turns)
-        if hard_constraints:
+        hard_constraint_texts = list(dict.fromkeys(memory.content for memory in hard_constraints))
+        if hard_constraint_texts:
             parts.extend(["", "Hard project constraints that must be addressed in the final memo:"])
-            parts.extend(f"- [project/constraint] {memory.content}" for memory in hard_constraints)
+            parts.extend(f"- [project/constraint] {content}" for content in hard_constraint_texts)
         other_memories = [memory for memory in memories if memory not in hard_constraints]
         if other_memories:
             parts.extend(["", "Relevant saved memory:"])
@@ -1542,31 +1549,37 @@ class ConversationalResearchAgent:
                 "Deliverable: prepare a citation-backed technical research memo with plan, evidence, trace, evaluation, and explicit coverage of every hard project constraint.",
             ]
         )
+        metadata = {
+            "source": "agent_session",
+            "session_id": session_id,
+            "session_key": session.session_key or session.session_id,
+            "workspace_id": workspace.workspace_id,
+            "workspace_name": workspace.name,
+            "workspace_context": workspace.team_context,
+            "default_stack": workspace.default_stack,
+            "deployment_constraints": workspace.deployment_constraints,
+            "risk_policy": workspace.risk_policy,
+            "preferred_sources": workspace.preferred_sources,
+            "skill_id": selected_skill.skill_id,
+            "skill_name": selected_skill.name,
+            "skill_scenario": selected_skill.scenario,
+            "required_inputs": selected_skill.required_inputs,
+            "evaluation_focus": selected_skill.evaluation_focus,
+            "memory_ids": [memory.memory_id for memory in memories],
+            "hard_constraint_memory_ids": [memory.memory_id for memory in hard_constraints],
+            "hard_constraints": hard_constraint_texts,
+            "user_turns": user_turns,
+        }
+        if repository_hint is not None:
+            metadata["github_repository"] = repository_hint
+            metadata["github_repository_slug"] = repository_slug
         return ResearchRequest(
             topic="\n".join(parts),
             depth=depth,  # type: ignore[arg-type]
             include_private_docs=include_private_docs,
             max_sections=max(1, max_sections),
             max_revisions=max(0, max_revisions),
-            metadata={
-                "source": "agent_session",
-                "session_id": session_id,
-                "session_key": session.session_key or session.session_id,
-                "workspace_id": workspace.workspace_id,
-                "workspace_name": workspace.name,
-                "workspace_context": workspace.team_context,
-                "default_stack": workspace.default_stack,
-                "deployment_constraints": workspace.deployment_constraints,
-                "risk_policy": workspace.risk_policy,
-                "preferred_sources": workspace.preferred_sources,
-                "skill_id": selected_skill.skill_id,
-                "skill_name": selected_skill.name,
-                "skill_scenario": selected_skill.scenario,
-                "required_inputs": selected_skill.required_inputs,
-                "evaluation_focus": selected_skill.evaluation_focus,
-                "memory_ids": [memory.memory_id for memory in memories],
-                "hard_constraint_memory_ids": [memory.memory_id for memory in hard_constraints],
-            },
+            metadata=metadata,
         )
 
     def _render_plan_message(self, plan_draft: AgentPlanDraft) -> str:

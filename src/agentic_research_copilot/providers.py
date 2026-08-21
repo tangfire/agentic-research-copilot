@@ -260,23 +260,27 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         revision_notes: Sequence[str] = (),
     ) -> tuple[SupervisorDecisionContract, ModelUsage]:
         payload = {
-            "request": request.model_dump(),
-            "research_brief": research_brief,
-            "plan": [item.model_dump() for item in plan],
-            "retrieval_routes": [route.model_dump() for route in retrieval_routes],
-            "corpus_profile": corpus_profile.model_dump(),
+            "request": _compact_supervisor_request(request),
+            "research_brief": _trim_text(research_brief, 600),
+            "plan": [_compact_supervisor_plan_item(item) for item in plan[:5]],
+            "retrieval_routes": [_compact_supervisor_route(route) for route in retrieval_routes[:5]],
+            "corpus_profile": _compact_supervisor_corpus_profile(corpus_profile),
             "revision_count": revision_count,
-            "revision_notes": list(revision_notes)[:8],
+            "revision_notes": [_trim_text(note, 220) for note in list(revision_notes)[:4]],
+            "output_limits": {
+                "reflection_chars": 160,
+                "rationale_chars": 120,
+                "research_topic_chars": 160,
+                "queries_per_call": 2,
+                "criteria_per_call": 3,
+                "conduct_calls": "one compact ConductResearch call per required plan item",
+            },
             "instructions": (
-                "Follow the Open Deep Research supervisor pattern. First reflect with a "
-                "think_tool-style call, then use ConductResearch calls to delegate concrete "
-                "research units. Use ResearchComplete only as the completion decision after "
-                "delegation and verification criteria are clear. Preserve the provided "
-                "plan_item_ids; do not invent IDs. Each ConductResearch call must choose "
-                "mode, selected_tools, web_queries/internal_queries, min_evidence, "
-                "min_sources, and sufficiency_criteria. Prefer primary or official sources "
-                "when they are available, keep source quality visible in evaluation, and "
-                "treat retrieval_routes as optional candidate hints, not as mandatory final routing decisions."
+                "Return a compact routing decision only. Include one think_tool, one ConductResearch "
+                "per required plan item, and one ResearchComplete. Preserve plan_item_ids. Each "
+                "ConductResearch chooses mode, selected_tools, up to two short queries, min_evidence, "
+                "min_sources, and up to three sufficiency criteria. Do not include report content, "
+                "evidence snippets, markdown, essays, or repeated context."
             ),
         }
         return self._chat_structured(
@@ -286,7 +290,8 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "think_tool for reflection, ConductResearch for delegated research, and "
                 "ResearchComplete for completion criteria. ConductResearch must include the evidence "
                 "tools and query rewrites needed by the delegated unit. Keep decisions inspectable and "
-                "citation-oriented."
+                "citation-oriented. This is a routing decision, not the final report: keep reflection, "
+                "rationales, research_topic, queries, and sufficiency criteria compact."
             ),
             user_payload=payload,
             schema=SupervisorDecisionContract.model_json_schema(),
@@ -1168,6 +1173,88 @@ def _limit_words(text: str, *, max_words: int) -> str:
     if len(words) <= max_words:
         return " ".join(words)
     return " ".join(words[:max_words]).rstrip(" ,.;:") + "..."
+
+
+def _compact_supervisor_request(request: ResearchRequest) -> dict[str, Any]:
+    metadata = request.metadata or {}
+    compact_metadata: dict[str, Any] = {}
+    for key in (
+        "source",
+        "session_id",
+        "workspace_id",
+        "workspace_name",
+        "workspace_context",
+        "default_stack",
+        "deployment_constraints",
+        "risk_policy",
+        "preferred_sources",
+        "skill_id",
+        "skill_name",
+        "skill_scenario",
+        "evaluation_focus",
+        "github_repository",
+        "github_repository_slug",
+    ):
+        value = metadata.get(key)
+        if value not in (None, "", [], {}):
+            compact_metadata[key] = value
+
+    hard_constraints = metadata.get("hard_constraints")
+    if isinstance(hard_constraints, list):
+        compact_metadata["hard_constraints"] = [
+            _trim_text(str(item), 140)
+            for item in dict.fromkeys(hard_constraints)
+            if str(item).strip()
+        ][:8]
+    user_turns = metadata.get("user_turns")
+    if isinstance(user_turns, list):
+        compact_metadata["user_turns"] = [_trim_text(str(item), 360) for item in user_turns[-3:]]
+    return {
+        "topic": _trim_text(request.topic, 650),
+        "depth": request.depth,
+        "include_private_docs": request.include_private_docs,
+        "max_sections": request.max_sections,
+        "max_revisions": request.max_revisions,
+        "metadata": compact_metadata,
+    }
+
+
+def _compact_supervisor_plan_item(item: PlanItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "question": _trim_text(item.question, 180),
+        "purpose": _trim_text(item.purpose, 120),
+        "search_query": _trim_text(item.search_query or "", 100),
+        "requires_research": item.requires_research,
+    }
+
+
+def _compact_supervisor_route(route: RetrievalRoute) -> dict[str, Any]:
+    return {
+        "plan_item_id": route.plan_item_id,
+        "mode": route.mode,
+        "reason": _trim_text(route.reason, 90),
+        "selected_tools": list(route.selected_tools)[:3],
+        "web_queries": [_trim_text(query, 100) for query in route.web_queries[:2]],
+        "internal_queries": [_trim_text(query, 100) for query in route.internal_queries[:2]],
+        "min_evidence": route.min_evidence,
+        "min_sources": route.min_sources,
+        "sufficiency_criteria": [_trim_text(item, 90) for item in route.sufficiency_criteria[:3]],
+    }
+
+
+def _compact_supervisor_corpus_profile(corpus_profile: CorpusProfile) -> dict[str, Any]:
+    return {
+        "document_count": corpus_profile.document_count,
+        "source_count": corpus_profile.source_count,
+        "source_names": [_trim_text(name, 60) for name in corpus_profile.source_names[:4]],
+        "document_kinds": dict(list(corpus_profile.document_kinds.items())[:4]),
+        "keyword_signals": [_trim_text(signal, 60) for signal in corpus_profile.keyword_signals[:6]],
+        "has_private_docs": corpus_profile.has_private_docs,
+        "has_reference_docs": corpus_profile.has_reference_docs,
+        "vector_backend": corpus_profile.vector_backend,
+        "keyword_backend": corpus_profile.keyword_backend,
+    }
 
 
 def _extract_chat_content(body: dict[str, Any]) -> str:

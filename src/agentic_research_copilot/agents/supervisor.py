@@ -149,7 +149,12 @@ class SupervisorAgent:
 
     def _is_structured_output_error(self, exc: Exception) -> bool:
         message = str(exc).lower()
-        return "invalid structured output" in message or "structured output" in message
+        return (
+            "invalid structured output" in message
+            or "structured output" in message
+            or "truncated at the max token limit" in message
+            or "finish_reason=length" in message
+        )
 
     def _fallback_contract(
         self,

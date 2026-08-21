@@ -18,6 +18,19 @@ _GENERIC_REPO_PAIRS = {
     ("api", "v1"),
     ("docs", "api"),
     ("docs", "runtime"),
+    ("issue", "release"),
+    ("issue", "releases"),
+    ("issues", "release"),
+    ("issues", "releases"),
+    ("pr", "release"),
+    ("pr", "releases"),
+    ("prs", "release"),
+    ("prs", "releases"),
+    ("pull", "request"),
+    ("pulls", "requests"),
+    ("owner", "name"),
+    ("repo", "url"),
+    ("readme", "license"),
 }
 
 
@@ -70,6 +83,9 @@ def _parse_structured_hint(values: Iterable[Any]) -> dict[str, str] | None:
         for key in (
             "github_repository",
             "target_repository",
+            "recognized_repo",
+            "target_repo",
+            "github_repository_slug",
             "repository",
             "repo",
             "repo_slug",

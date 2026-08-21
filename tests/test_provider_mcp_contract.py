@@ -3,6 +3,7 @@ from agentic_research_copilot.providers import (
     _mcp_routing_hints,
     _normalize_researcher_action,
 )
+from agentic_research_copilot.github_repository import parse_github_repository_hint
 from agentic_research_copilot.schemas import (
     MCPToolDescriptor,
     PlanItem,
@@ -115,4 +116,23 @@ def test_github_repository_hints_extract_owner_repo_from_chinese_repo_request():
     assert _github_repository_hints(item) == {
         "owner": "langchain-ai",
         "repo": "open_deep_research",
+    }
+
+
+def test_repository_hint_ignores_generic_issue_release_phrase():
+    text = """Selected skill: Open Source Adoption Review
+    - plan_template: 检查架构、维护活跃度、issue/release 信号和 license 风险
+    User turns: 评估 langchain-ai/langgraph 是否适合一个 5 人 Python/FastAPI 团队。
+    """
+
+    assert parse_github_repository_hint(text) == {
+        "owner": "langchain-ai",
+        "repo": "langgraph",
+    }
+
+
+def test_repository_hint_accepts_recognized_repo_metadata():
+    assert parse_github_repository_hint({"recognized_repo": "langchain-ai/langgraph"}) == {
+        "owner": "langchain-ai",
+        "repo": "langgraph",
     }

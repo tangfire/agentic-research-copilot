@@ -11,9 +11,12 @@ from agentic_research_copilot.provider_base import ModelUsage
 from agentic_research_copilot.schemas import (
     CorpusProfile,
     EvidenceItem,
+    PlanItem,
     ReportSection,
     ReporterContract,
     ResearchRequest,
+    RetrievalRoute,
+    SupervisorDecisionContract,
 )
 
 
@@ -181,6 +184,84 @@ def test_structured_provider_exposes_truncation_diagnostics(monkeypatch):
     assert error.diagnostics["finish_reason"] == "length"
     assert "truncated" in error.reason
     assert len(fake_client.calls) == 3
+
+
+def test_supervisor_compacts_context_before_model_call(monkeypatch):
+    provider = OpenAICompatibleResearchModelProvider(
+        base_url="https://relay.example.test/v1",
+        api_key="test-key",
+        chat_model="test-model",
+        embedding_model="test-embedding",
+    )
+    captured = {}
+
+    def fake_chat_structured(*, system_prompt, user_payload, schema, response_model):
+        captured["payload"] = user_payload
+        captured["system_prompt"] = system_prompt
+        return SupervisorDecisionContract(
+            reflection="route compactly",
+            tool_calls=[],
+            completion_criteria=["citations are preserved"],
+            max_concurrent_research_units=1,
+            confidence=0.7,
+        ), ModelUsage(provider="fake", model="fake")
+
+    monkeypatch.setattr(provider, "_chat_structured", fake_chat_structured)
+    request = ResearchRequest(
+        topic="Conversation research request:\n" + "x" * 20000,
+        metadata={
+            "source": "agent_session",
+            "workspace_id": "default-workspace",
+            "github_repository": {"owner": "langchain-ai", "repo": "langgraph"},
+            "github_repository_slug": "langchain-ai/langgraph",
+            "hard_constraints": ["必须支持失败恢复和回滚" for _ in range(20)],
+            "user_turns": ["评估 langchain-ai/langgraph" + "y" * 2000],
+            "large_blob": "z" * 20000,
+        },
+    )
+    plan = [
+        PlanItem(
+            id=f"item-{index}",
+            question="q" * 1000,
+            purpose="p" * 1000,
+            search_query="s" * 1000,
+        )
+        for index in range(8)
+    ]
+    routes = [
+        RetrievalRoute(
+            plan_item_id=f"item-{index}",
+            mode="external",
+            reason="r" * 800,
+            selected_tools=["web_search", "mcp_tool"],
+            web_queries=["web" * 200, "extra" * 200, "drop" * 200],
+            internal_queries=["internal" * 200],
+            min_evidence=2,
+            min_sources=1,
+            sufficiency_criteria=["criteria" * 80 for _ in range(6)],
+        )
+        for index in range(8)
+    ]
+
+    provider.supervise_research(
+        request,
+        "brief" * 1000,
+        plan,
+        routes,
+        CorpusProfile(has_private_docs=True, source_names=["source" * 40 for _ in range(10)]),
+    )
+
+    payload = captured["payload"]
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert len(serialized) < 14000
+    assert len(payload["request"]["topic"]) <= 1200
+    assert payload["request"]["metadata"]["github_repository_slug"] == "langchain-ai/langgraph"
+    assert len(payload["plan"]) == 5
+    assert len(payload["plan"][0]["question"]) <= 320
+    assert len(payload["retrieval_routes"]) == 5
+    assert len(payload["retrieval_routes"][0]["web_queries"]) == 2
+    assert "large_blob" not in payload["request"]["metadata"]
+    assert "This is a routing decision" in captured["system_prompt"]
 
 
 def test_reporter_compacts_context_before_model_call(monkeypatch):
