@@ -494,11 +494,11 @@ team constraints / repo / technical question
 
 ### Q44: 你们的 agent 结构到底是什么？是 loop 还是 workflow？
 
-考察点：能否讲清“流动结构”。
+考察点：能否讲清“流动结构”和 orchestration 边界。
 
 30 秒答法：
 
-> 外层是 workflow，内层是 bounded tool loop。外层负责 session、memory、skill、plan、confirm、research、report、verify、eval；内层 researcher 针对一个 plan item 决定 web、vector、MCP 或 complete。
+> 外层是 workflow / orchestrator，内层是 bounded tool loop。外层负责 session、memory、skill、plan、confirm、research、report、verify、eval；内层 researcher 针对一个 plan item 决定 web、vector、MCP 或 complete。
 
 2 分钟答法：
 
@@ -506,19 +506,57 @@ team constraints / repo / technical question
 
 对应 artifact：`src/agentic_research_copilot/graph_runtime.py`、`src/agentic_research_copilot/agents/researcher.py`
 
-### Q45: ReAct、Plan-and-Execute、Spec 这些规划方式怎么理解？
+### Q45: ReAct、Plan-and-Execute、Spec、Orchestrator-Worker 这些规划方式怎么理解？
 
 考察点：agent 规划范式。
 
 30 秒答法：
 
-> ReAct 是边想边做，灵活但容易短视和循环；Plan-and-Execute 是先计划再执行，结构清晰但计划错了会传导；Spec 更像先定义目标、约束和验收标准，再执行并校验，适合工程任务和高风险任务。
+> ReAct 是边想边做，灵活但容易短视和循环；Plan-and-Execute 是先计划再执行，结构清晰但计划错了会传导；Spec 更像先定义目标、约束和验收标准，再执行并校验，适合工程任务和高风险任务；Orchestrator-Worker 是由上层协调者拆任务、分派角色，下层 worker 各自完成局部工作。
 
 2 分钟答法：
 
-> Research Desk 更接近 Plan-and-Execute + Spec gate：先把研究问题、团队约束和成功标准写成 plan draft，用户确认后再执行；执行中局部使用 ReAct-like tool loop；最后用 verifier/evaluator 检查 citation、faithfulness 和 constraint coverage。这样比纯 ReAct 更适合秋招项目，因为状态、证据和质量门都能讲清楚。
+> Research Desk 更接近 Plan-and-Execute + Spec gate，同时借了 Orchestrator-Worker 的分工思想：先把研究问题、团队约束和成功标准写成 plan draft，用户确认后再执行；执行中局部使用 ReAct-like tool loop；然后由 planner / supervisor 把任务路由给 `RepoSignalAgent`、`ArchitectureFitAgent`、`OpsRiskAgent`，最后由 verifier/evaluator 检查 citation、faithfulness 和 constraint coverage。这样比纯 ReAct 更适合秋招项目，因为状态、证据和质量门都能讲清楚。
 
-### Q46: 你怎么了解 agent 前沿？
+对应 artifact：`src/agentic_research_copilot/multi_agent_harness.py`、`src/agentic_research_copilot/pipeline.py`
+
+### Q46: 你们的 agent 是 chain、graph，还是 supervisor 模式？
+
+考察点：能否把主流 agent 运行形态讲清楚。
+
+30 秒答法：
+
+> 主链路更像 graph / workflow，不是简单 chain。原因是研究任务有明确阶段和回退条件；同时在研究阶段内部又存在 supervisor 负责选 worker、worker 负责执行工具循环的结构。
+
+2 分钟答法：
+
+> 如果只讲 chain，那会把系统说窄了，因为我们的任务不是线性“一步接一步”，而是有会话、计划、确认、研究、汇总、验证这些阶段。更准确地说，外层是 graph / workflow，节点之间有状态和条件转移；内层研究阶段带有 supervisor 思路，由 routing layer 决定哪个 specialist worker 处理哪类证据。它不是任意开放式多 agent 协作，而是 bounded multi-agent execution。
+
+对应 artifact：`src/agentic_research_copilot/graph_runtime.py`、`src/agentic_research_copilot/multi_agent_harness.py`
+
+### Q47: 你们这个算哪种 MAS？Independent、Centralized、Decentralized 还是 Hybrid？
+
+考察点：是否理解多 Agent 协作模式，而不是只会说“我用了多个 Agent”。
+
+30 秒答法：
+
+> 我们更准确地说是 Centralized MAS，也就是中心化 Orchestrator-Worker。Planner / Supervisor 像 orchestrator，负责拆任务、路由专家、收集结果；`RepoSignalAgent`、`ArchitectureFitAgent`、`OpsRiskAgent` 是 specialist worker，各自处理不同证据面；Writer 和 Verifier 负责集中合成和质量检查。
+
+2 分钟答法：
+
+> 它不是 decentralized debate 型多 Agent，也不是完全 independent MAS。三个专家 agent 不直接自由聊天，而是通过共享 run state、route decision、evidence ledger、conflict record 和 verifier 间接协同。这样做是因为开源引入评审更看重证据可靠、约束覆盖、工具权限和可复盘，而不是开放式头脑风暴。中心化 MAS 的好处是质量控制、trace、权限边界和评测都更稳定。
+
+如果面试官追问“那是不是不够多 Agent”：
+
+> 多 Agent 不一定等于 agent 互相聊天。这个项目的多 Agent 价值在于 expert decomposition、职责隔离、工具边界和证据归属。对于开源引入评审这类需要统一口径和质量门的任务，centralized orchestrator-worker 比去中心化辩论更合适。
+
+诚实边界：
+
+> 目前没有实现多轮 peer debate 或 decentralized consensus。后续如果要增强协同，我会优先做 Cross-Agent Review：只在专家结论冲突、约束覆盖低或证据不足时触发一次冲突审查，而不是让 agent 无限互聊。
+
+对应 artifact：`src/agentic_research_copilot/multi_agent_harness.py`、`src/agentic_research_copilot/pipeline.py`、`src/agentic_research_copilot/schemas.py`
+
+### Q48: 你怎么了解 agent 前沿？
 
 考察点：学习来源和判断力。
 
@@ -530,7 +568,7 @@ team constraints / repo / technical question
 
 > 我不会只看概念文章，而是看它们在解决什么工程问题：持久状态、人类确认、工具权限、memory、trace、eval、replay、长任务恢复。Research Desk 也是按这个思路做的，不是把热门名词都塞进去，而是围绕开源引入评审这条闭环选择需要的机制。
 
-### Q47: 简历项目里最难的点是什么？
+### Q49: 简历项目里最难的点是什么？
 
 考察点：是否真做过复杂问题。
 
@@ -544,7 +582,7 @@ team constraints / repo / technical question
 
 对应 artifact：`src/agentic_research_copilot/providers.py`、`tests/test_providers.py`
 
-### Q48: Trace 上报链路怎么做？评测架构怎么做？了解 OTel 吗？
+### Q50: Trace 上报链路怎么做？评测架构怎么做？了解 OTel 吗？
 
 考察点：可观测性和平台化视角。
 
@@ -558,7 +596,7 @@ team constraints / repo / technical question
 
 对应 artifact：`src/agentic_research_copilot/observability.py`、`docs/observability-design.zh-CN.md`
 
-### Q49: Benchmark 数据存 ES 合理吗？
+### Q51: Benchmark 数据存 ES 合理吗？
 
 考察点：评测数据架构。
 
@@ -570,16 +608,16 @@ team constraints / repo / technical question
 
 > Agent benchmark 至少有四类数据：task spec、expected labels、run artifact、score summary。task spec 和 score summary 需要稳定结构；trace/event 适合检索；大报告和工具结果适合对象存储或本地 bundle。Research Desk 现在是单机 SQLite + export bundle，面试时可以说这是学习版；如果上生产，会把热事件、冷 artifact、聚合指标分开存。
 
-### Q50: 这些题我们项目到底覆盖到什么程度？
+### Q52: 这些题我们项目到底覆盖到什么程度？
 
 考察点：不要过度包装。
 
 30 秒答法：
 
-> Agent 结构、Skill、MCP、tool loop、SSE 恢复思路、trace、evaluation、memory 压缩这些都能用项目讲；进程线程协程、索引、语言数据结构、MySQL/Redis 一致性、OTel 细节属于通用基础和扩展设计，需要单独背，不能说项目已经完整实现企业级方案。
+> Agent 结构、Skill、MCP、tool loop、SSE 恢复思路、trace、evaluation、memory 压缩、ReAct / Plan-and-Execute / Orchestrator-Worker、Centralized MAS 这些都能用项目讲；进程线程协程、索引、语言数据结构、MySQL/Redis 一致性、OTel 细节属于通用基础和扩展设计，需要单独背，不能说项目已经完整实现企业级方案。
 
 复习顺序：
 
 1. 先背 Q1-Q22，掌握项目主线。
 2. 再背 Q31-Q36，掌握后端协议和 agent 工程。
-3. 最后背 Q37-Q50，补基础题和平台化追问。
+3. 最后背 Q37-Q52，补基础题、MAS 范式和平台化追问。
