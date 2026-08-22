@@ -315,7 +315,9 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
         assert any(memory["scope"] == "project" for memory in turn_data["memory_updates"])
         assert turn_data["memory_extraction_result"]["accepted"]
         assert any(step["kind"] == "planning" and step["status"] == "completed" for step in turn_data["steps"])
-        assert "[project/constraint]" in turn_data["plan_draft"]["research_request"]["topic"]
+        research_request = turn_data["plan_draft"]["research_request"]
+        assert "[project/constraint]" not in research_request["topic"]
+        assert "[project/constraint]" in research_request["metadata"]["request_context"]
 
         memory_response = client.get(f"/v1/agent/sessions/{session_id}/memory")
         assert memory_response.status_code == 200

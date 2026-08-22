@@ -52,6 +52,8 @@ class ResearchGraphState(TypedDict, total=False):
     final_report: Any
     final_evaluation: Any
     final_issues: list[str]
+    reporter_degraded: bool
+    reporter_degraded_reason: str | None
     needs_revision: bool
     revision_reason: str | None
     run: ResearchRun
@@ -174,6 +176,8 @@ class LangGraphResearchRuntime:
             "final_report": None,
             "final_evaluation": None,
             "final_issues": [],
+            "reporter_degraded": False,
+            "reporter_degraded_reason": None,
             "needs_revision": False,
             "revision_reason": None,
         }
@@ -715,7 +719,11 @@ class LangGraphResearchRuntime:
             runtime="langgraph",
         )
         report = report.model_copy(update={"source_index": self.copilot.workflow.format_sources(report_evidence)})
-        return {"final_report": report}
+        return {
+            "final_report": report,
+            "reporter_degraded": bool(degraded_reason),
+            "reporter_degraded_reason": degraded_reason,
+        }
 
     def _verifier_evaluator(self, state: ResearchGraphState) -> ResearchGraphState:
         request = state["request"]
@@ -738,6 +746,17 @@ class LangGraphResearchRuntime:
             document_hits=state["final_document_hits"],
             retrieval_routes=state["final_retrieval_routes"],
         )
+        reporter_degraded = bool(state.get("reporter_degraded"))
+        reporter_degraded_reason = state.get("reporter_degraded_reason")
+        if reporter_degraded:
+            degraded_note = (
+                "Reporter structured output failed; runtime preserved citation-bound drafts but the main "
+                "ReporterContract path did not succeed."
+            )
+            notes = list(evaluation.notes)
+            if degraded_note not in notes:
+                notes.append(degraded_note)
+            evaluation = evaluation.model_copy(update={"passed": False, "notes": notes})
         verifier_usage = self.copilot.verifier.last_usage
         self._append_trace(
             state,
@@ -827,7 +846,11 @@ class LangGraphResearchRuntime:
 
         usable_report = bool(report.citations) and evaluation.passed
         strict_mode = bool(getattr(self.copilot.settings, "strict_providers", False))
-        if should_revise and revision_count < request.max_revisions:
+        if reporter_degraded:
+            final_status = "failed"
+            failure_reason = f"Reporter structured output failed: {reporter_degraded_reason}"
+            needs_revision = False
+        elif should_revise and revision_count < request.max_revisions:
             final_status = "completed"
             failure_reason = None
             needs_revision = True

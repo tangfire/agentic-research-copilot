@@ -273,8 +273,9 @@ def test_reporter_compacts_context_before_model_call(monkeypatch):
     )
     captured = {}
 
-    def fake_chat_structured(*, system_prompt, user_payload, schema, response_model):
+    def fake_chat_structured(*, system_prompt, user_payload, schema, response_model, max_tokens=None):
         captured["payload"] = user_payload
+        captured["max_tokens"] = max_tokens
         return ReporterContract(title="ok", summary="ok"), ModelUsage(provider="fake", model="fake")
 
     monkeypatch.setattr(provider, "_chat_structured", fake_chat_structured)
@@ -303,11 +304,12 @@ def test_reporter_compacts_context_before_model_call(monkeypatch):
     provider.compose_report("topic" * 500, sections, evidence, 0.8)
 
     payload = captured["payload"]
-    assert len(payload["evidence_index"]) == 8
+    assert len(payload["evidence_index"]) == 6
     assert len(payload["sections"]) == 4
     assert len(payload["topic"]) == 800
     assert len(payload["evidence_index"][0]["content"]) == 260
     assert len(payload["evidence_index"][0]["snippet"]) == 180
-    assert len(payload["sections"][0]["content"]) == 700
+    assert len(payload["sections"][0]["content"]) == 420
     assert len(payload["sections"][0]["source_summary"]) == 2
     assert len(payload["sections"][0]["citation_titles"]) == 3
+    assert captured["max_tokens"] == provider.reporter_max_tokens

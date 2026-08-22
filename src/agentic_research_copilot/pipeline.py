@@ -1858,34 +1858,33 @@ class ResearchCopilot:
 
         evidence_summary = self._evidence_summary(citations)
         parts = [
-            f"本节回答：{self._compact_report_text(item.question, 260)}",
-            f"研究目标：{self._compact_report_text(request.topic, 420)}。",
-            f"为什么重要：{self._compact_report_text(item.purpose, 260)}",
-            f"核心发现：{self._compact_report_text(finding, 900)}",
+            f"问题：{self._compact_report_text(item.question, 220)}",
+            f"目标：{self._compact_report_text(request.topic, 220)}",
+            f"结论：{self._compact_report_text(finding, 520)}",
+            f"影响：{self._compact_report_text(item.purpose, 220)}",
         ]
         if evidence_summary:
-            parts.append(f"支撑证据：{evidence_summary}")
+            parts.append(f"证据：{evidence_summary}")
         if route is not None:
             tool_summary = ", ".join(route.selected_tools) or route.mode
             parts.append(
-                f"检索路由：{route.mode}，使用 {tool_summary}；"
-                f"充分性目标是至少 {route.min_evidence} 条证据，"
-                f"覆盖 {route.min_sources} 个来源组。"
+                f"取证：{route.mode} 路由，使用 {tool_summary}；"
+                f"目标是至少 {route.min_evidence} 条证据、{route.min_sources} 个来源组。"
             )
         if search_queries:
             query_text = "; ".join(
                 self._compact_report_text(query.query, 180) for query in search_queries[:2]
             )
-            parts.append(f"使用的查询：{query_text}。")
+            parts.append(f"查询：{query_text}。")
         if note is not None and note.gaps:
             gaps = "; ".join(self._compact_report_text(gap, 180) for gap in note.gaps[:2])
-            parts.append(f"剩余注意点：{gaps}。")
+            parts.append(f"注意点：{gaps}。")
         if note is not None and note.follow_up_queries:
             followups = "; ".join(
                 self._compact_report_text(query, 180) for query in note.follow_up_queries[:2]
             )
-            parts.append(f"建议继续追问：{followups}。")
-        return " ".join(part.strip() for part in parts if part and part.strip())
+            parts.append(f"可继续追问：{followups}。")
+        return "\n".join(part.strip() for part in parts if part and part.strip())
 
     def _fallback_section_content(
         self,
@@ -1895,8 +1894,8 @@ class ResearchCopilot:
     ) -> str:
         evidence_summary = self._evidence_summary(citations)
         if evidence_summary:
-            return f"{research_brief} 与 {topic} 相关的证据：{evidence_summary}"
-        return f"{research_brief} 暂时没有找到可引用证据来支撑 {topic}。"
+            return f"问题：{self._compact_report_text(topic, 220)}\n证据：{evidence_summary}"
+        return f"问题：{self._compact_report_text(topic, 220)}\n注意点：暂时没有找到可引用证据支撑这一节。"
 
     def _evidence_summary(self, citations: list[EvidenceItem]) -> str:
         snippets: list[str] = []
@@ -1907,7 +1906,7 @@ class ResearchCopilot:
                 if part and part.strip()
             )
             if text:
-                snippets.append(text[:320].rstrip())
+                snippets.append(text[:220].rstrip())
         return " ".join(snippets)
 
     @staticmethod

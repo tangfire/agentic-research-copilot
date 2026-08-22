@@ -4,6 +4,7 @@ from agentic_research_copilot.dev_fixtures import FixtureResearchModelProvider
 from agentic_research_copilot.pipeline import ResearchCopilot
 from agentic_research_copilot.providers import (
     OpenAICompatibleResearchModelProvider,
+    StructuredOutputError,
     build_embedding_provider,
     build_model_provider,
 )
@@ -19,6 +20,16 @@ from agentic_research_copilot.schemas import (
     SearchQuery,
 )
 from agentic_research_copilot.source_reader import SourceReader
+
+
+class EmptyReporterFixtureProvider(FixtureResearchModelProvider):
+    def compose_report(self, topic, sections, evidence, confidence):
+        raise StructuredOutputError(
+            response_model="ReporterContract",
+            attempts=3,
+            reason="provider returned empty message content",
+            diagnostics={"finish_reason": "stop", "content_chars": 0},
+        )
 
 
 def test_chat_provider_can_share_embedding_provider(tmp_path: Path):
@@ -196,6 +207,7 @@ def test_pipeline_returns_report(tmp_path: Path):
     )
     assert all(section.citations for section in result.report.sections)
     assert any("multi-agent research orchestration" in section.content.lower() for section in result.report.sections)
+    assert not any("Conversation research request" in section.content for section in result.report.sections)
     assert result.web_hits is not None
     assert result.document_hits
     assert any(hit.kind == "document-chunk" for hit in result.document_hits)
@@ -217,6 +229,30 @@ def test_pipeline_returns_report(tmp_path: Path):
     assert replayed.benchmark_summary is not None
     assert replayed.benchmark_summary.replay_fidelity == 1.0
     assert any(event.step == "replay.frozen" for event in replayed.trace)
+
+
+def test_pipeline_marks_reporter_degradation_failed(tmp_path: Path):
+    provider = EmptyReporterFixtureProvider()
+    copilot = ResearchCopilot(
+        settings=AppSettings(
+            storage_path=str(tmp_path / "reporter-degraded.sqlite"),
+            langgraph_checkpoint_path=str(tmp_path / "reporter-degraded-checkpoints.sqlite"),
+            seed_reference_knowledge=True,
+        ),
+        model_provider=provider,
+        embedding_provider=provider,
+    )
+
+    result = copilot.run(ResearchRequest(topic="multi-agent research orchestration", max_revisions=0))
+
+    assert result.status == "failed"
+    assert result.failure_reason is not None
+    assert "Reporter structured output failed" in result.failure_reason
+    assert result.report is not None
+    assert result.evaluation is not None
+    assert result.evaluation.passed is False
+    assert any("ReporterContract" in note or "Reporter structured output failed" in note for note in result.evaluation.notes)
+    assert any(event.step == "reporting.degraded" and event.status == "failed" for event in result.trace)
 
 
 def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):

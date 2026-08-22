@@ -355,6 +355,24 @@
       animation: pulse 1.2s ease-in-out infinite;
     }
 
+    .message.compact-message {
+      background: #f8fafc;
+      border-color: #dbe4ef;
+    }
+
+    .message details {
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    .message summary,
+    .conversation-history summary,
+    .report-section summary {
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
     @keyframes pulse {
       0%,
       100% {
@@ -624,14 +642,101 @@
 
     .report {
       display: grid;
+      gap: 14px;
+      width: min(980px, 100%);
+      justify-self: center;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .report-hero {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid #b9d8d2;
+      border-radius: 8px;
+      background: #f1faf8;
+    }
+
+    .report-title-row {
+      display: flex;
+      justify-content: space-between;
       gap: 12px;
+      align-items: start;
+    }
+
+    .report-title-row h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .report-summary {
+      margin: 0;
+      color: #1f2937;
+      line-height: 1.75;
+    }
+
+    .report-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .report-list-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #f8fafc;
+      line-height: 1.6;
     }
 
     .report-section {
       display: grid;
-      gap: 6px;
-      padding-top: 10px;
+      gap: 0;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .report-section summary {
+      padding: 12px;
+      color: #0f172a;
+      background: #f8fafc;
+    }
+
+    .report-section-body {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
       border-top: 1px solid var(--line);
+    }
+
+    .report-section-body p {
+      margin: 0;
+      line-height: 1.75;
+    }
+
+    .report-sources {
+      margin: 0;
+      padding-left: 22px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .conversation-history {
+      width: min(760px, 92%);
+      justify-self: start;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .conversation-history .message {
+      width: 100%;
+      margin-top: 10px;
     }
 
     .empty {
@@ -953,6 +1058,23 @@
       return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
     }
 
+    function asList(value) {
+      return Array.isArray(value) ? value.filter((item) => String(item || "").trim()) : [];
+    }
+
+    function renderTextParagraphs(value) {
+      const lines = String(value || "")
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (!lines.length) return "<p>暂无内容。</p>";
+      return lines.map((line) => {
+        const cleaned = line.replace(/^[-*]\s+/, "");
+        const prefix = /^[-*]\s+/.test(line) ? "• " : "";
+        return `<p>${prefix}${escapeHtml(cleaned)}</p>`;
+      }).join("");
+    }
+
     function formatTime(value) {
       const text = String(value || "").trim();
       if (!text) return "n/a";
@@ -1128,16 +1250,42 @@
         el.timeline.innerHTML = '<div class="empty">先输入研究目标和团队约束。</div>';
         return;
       }
-      el.timeline.innerHTML = bundle.messages.map((message) => `
-        <article class="message ${message.role}">
+      if (reportHtml) {
+        const lastUser = [...bundle.messages].reverse().find((message) => message.role === "user");
+        const userHtml = lastUser ? renderMessage(lastUser) : "";
+        el.timeline.innerHTML = userHtml + reportHtml + renderConversationHistory(bundle.messages);
+        el.timeline.scrollTop = 0;
+        return;
+      }
+      el.timeline.innerHTML = bundle.messages.map((message) => renderMessage(message)).join("") + pendingHtml;
+      el.timeline.scrollTop = el.timeline.scrollHeight;
+    }
+
+    function renderMessage(message, options = {}) {
+      const rawContent = String(message.content || "");
+      const shouldCompact = options.compact || (message.role === "assistant" && rawContent.length > 1000);
+      const shownContent = shouldCompact ? short(rawContent, 360) : rawContent;
+      return `
+        <article class="message ${escapeHtml(message.role)} ${shouldCompact ? "compact-message" : ""}">
           <header>
             <strong>${escapeHtml(label(ROLE_LABELS, message.role, "消息"))}</strong>
             <span>${escapeHtml(label(INTENT_LABELS, message.intent, "对话"))} · ${escapeHtml(formatTime(message.created_at))}</span>
           </header>
-          <pre>${escapeHtml(message.content)}</pre>
+          <pre>${escapeHtml(shownContent)}</pre>
+          ${shouldCompact ? `<details><summary>展开完整内容</summary><pre>${escapeHtml(rawContent)}</pre></details>` : ""}
         </article>
-      `).join("") + pendingHtml + reportHtml;
-      el.timeline.scrollTop = el.timeline.scrollHeight;
+      `;
+    }
+
+    function renderConversationHistory(messages) {
+      const history = (messages || []).filter((message) => message.role !== "user" || message.intent !== "chat");
+      if (!history.length) return "";
+      return `
+        <details class="conversation-history">
+          <summary>查看计划和确认记录</summary>
+          ${history.map((message) => renderMessage(message, { compact: true })).join("")}
+        </details>
+      `;
     }
 
     function renderLocalActivity(bundle) {
@@ -1590,22 +1738,56 @@
         return '<section class="block"><h3>结果</h3><p>还没有完成的报告。</p></section>';
       }
       const evaluation = run.evaluation || {};
+      const report = run.report;
+      const recommendations = asList(report.recommendations);
+      const highlights = asList(report.highlights);
+      const sources = asList(report.source_index);
       return `
-        <section class="block report">
-          <h3>${escapeHtml(run.report.title)}</h3>
-          <p>${escapeHtml(run.report.summary)}</p>
+        <section class="report">
+          <div class="report-hero">
+            <div class="report-title-row">
+              <h2>${escapeHtml(report.title || "研究报告")}</h2>
+              <span class="pill good">已完成</span>
+            </div>
+            <p class="report-summary">${escapeHtml(report.summary || "报告已生成，请查看下方章节和来源。")}</p>
+          </div>
           <div class="metric-grid">
             ${metric("引用准确", evaluation.citation_precision)}
             ${metric("忠实度", evaluation.faithfulness_proxy)}
             ${metric("上下文召回", evaluation.context_recall)}
-            ${metric("来源数", run.report.source_count)}
+            ${metric("来源数", report.source_count)}
           </div>
-          ${run.report.sections.map((section) => `
-            <div class="report-section">
-              <strong>${escapeHtml(section.heading)}</strong>
-              <p>${escapeHtml(section.content)}</p>
+          ${recommendations.length ? `
+            <div class="report-list">
+              <h3>建议</h3>
+              ${recommendations.map((item) => `<div class="report-list-item">${escapeHtml(item)}</div>`).join("")}
             </div>
+          ` : ""}
+          ${highlights.length ? `
+            <div class="report-list">
+              <h3>关键发现</h3>
+              ${highlights.map((item) => `<div class="report-list-item">${escapeHtml(item)}</div>`).join("")}
+            </div>
+          ` : ""}
+          ${(report.sections || []).map((section, index) => `
+            <details class="report-section" ${index === 0 ? "open" : ""}>
+              <summary>${escapeHtml(section.heading || `章节 ${index + 1}`)}</summary>
+              <div class="report-section-body">
+                ${renderTextParagraphs(section.content)}
+                <p class="subtle">证据数：${escapeHtml(section.evidence_count || 0)} · 来源：${escapeHtml((section.source_summary || []).join(" / ") || "n/a")}</p>
+              </div>
+            </details>
           `).join("")}
+          ${sources.length ? `
+            <details class="report-section">
+              <summary>来源索引</summary>
+              <div class="report-section-body">
+                <ol class="report-sources">
+                  ${sources.slice(0, 20).map((source) => `<li>${escapeHtml(source)}</li>`).join("")}
+                </ol>
+              </div>
+            </details>
+          ` : ""}
         </section>
       `;
     }

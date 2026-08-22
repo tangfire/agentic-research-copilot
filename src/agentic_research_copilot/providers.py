@@ -103,6 +103,8 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         timeout_seconds: float = 30.0,
         temperature: float = 0.2,
         embedding_dimensions: int = 256,
+        max_tokens: int = 4096,
+        reporter_max_tokens: int = 2048,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -111,6 +113,8 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         self.timeout_seconds = timeout_seconds
         self.temperature = temperature
         self.embedding_dimensions = max(32, embedding_dimensions)
+        self.max_tokens = max(512, max_tokens)
+        self.reporter_max_tokens = max(512, reporter_max_tokens)
 
     def clarify_request(
         self,
@@ -364,12 +368,12 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "content": _trim_text(item.content or "", 260),
                 "score": item.score,
             }
-            for index, item in enumerate(evidence[:8], start=1)
+            for index, item in enumerate(evidence[:6], start=1)
         ]
         section_drafts = [
             {
-                "heading": _trim_text(section.heading, 120),
-                "content": _trim_text(section.content, 700),
+                "heading": _trim_text(section.heading, 90),
+                "content": _trim_text(section.content, 420),
                 "evidence_count": section.evidence_count,
                 "source_summary": [_trim_text(source, 80) for source in section.source_summary[:2]],
                 "citation_titles": [
@@ -388,11 +392,11 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "Synthesize the final report sections from the draft sections and evidence. "
                 "Use Simplified Chinese by default unless the topic/request explicitly asks for English. "
                 "Keep established technical names such as GitHub, MCP, LangGraph, FastAPI, trace, evaluation, and worker in English when clearer. "
-                "Return compact JSON: at most 4 sections, each section content should be no more than 600 Chinese characters, "
-                "summary no more than 300 Chinese characters, and highlights/recommendations should each contain at most 4 short items. "
-                "Do not reproduce the evidence text; synthesize it. Each section must be specific, "
-                "citation-backed, and balanced. Use citation_indexes to reference only the "
-                "provided evidence_index entries. Do not invent sources, URLs, facts, or citations."
+                "Return compact JSON. Prefer sections=[] because the runtime already has citation-bound section drafts. "
+                "Your main job is title, summary, highlights, recommendations, source_index, and confidence. "
+                "summary must be no more than 220 Chinese characters; highlights/recommendations should each contain at most 4 short items. "
+                "Do not reproduce draft sections or evidence text. Use source_index entries from the provided evidence_index only. "
+                "Do not invent sources, URLs, facts, or citations."
             ),
         }
         return self._chat_structured(
@@ -400,14 +404,15 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "You are the final report writer for a deep research copilot, following the "
                 "Open Deep Research pattern of synthesizing compressed findings into a "
                 "comprehensive citation-backed report. Return valid JSON only that conforms "
-                "to the supplied schema. Populate sections with rewritten section drafts and "
-                "citation_indexes that map to the provided evidence_index. Keep the JSON compact "
+                "to the supplied schema. Keep sections empty unless a short correction is essential. "
+                "Keep the JSON compact "
                 "and finish the object within the output budget. User-facing text should be "
                 "Simplified Chinese unless English is explicitly requested."
             ),
             user_payload=payload,
             schema=ReporterContract.model_json_schema(),
             response_model=ReporterContract,
+            max_tokens=self.reporter_max_tokens,
         )
 
     def compress_source(
@@ -610,6 +615,7 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         user_payload: dict[str, Any],
         schema: dict[str, Any],
         response_model: type[TContract],
+        max_tokens: int | None = None,
     ) -> tuple[TContract, ModelUsage]:
         start = time.perf_counter()
         base_messages = [
@@ -631,7 +637,7 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
             "messages": base_messages,
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
-            "max_tokens": 4096,
+            "max_tokens": max_tokens or self.max_tokens,
         }
         with self._client() as client:
             last_error: Exception | None = None
@@ -661,7 +667,10 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 elif attempt == 2:
                     attempt_payload.pop("response_format", None)
                     attempt_payload["temperature"] = 0.0
-                    attempt_payload["max_tokens"] = 6144
+                    attempt_payload["max_tokens"] = max(
+                        attempt_payload.get("max_tokens", self.max_tokens),
+                        max_tokens or self.max_tokens,
+                    )
                     attempt_payload["messages"].append(
                         {
                             "role": "user",
@@ -782,6 +791,8 @@ def build_model_provider(settings: Any) -> ResearchModelProvider:
         timeout_seconds=float(getattr(settings, "model_timeout_seconds", 30.0)),
         temperature=float(getattr(settings, "model_temperature", 0.2)),
         embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256)),
+        max_tokens=int(getattr(settings, "model_max_tokens", 4096)),
+        reporter_max_tokens=int(getattr(settings, "model_reporter_max_tokens", 2048)),
     )
 
 
@@ -800,6 +811,8 @@ def build_embedding_provider(settings: Any, model_provider: ResearchModelProvide
             timeout_seconds=float(getattr(settings, "model_timeout_seconds", 30.0)),
             temperature=float(getattr(settings, "model_temperature", 0.2)),
             embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256)),
+            max_tokens=int(getattr(settings, "model_max_tokens", 4096)),
+            reporter_max_tokens=int(getattr(settings, "model_reporter_max_tokens", 2048)),
         )
     if provider_name == "model":
         return model_provider or build_model_provider(settings)
@@ -1184,6 +1197,7 @@ def _compact_supervisor_request(request: ResearchRequest) -> dict[str, Any]:
         "workspace_id",
         "workspace_name",
         "workspace_context",
+        "request_context",
         "default_stack",
         "deployment_constraints",
         "risk_policy",
@@ -1196,7 +1210,14 @@ def _compact_supervisor_request(request: ResearchRequest) -> dict[str, Any]:
         "github_repository_slug",
     ):
         value = metadata.get(key)
-        if value not in (None, "", [], {}):
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, str):
+            limit = 1400 if key == "request_context" else 360
+            compact_metadata[key] = _trim_text(value, limit)
+        elif isinstance(value, list):
+            compact_metadata[key] = [_trim_text(str(item), 180) for item in value[:8]]
+        else:
             compact_metadata[key] = value
 
     hard_constraints = metadata.get("hard_constraints")

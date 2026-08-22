@@ -14,22 +14,61 @@ class ConstraintTextSource:
     source_id: str
 
 
+_CONSTRAINT_KEYWORDS = (
+    "constraint",
+    "constraints",
+    "team",
+    "部署",
+    "回滚",
+    "fastapi",
+    "docker",
+    "mcp",
+    "checkpoint",
+    "memory",
+)
+_IGNORED_LINE_PREFIXES = ("已覆盖：", "未覆盖：", "弱覆盖：")
+_IGNORED_LINE_PREFIXES_EN = ("covered:", "missing:", "weak:")
+_IGNORED_LINE_MARKERS = (
+    "parent document:",
+    "matched child chunk:",
+    "metadata:",
+    "source:",
+    "context_confid",
+)
+
+
+def _clean_constraint_line(line: str) -> str:
+    cleaned = " ".join(line.split()).strip(" -\t")
+    if not cleaned:
+        return ""
+    lowered = cleaned.lower()
+    if cleaned.startswith(_IGNORED_LINE_PREFIXES) or lowered.startswith(_IGNORED_LINE_PREFIXES_EN):
+        return ""
+    if any(marker in lowered for marker in _IGNORED_LINE_MARKERS):
+        return ""
+    return cleaned
+
+
 def extract_constraint_texts(value: str, *, fallback_to_full_text: bool = False) -> list[str]:
     normalized = " ".join(value.split())
     if not normalized:
         return []
     texts: list[str] = []
     for line in value.splitlines():
-        line = line.strip(" -\t")
+        line = _clean_constraint_line(line)
         if not line:
             continue
         if "[project/constraint]" in line or "[session/constraint]" in line or "[user/preference]" in line:
-            texts.append(line.split("]", 1)[-1].strip())
+            extracted = _clean_constraint_line(line.split("]", 1)[-1])
+            if extracted:
+                texts.append(extracted)
             continue
-        if any(keyword in line.lower() for keyword in ("constraint", "constraints", "team", "部署", "回滚", "fastapi", "docker", "mcp", "checkpoint", "memory")):
+        if any(keyword in line.lower() for keyword in _CONSTRAINT_KEYWORDS):
             texts.append(line)
     if fallback_to_full_text and not texts and len(normalized) > 18:
-        texts.append(normalized)
+        cleaned = _clean_constraint_line(normalized)
+        if cleaned:
+            texts.append(cleaned)
     return _dedupe(texts)
 
 
@@ -58,10 +97,6 @@ def evaluate_constraint_coverage(
     evidence: Iterable[EvidenceItem],
 ) -> list[ConstraintCoverage]:
     report_sections = report.sections or []
-    evidence_text = " ".join(
-        " ".join(filter(None, [item.title, item.source, item.snippet or "", item.content or ""]))
-        for item in evidence
-    )
     coverage: list[ConstraintCoverage] = []
     for constraint in constraints:
         content_tokens = _tokens(constraint.content)
@@ -85,14 +120,14 @@ def evaluate_constraint_coverage(
                 if constraint.content[:12].lower() in haystack:
                     matched_evidence.append(item.title)
 
-        covered = bool(matched_sections or matched_evidence or _soft_match(constraint.content, evidence_text))
+        covered = bool(matched_sections)
         confidence = 0.0
         if covered:
             confidence = min(1.0, 0.45 + (0.2 * len(matched_sections)) + (0.15 * len(matched_evidence)))
         reason = (
-            "Covered by report sections and/or evidence."
+            "Covered explicitly by report sections; evidence matches are supporting context."
             if covered
-            else "No strong match found in report sections or evidence."
+            else "No strong explicit match found in report sections."
         )
         coverage.append(
             ConstraintCoverage(
@@ -177,11 +212,6 @@ def extract_constraint_coverage_from_run(run: ResearchRun) -> list[ConstraintCov
                     constraints.append(
                         ConstraintTextSource(content=text, source_id=f"metadata:{entry_index}:{text_index}")
                     )
-    if run.report is not None:
-        for section in run.report.sections:
-            if section.heading and section.heading.strip().lower() in {"team constraint coverage", "团队约束覆盖"}:
-                for index, text in enumerate(extract_constraint_texts(section.content, fallback_to_full_text=True)):
-                    constraints.append(ConstraintTextSource(content=text, source_id=f"report:{index}"))
     return evaluate_constraint_coverage(
         run_id=run.run_id,
         session_id=None,

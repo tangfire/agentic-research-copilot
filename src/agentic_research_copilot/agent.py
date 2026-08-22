@@ -1554,6 +1554,7 @@ class ConversationalResearchAgent:
                 "Deliverable: prepare a citation-backed technical research memo with plan, evidence, trace, evaluation, and explicit coverage of every hard project constraint.",
             ]
         )
+        request_context = "\n".join(parts)
         metadata = {
             "source": "agent_session",
             "session_id": session_id,
@@ -1574,12 +1575,15 @@ class ConversationalResearchAgent:
             "hard_constraint_memory_ids": [memory.memory_id for memory in hard_constraints],
             "hard_constraints": hard_constraint_texts,
             "user_turns": user_turns,
+            "request_context": request_context,
+            "skill_plan_template": selected_skill.plan_template,
+            "skill_instructions_excerpt": selected_skill.instructions_excerpt,
         }
         if repository_hint is not None:
             metadata["github_repository"] = repository_hint
             metadata["github_repository_slug"] = repository_slug
         return ResearchRequest(
-            topic="\n".join(parts),
+            topic=_trim(latest_content, 1200),
             depth=depth,  # type: ignore[arg-type]
             include_private_docs=include_private_docs,
             max_sections=max(1, max_sections),
