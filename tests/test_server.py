@@ -225,7 +225,7 @@ def test_api_can_store_documents_and_runs(tmp_path: Path, monkeypatch):
     clear_history_data = clear_history_response.json()
     assert clear_history_data["runs_deleted"] >= 1
     assert clear_history_data["memory_removed_from_core"] is False
-    assert clear_history_data["agent_memory_preserved"] is True
+    assert clear_history_data["structured_memory_preserved"] is True
     assert client.get("/v1/research/runs").json() == []
     assert client.get("/v1/research/jobs").json() == []
 
@@ -330,7 +330,7 @@ def test_agent_session_plans_memory_and_confirms_job(tmp_path: Path, monkeypatch
 
         documents_response = client.get("/v1/documents")
         assert documents_response.status_code == 200
-        assert any(doc["metadata"].get("kind") == "agent_memory" for doc in documents_response.json())
+        assert all(doc["metadata"].get("kind") != "agent_memory" for doc in documents_response.json())
 
         confirm_response = client.post(f"/v1/agent/sessions/{session_id}/confirm-plan")
         assert confirm_response.status_code == 200
@@ -550,7 +550,7 @@ def test_agent_session_can_be_deleted_without_losing_project_memory(tmp_path: Pa
     assert any("Python/FastAPI" in item["content"] for item in project_memory_after)
     documents_response = client.get("/v1/documents")
     assert documents_response.status_code == 200
-    assert any(doc["metadata"].get("kind") == "agent_memory" for doc in documents_response.json())
+    assert all(doc["metadata"].get("kind") != "agent_memory" for doc in documents_response.json())
 
     missing_delete_response = client.delete(f"/v1/agent/sessions/{session_id}")
     assert missing_delete_response.status_code == 404

@@ -221,10 +221,19 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         revision_notes: Sequence[str] = (),
     ) -> tuple[PlannerContract, ModelUsage]:
         payload = {
-            "request": request.model_dump(),
-            "corpus_profile": corpus_profile.model_dump(),
+            "request": _compact_planner_request(request),
+            "corpus_profile": _compact_planner_corpus_profile(corpus_profile),
             "revision_count": revision_count,
-            "revision_notes": list(revision_notes)[:8],
+            "revision_notes": [_trim_text(note, 220) for note in list(revision_notes)[:4]],
+            "output_limits": {
+                "research_brief_chars": 360,
+                "plan_items": "3-4 items",
+                "question_chars": 180,
+                "purpose_chars": 140,
+                "search_query_chars": 120,
+                "assumptions": 4,
+                "success_criteria": 4,
+            },
         }
         schema = PlannerContract.model_json_schema()
         return self._chat_structured(
@@ -235,15 +244,15 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "Guidelines:\n"
                 "- Unless the user explicitly asks for English, write all user-facing fields in Simplified Chinese. "
                 "Keep established technical names such as GitHub, MCP, LangGraph, FastAPI, trace, evaluation, and worker in English when clearer.\n"
-                "- Write a clear research_brief that summarizes the goal, approach, and key constraints.\n"
-                "- Each plan item must have a specific question (not vague), a clear purpose, and an "
+                "- Write a concise research_brief that summarizes the goal, approach, and key constraints.\n"
+                "- Return 3-4 plan items. Each plan item must have a specific question (not vague), a clear purpose, and an "
                 "optimized search_query tuned for search engines (shorter and keyword-focused).\n"
                 "- Avoid overlapping questions. Cover different angles: background, methods, comparisons, "
                 "limitations, and practical implications where relevant.\n"
                 "- If revision_count > 0, use revision_notes to address previously identified gaps.\n"
                 "- If private documents are available (corpus_profile.has_private_docs), include items "
                 "that can be grounded in those documents.\n\n"
-                "Return valid JSON only that conforms to the supplied schema."
+                "Return compact valid JSON only that conforms to the supplied schema. Do not include essays, markdown, source snippets, or repeated request context."
             ),
             user_payload=payload,
             schema=schema,
@@ -309,39 +318,24 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         revision_count: int = 0,
         max_revisions: int = 2,
     ) -> tuple[VerificationContract, ModelUsage]:
-        compact_report = report.model_dump()
-        compact_report["summary"] = _trim_text(str(compact_report.get("summary", "")), 900)
-        compact_report["sections"] = [
-            {
-                **section,
-                "heading": _trim_text(str(section.get("heading", "")), 180),
-                "content": _trim_text(str(section.get("content", "")), 1000),
-            }
-            for section in compact_report.get("sections", [])[:6]
-            if isinstance(section, dict)
-        ]
         payload = {
-            "report": compact_report,
-            "evidence": [
-                {
-                    "title": _trim_text(item.title, 180),
-                    "source": _trim_text(item.source, 140),
-                    "kind": item.kind,
-                    "url": item.url,
-                    "snippet": _trim_text(item.snippet or "", 360),
-                    "content": _trim_text(item.content or "", 420),
-                    "score": item.score,
-                }
-                for item in evidence[:12]
-            ],
-            "plan": [item.model_dump() for item in plan[:12]],
+            "report": _compact_verifier_report(report),
+            "evidence": _compact_verifier_evidence(evidence),
+            "plan": _compact_verifier_plan(plan),
             "revision_count": revision_count,
             "max_revisions": max_revisions,
+            "output_limits": {
+                "issues": "at most 4 short strings",
+                "critical_issues": "at most 3 short strings",
+                "revision_reason_chars": 180,
+            },
+            "instructions": "Quality gate only: cite coverage, critical gaps, revise yes/no. Short JSON verdict.",
         }
         return self._chat_structured(
             system_prompt=(
-                "You are the verifier for a research copilot. Return valid JSON only "
-                "that conforms to the supplied schema."
+                "You are the quality gate verifier for a research copilot. Return compact valid JSON only "
+                "that conforms to the supplied schema. Keep issues and revision_reason short. "
+                "Do not output markdown, report prose, evidence snippets, or repeated context."
             ),
             user_payload=payload,
             schema=VerificationContract.model_json_schema(),
@@ -1015,6 +1009,22 @@ def _clean_github_repo_hint(owner: str, repo: str) -> dict[str, str] | None:
     cleaned_repo = repo.strip().strip("/").removesuffix(".git")
     if not cleaned_owner or not cleaned_repo:
         return None
+    pair = (cleaned_owner.lower(), cleaned_repo.lower())
+    generic_pairs = {
+        ("python", "fastapi"),
+        ("python", "django"),
+        ("python", "flask"),
+        ("java", "spring"),
+        ("java", "springboot"),
+        ("javascript", "react"),
+        ("typescript", "react"),
+        ("node", "react"),
+        ("nodejs", "react"),
+    }
+    generic_owners = {"python", "java", "javascript", "typescript", "node", "nodejs", "go", "golang", "rust", "c", "cpp", "csharp"}
+    generic_repos = {"fastapi", "django", "flask", "spring", "springboot", "react", "vue", "angular", "nextjs", "nuxt", "express"}
+    if pair in generic_pairs or (pair[0] in generic_owners and pair[1] in generic_repos):
+        return None
     return {"owner": cleaned_owner, "repo": cleaned_repo}
 
 
@@ -1182,6 +1192,130 @@ def _limit_words(text: str, *, max_words: int) -> str:
         return " ".join(words)
     return " ".join(words[:max_words]).rstrip(" ,.;:") + "..."
 
+
+def _compact_planner_request(request: ResearchRequest) -> dict[str, Any]:
+    metadata = request.metadata or {}
+    compact_metadata: dict[str, Any] = {}
+    for key in (
+        "source",
+        "session_id",
+        "workspace_id",
+        "workspace_name",
+        "workspace_context",
+        "default_stack",
+        "deployment_constraints",
+        "risk_policy",
+        "preferred_sources",
+        "skill_id",
+        "skill_name",
+        "skill_scenario",
+        "required_inputs",
+        "evaluation_focus",
+        "github_repository",
+        "github_repository_slug",
+    ):
+        value = metadata.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, str):
+            compact_metadata[key] = _trim_text(value, 260)
+        elif isinstance(value, list):
+            compact_metadata[key] = [_trim_text(str(item), 120) for item in value[:6]]
+        else:
+            compact_metadata[key] = value
+
+    hard_constraints = metadata.get("hard_constraints")
+    if isinstance(hard_constraints, list):
+        compact_metadata["hard_constraints"] = [
+            _trim_text(str(item), 140)
+            for item in dict.fromkeys(hard_constraints)
+            if str(item).strip()
+        ][:8]
+    user_turns = metadata.get("user_turns")
+    if isinstance(user_turns, list):
+        compact_metadata["user_turns"] = [_trim_text(str(item), 420) for item in user_turns[-3:]]
+
+    request_context = metadata.get("request_context")
+    if isinstance(request_context, str) and request_context.strip():
+        compact_metadata["request_context_summary"] = _trim_text(request_context, 900)
+
+    return {
+        "topic": _trim_text(request.topic, 700),
+        "depth": request.depth,
+        "include_private_docs": request.include_private_docs,
+        "max_sections": min(max(1, request.max_sections), 4),
+        "max_revisions": request.max_revisions,
+        "metadata": compact_metadata,
+    }
+
+
+def _compact_planner_corpus_profile(corpus_profile: CorpusProfile) -> dict[str, Any]:
+    return {
+        "document_count": corpus_profile.document_count,
+        "source_count": corpus_profile.source_count,
+        "source_names": [_trim_text(name, 60) for name in corpus_profile.source_names[:5]],
+        "document_kinds": dict(list(corpus_profile.document_kinds.items())[:5]),
+        "keyword_signals": [_trim_text(signal, 60) for signal in corpus_profile.keyword_signals[:8]],
+        "has_private_docs": corpus_profile.has_private_docs,
+        "has_reference_docs": corpus_profile.has_reference_docs,
+        "vector_backend": corpus_profile.vector_backend,
+        "keyword_backend": corpus_profile.keyword_backend,
+    }
+
+
+def _compact_verifier_report(report: ResearchReport) -> dict[str, Any]:
+    sections = []
+    for index, section in enumerate(report.sections[:3], start=1):
+        sections.append(
+            {
+                "index": index,
+                "heading": _trim_text(section.heading, 80),
+                "content_preview": _trim_text(section.content, 180),
+                "citation_count": len(section.citations),
+                "evidence_count": section.evidence_count,
+                "source_summary": [_trim_text(source, 50) for source in section.source_summary[:2]],
+                "citation_titles": [_trim_text(item.title, 60) for item in section.citations[:2]],
+            }
+        )
+    return {
+        "title": _trim_text(report.title, 90),
+        "summary": _trim_text(report.summary, 240),
+        "confidence": report.confidence,
+        "source_count": report.source_count,
+        "section_count": len(report.sections),
+        "citation_count": len(report.citations),
+        "sections": sections,
+        "highlights": [_trim_text(item, 80) for item in report.highlights[:3]],
+        "recommendations": [_trim_text(item, 80) for item in report.recommendations[:3]],
+        "source_index": [_trim_text(item, 80) for item in report.source_index[:4]],
+    }
+
+
+def _compact_verifier_evidence(evidence: Sequence[EvidenceItem]) -> list[dict[str, Any]]:
+    return [
+        {
+            "index": index,
+            "title": _trim_text(item.title, 60),
+            "source": _trim_text(item.source, 50),
+            "kind": item.kind,
+            "url": _trim_text(item.url or "", 80),
+            "snippet": _trim_text(item.snippet or "", 80),
+            "score": item.score,
+        }
+        for index, item in enumerate(evidence[:4], start=1)
+    ]
+
+
+def _compact_verifier_plan(plan: Sequence[PlanItem]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": item.id,
+            "question": _trim_text(item.question, 100),
+            "purpose": _trim_text(item.purpose, 80),
+            "requires_research": item.requires_research,
+        }
+        for item in plan[:5]
+    ]
 
 def _compact_supervisor_request(request: ResearchRequest) -> dict[str, Any]:
     metadata = request.metadata or {}

@@ -78,7 +78,7 @@ MCP token 缺失时不能伪造 GitHub evidence。
 用途：
 
 - 作为 hard constraint 注入 planning request。
-- 同步进入本地 DocumentStore，参与 vector/BM25/graph retrieval。
+- 通过 structured memory 注入 planning/report/evaluation，不参与 vector/BM25/graph retrieval。
 - 被 constraint coverage gate 逐条检查。
 
 ### 2.3 session_memory
@@ -115,8 +115,8 @@ metadata
 重要约定：
 
 - `scope=project` 或 `kind=constraint` 会被标记为 `hard_constraint=true`。
-- project memory 会同步写入 DocumentStore，document id 是 `memory:{memory_id}`。
-- 删除 project memory 时，对应本地 document 也会删除。
+- project memory 不同步写入 DocumentStore，也不会触发向量化；它通过 structured memory 直接进入 planning/report/evaluation context。
+- 删除 project memory 时只删除 SQLite memory item；旧版本遗留的 `memory:{memory_id}` 文档会被兼容性清理。
 
 ## 4. Memory Extraction 的边界
 
@@ -335,7 +335,7 @@ DELETE /v1/agent/sessions/{session_id}
 
 一句话：
 
-> 我把 memory 分成 user/project/session 三层，其中 project memory 会进入本地知识库和 planning prompt，并作为 hard constraints 被 constraint coverage gate 检查。
+> 我把 memory 分成 user/project/session 三层，其中 project memory 不走向量库，而是作为结构化约束注入 planning prompt，并作为 hard constraints 被 constraint coverage gate 检查。
 
 被问“为什么不直接用 Mem0”：
 

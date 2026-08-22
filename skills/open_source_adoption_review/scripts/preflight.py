@@ -67,13 +67,43 @@ def _read_payload() -> dict[str, Any]:
 
 
 def _find_repo(content: str) -> str:
-    match = re.search(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", content)
-    if match:
-        return match.group(1)
     match = re.search(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", content, flags=re.IGNORECASE)
     if match:
-        return match.group(1)
+        return _clean_repo_slug(match.group(1))
+    for match in re.finditer(r"(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?![A-Za-z0-9_.-])", content):
+        slug = _clean_repo_slug(match.group(1))
+        if slug:
+            return slug
     return ""
+
+
+def _clean_repo_slug(slug: str) -> str:
+    parts = slug.strip().strip("`'\".,;:()[]{}<>").split("/", 1)
+    if len(parts) != 2:
+        return ""
+    owner = parts[0].strip().strip("/")
+    repo = parts[1].strip().strip("/").removesuffix(".git")
+    if not owner or not repo:
+        return ""
+    pair = (owner.lower(), repo.lower())
+    generic_pairs = {
+        ("python", "fastapi"),
+        ("python", "django"),
+        ("python", "flask"),
+        ("java", "spring"),
+        ("java", "springboot"),
+        ("javascript", "react"),
+        ("typescript", "react"),
+        ("node", "react"),
+        ("nodejs", "react"),
+    }
+    generic_owners = {"python", "java", "javascript", "typescript", "node", "nodejs", "go", "golang", "rust", "c", "cpp", "csharp"}
+    generic_repos = {"fastapi", "django", "flask", "spring", "springboot", "react", "vue", "angular", "nextjs", "nuxt", "express"}
+    if pair in generic_pairs or (pair[0] in generic_owners and pair[1] in generic_repos):
+        return ""
+    if "." in owner or owner.lower() in {"http", "https", "www"}:
+        return ""
+    return f"{owner}/{repo}"
 
 
 def _has_team_constraints(content: str, workspace: Any) -> bool:

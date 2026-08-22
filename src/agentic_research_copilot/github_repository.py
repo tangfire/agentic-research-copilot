@@ -31,6 +31,43 @@ _GENERIC_REPO_PAIRS = {
     ("owner", "name"),
     ("repo", "url"),
     ("readme", "license"),
+    ("python", "fastapi"),
+    ("python", "django"),
+    ("python", "flask"),
+    ("java", "spring"),
+    ("java", "springboot"),
+    ("javascript", "react"),
+    ("typescript", "react"),
+    ("node", "react"),
+    ("nodejs", "react"),
+}
+_GENERIC_REPO_OWNERS = {
+    "python",
+    "java",
+    "javascript",
+    "typescript",
+    "node",
+    "nodejs",
+    "go",
+    "golang",
+    "rust",
+    "c",
+    "cpp",
+    "csharp",
+
+}
+_GENERIC_REPO_NAMES = {
+    "fastapi",
+    "django",
+    "flask",
+    "spring",
+    "springboot",
+    "react",
+    "vue",
+    "angular",
+    "nextjs",
+    "nuxt",
+    "express",
 }
 
 
@@ -157,6 +194,8 @@ def _clean_repo_hint(owner: Any, repo: Any) -> dict[str, str] | None:
         return None
     pair = (cleaned_owner.lower(), cleaned_repo.lower())
     if pair in _GENERIC_REPO_PAIRS:
+        return None
+    if pair[0] in _GENERIC_REPO_OWNERS and pair[1] in _GENERIC_REPO_NAMES:
         return None
     if "." in cleaned_owner or cleaned_owner in {"http", "https", "www"}:
         return None

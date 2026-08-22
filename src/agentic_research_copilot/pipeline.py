@@ -235,7 +235,7 @@ class ResearchCopilot:
             "jobs_deleted": jobs_deleted,
             "telemetry_deleted": telemetry_deleted,
             "memory_removed_from_core": False,
-            "agent_memory_preserved": True,
+            "structured_memory_preserved": True,
         }
 
     def clarify(self, request: ResearchRequest) -> ClarificationContract:
@@ -676,9 +676,10 @@ class ResearchCopilot:
                 {"name": "telemetry", "provider": "in_process_event_log", "enabled": True},
                 {
                     "name": "agent_memory",
-                    "provider": "sqlite + local DocumentStore sync",
+                    "provider": "sqlite structured memory",
                     "enabled": True,
                     "scopes": ["user", "project", "session"],
+                    "retrieval_path": "injected into planning/report/evaluation context, not vector-indexed",
                 },
             ],
             "retrieval": {
@@ -967,7 +968,14 @@ class ResearchCopilot:
         return job
 
     def _restore_state(self) -> None:
-        self.documents.extend(self.storage.load_documents())
+        stored_documents = self.storage.load_documents()
+        indexable_documents: list[EvidenceItem] = []
+        for document in stored_documents:
+            if document.source == "agent-memory" or document.metadata.get("kind") == "agent_memory":
+                self.storage.delete_document(self.storage.document_identity(document))
+                continue
+            indexable_documents.append(document)
+        self.documents.extend(indexable_documents)
         restored_jobs: list[ResearchJob] = []
         for job in self.storage.load_jobs():
             if job.cancel_requested and job.status in {"queued", "running"}:

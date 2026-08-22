@@ -59,7 +59,7 @@ session -> memory -> clarify -> plan -> confirm -> step stream -> tool policy/ap
 - 有 tool loop：研究 agent 会在 web search、vector retrieval、MCP tool 之间选择。
 - 有 tool policy：工具状态、auth、risk、approval_required 都是可见的。
 - 有 HITL approval：MCP token 缺失或风险动作不会被伪装成成功。
-- 有本地知识库：团队约束、架构文档、论文、README 可以进入 DocumentStore。
+- 有本地知识库：架构文档、论文、README 可以进入 DocumentStore；团队约束走 workspace/profile 和 structured memory 注入，不做向量化。
 - 有图增强检索：实体/关系信号和 dense/BM25 一起参与候选召回。
 - 有 evaluation：输出 citation precision、retrieval hit rate、context precision、faithfulness proxy、constraint coverage 等指标。
 - 有 trace/replay：可以解释每一步怎么来的，而不是只给最后答案。
@@ -142,7 +142,7 @@ Memory 分三层：
 - v2 用 SQLite，不引入 Mem0 SDK
 - 每次 user message 后做轻量 memory extraction
 - 保存 `MemoryExtractionResult`
-- project memory 同步写入 DocumentStore
+- project memory 标记为 hard constraint，并通过 request_context 注入 planning/report/evaluation
 - planning 时自动注入 relevant memory
 - project/constraint memory 进入 constraint coverage gate
 
@@ -345,7 +345,7 @@ Planner 仍然决定研究计划，底层 LangGraph workflow 仍然负责状态�
 简历项目 bullet 可以这样写：
 
 - 设计并实现 conversational research agent：支持 session state、SQLite memory、interactive planning、human confirmation、step stream 和后台 research job binding。
-- 构建 Agentic RAG 检索层：以 Qdrant dense retrieval + SQLite FTS5/BM25 为主路径，支持可选 LightRAG-inspired entity/relation graph signal 和 reranking，服务本地文档与 project memory grounding。
+- 构建 Agentic RAG 检索层：以 Qdrant dense retrieval + SQLite FTS5/BM25 为主路径，支持可选 LightRAG-inspired entity/relation graph signal 和 reranking，服务本地文档 grounding；团队约束通过 structured memory 注入并由 constraint coverage gate 检查。
 - 实现 ODR-style research workflow：clarify、plan、research supervisor、bounded tool loop、reporter、verifier/evaluator、trace/replay。
 - 设计 tool registry/policy/invocation/approval 模型，支持 GitHub MCP repository/code/issue/PR/release evidence，并在 token 缺失时 fail fast 或显式降级。
 - 建设可观测质量体系：输出 source index、retrieval route、tool calls、checkpoint、citation precision、context precision、faithfulness proxy、constraint coverage 等评估指标。

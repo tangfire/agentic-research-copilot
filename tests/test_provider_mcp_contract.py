@@ -131,6 +131,14 @@ def test_repository_hint_ignores_generic_issue_release_phrase():
     }
 
 
+def test_repository_hint_rejects_common_tech_stack_pair():
+    assert parse_github_repository_hint({"recognized_repo": "Python/FastAPI"}) is None
+    assert parse_github_repository_hint("我们是 5 人 Python/FastAPI 团队，评估 langchain-ai/langgraph 是否适合。") == {
+        "owner": "langchain-ai",
+        "repo": "langgraph",
+    }
+
+
 def test_repository_hint_accepts_recognized_repo_metadata():
     assert parse_github_repository_hint({"recognized_repo": "langchain-ai/langgraph"}) == {
         "owner": "langchain-ai",

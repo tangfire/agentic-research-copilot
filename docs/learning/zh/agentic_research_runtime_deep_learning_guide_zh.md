@@ -347,7 +347,7 @@ GET /v1/runtime/provider-check
 
 `add_document()` 和 `ingest_document_path()` 会把本地资料放进 `DocumentStore`。
 
-这里的本地资料是当前 research runtime 可检索的 evidence corpus。现在 agent 层也会把重要的 `project` memory 同步进 DocumentStore，让团队约束进入同一套检索链路。
+这里的本地资料是当前 research runtime 可检索的 evidence corpus。`project` memory 不再同步进 DocumentStore，而是作为 structured context 注入 planning/report/evaluation；这样团队约束不会在每轮对话里触发不必要的向量化。
 
 区别很重要：
 

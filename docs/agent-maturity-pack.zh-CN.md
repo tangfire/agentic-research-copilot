@@ -133,7 +133,7 @@ GET /v1/agent/sessions/{session_id}/events
 默认工具：
 
 - `web_search`: 公开 web 证据，低风险。
-- `vector_retrieval`: 本地知识库和 project memory，低风险。
+- `vector_retrieval`: 本地知识库和上传/导入文档，低风险；project memory 通过 structured context 注入，不作为向量文档检索。
 - `mcp_tool`: 外部 MCP 工具，默认中风险，缺 auth 或未知工具时需要 approval/gating。
 
 API：

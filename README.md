@@ -72,7 +72,7 @@ workflow nodes -> another hidden agent loop -> final report
 7. `Planner` writes a research brief and decomposes the topic into focused plan items.
 8. `ResearchSupervisor` emits ODR-style `think_tool`, `ConductResearch`, and `ResearchComplete` tool calls.
 9. `Researcher` runs a bounded tool loop for each delegated unit: `web_search`, optional external `mcp_tool`, or completion.
-10. `Retriever` grounds uploaded documents and project memory with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, and optional graph/rerank enhancement.
+10. `Retriever` grounds uploaded/local documents with child chunk retrieval, parent/neighbor expansion, dense retrieval, BM25, and optional graph/rerank enhancement. Project memory is injected as structured planning and constraint context instead of being vector-indexed.
 11. `Reporter` writes topic-specific sections from notes and evidence. It does not use fixed demo sections.
 12. `ConstraintCoverage` checks hard project constraints against report sections and evidence, adding warnings or failing evaluation when coverage is too weak.
 13. `Specialist routing` maps plan items to `RepoSignalAgent`, `ArchitectureFitAgent`, and `OpsRiskAgent`, then writes role assignments, route decisions, conflicts, an evidence ledger, and labeled/proxy benchmark metrics. The compatibility module is `multi_agent_harness.py`; it does not execute another hidden research loop.

@@ -1143,6 +1143,11 @@
 
     async function loadBundle(sessionId, options = {}) {
       const { syncLive = true } = options;
+      const switchingSession = state.activeSessionId && state.activeSessionId !== sessionId;
+      if (switchingSession) {
+        stopLiveStream(true);
+        state.localActivity = null;
+      }
       try {
         state.bundle = await api(`/v1/agent/sessions/${sessionId}`);
       } catch (error) {
@@ -1159,6 +1164,9 @@
       state.activeSessionId = sessionId;
       if (state.bundle.workspace && state.bundle.workspace.workspace_id) {
         state.activeWorkspaceId = state.bundle.workspace.workspace_id;
+      }
+      if (state.bundle.session && !isLiveStatus(state.bundle.session.status)) {
+        state.localActivity = null;
       }
       renderAll();
       if (syncLive) {
@@ -1253,7 +1261,7 @@
       if (reportHtml) {
         const lastUser = [...bundle.messages].reverse().find((message) => message.role === "user");
         const userHtml = lastUser ? renderMessage(lastUser) : "";
-        el.timeline.innerHTML = userHtml + reportHtml + renderConversationHistory(bundle.messages);
+        el.timeline.innerHTML = userHtml + renderReportReadyNotice(bundle.active_run) + reportHtml + renderConversationHistory(bundle.messages);
         el.timeline.scrollTop = 0;
         return;
       }
@@ -1273,6 +1281,18 @@
           </header>
           <pre>${escapeHtml(shownContent)}</pre>
           ${shouldCompact ? `<details><summary>展开完整内容</summary><pre>${escapeHtml(rawContent)}</pre></details>` : ""}
+        </article>
+      `;
+    }
+
+    function renderReportReadyNotice(run) {
+      return `
+        <article class="message assistant report-ready">
+          <header>
+            <strong>报告已完成</strong>
+            <span>Run ${escapeHtml(short(run && run.run_id, 12))}</span>
+          </header>
+          <pre>研究报告已经生成。先看下方建议、关键发现和质量指标；需要复盘过程时再打开会话事件或 Langfuse Trace。</pre>
         </article>
       `;
     }
@@ -1428,7 +1448,10 @@
           </div>
           <div class="observation-links">
             ${bundle.session && bundle.session.session_id ? `
-              <a class="compact-link primary-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events" target="_blank" rel="noreferrer">查看会话事件</a>
+              <a class="compact-link primary-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events" target="_blank" rel="noreferrer">新标签查看会话事件</a>
+            ` : ""}
+            ${run && run.report ? `
+              <button class="compact-link primary-link" type="button" data-scroll-report>回到报告</button>
             ` : ""}
             ${traceUrl ? `
               <a class="compact-link" href="${escapeHtml(traceUrl)}" target="_blank" rel="noreferrer">查看 Langfuse Trace</a>
@@ -1743,7 +1766,7 @@
       const highlights = asList(report.highlights);
       const sources = asList(report.source_index);
       return `
-        <section class="report">
+        <section id="reportTop" class="report">
           <div class="report-hero">
             <div class="report-title-row">
               <h2>${escapeHtml(report.title || "研究报告")}</h2>
@@ -1917,6 +1940,15 @@
       el.inspector.querySelectorAll("[data-reject]").forEach((button) => {
         button.addEventListener("click", () => resolveApproval(button.dataset.reject, false));
       });
+      el.inspector.querySelectorAll("[data-scroll-report]").forEach((button) => {
+        button.addEventListener("click", () => scrollToReport());
+      });
+    }
+
+    function scrollToReport() {
+      const report = document.getElementById("reportTop");
+      if (!report) return;
+      report.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     async function createSession() {
@@ -2216,6 +2248,7 @@
         } catch (_) {
           // heartbeat is best-effort
         }
+        scheduleStreamRefresh();
       });
       source.onerror = () => {
         if (source.readyState === EventSource.CLOSED) {

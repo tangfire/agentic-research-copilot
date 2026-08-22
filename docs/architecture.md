@@ -23,7 +23,7 @@ flowchart LR
   UI["Agent Workbench UI"] --> API["FastAPI API"]
   API --> Session["AgentSession"]
   Session --> Memory["SQLite Memory"]
-  Memory --> KB["Local DocumentStore Sync"]
+  Memory --> Context["Structured Planning / Constraint Context"]
   Session --> Confirm["Plan Confirmation Gate"]
   Confirm --> Steps["AgentRunStep / Events"]
   Confirm --> Policy["Tool Registry / Policy"]
@@ -36,15 +36,14 @@ flowchart LR
   Planner --> Supervisor["ResearchSupervisor"]
   Supervisor --> Researcher["Researcher Loop"]
   Supervisor --> Retriever["Contextual Retriever"]
+  Context --> Planner
+  Context --> Coverage
   Researcher --> Web["Search Providers"]
   Researcher --> Reader["Source Reader"]
   Researcher --> MCP["External MCP Tools"]
   Retriever --> Dense["Qdrant Dense Index"]
   Retriever --> BM25["SQLite FTS5/BM25"]
   Retriever --> KG["Entity/Relation Graph Signal"]
-  KB --> Dense
-  KB --> BM25
-  KB --> KG
   Dense --> Rerank["Reranker"]
   BM25 --> Rerank
   KG --> Rerank
@@ -132,7 +131,7 @@ Kinds:
 - `fact`
 - `todo`
 
-Each user message is scanned by a lightweight extractor. Explicit preferences, team constraints, and concrete session facts become `MemoryItem` rows. v2 also stores `MemoryExtractionResult` so candidates, accepted memories, rejected duplicates, and extractor reasons can be inspected. Project-scope memory is inserted into the local document store with `kind=agent_memory`, so the existing vector/BM25/graph retrieval layer can retrieve it during research. This makes team constraints part of the local knowledge base instead of repeated prompt text.
+Each user message is scanned by a lightweight extractor. Explicit preferences, team constraints, and concrete session facts become `MemoryItem` rows. v2 also stores `MemoryExtractionResult` so candidates, accepted memories, rejected duplicates, and extractor reasons can be inspected. Project-scope memory is kept as structured memory and injected into planning, reporting, and constraint evaluation context. It is not inserted into the vector document store, because team constraints are small, authoritative control-plane facts rather than evidence documents that need semantic retrieval.
 
 Project-scope memory and `kind=constraint` memory are treated as hard constraints. Confirmed plans inject them into `ResearchRequest.topic` as `[project/constraint]` lines, and completed runs are checked by the constraint coverage gate.
 

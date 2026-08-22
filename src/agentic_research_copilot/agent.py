@@ -728,7 +728,7 @@ class ConversationalResearchAgent:
             AgentToolDefinition(
                 name="vector_retrieval",
                 channel="vector",
-                description="检索本地知识库、项目文档和 project memory。",
+                description="检索本地知识库和项目文档；团队约束从 structured memory/workspace 直接注入，不走向量化。",
                 input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
                 enabled="vector_retrieval" not in disabled_tools,
                 requires_auth=False,
@@ -889,6 +889,7 @@ class ConversationalResearchAgent:
         memory = self.store.load_memory_item(memory_id)
         deleted = self.store.delete_memory_item(memory_id)
         if deleted and memory is not None and memory.scope == "project":
+            # Backward-compatible cleanup for memory documents created by older builds.
             self.copilot.delete_document(f"memory:{memory.memory_id}")
         return deleted
 
@@ -1216,24 +1217,12 @@ class ConversationalResearchAgent:
                     "metadata": {
                         **memory.metadata,
                         "hard_constraint": True,
+                        "retrieval_path": "structured_memory",
+                        "document_store_sync": False,
                     }
                 }
             )
         self.store.save_memory_item(memory)
-        if memory.scope == "project":
-            self.copilot.add_document(
-                title=f"Memory: {memory.kind}",
-                source="agent-memory",
-                snippet=memory.content,
-                content=memory.content,
-                metadata={
-                    "kind": "agent_memory",
-                    "memory_scope": memory.scope,
-                    "memory_kind": memory.kind,
-                    "memory_id": memory.memory_id,
-                    "document_id": f"memory:{memory.memory_id}",
-                },
-            )
 
     def _save_session_context(
         self,
