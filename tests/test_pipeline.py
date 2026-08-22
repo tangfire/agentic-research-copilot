@@ -327,6 +327,154 @@ def test_build_sections_uses_plan_notes_and_topic_evidence(tmp_path: Path):
     assert [item.title for item in sections[0].citations] == ["Battery recycling partnership report"]
 
 
+def test_report_sections_strip_scraped_navigation_noise(tmp_path: Path):
+    provider = FixtureResearchModelProvider()
+    copilot = ResearchCopilot(
+        settings=AppSettings(storage_path=str(tmp_path / "clean-report.sqlite")),
+        model_provider=provider,
+        embedding_provider=provider,
+    )
+    request = ResearchRequest(
+        topic="Evaluate langchain-ai/langgraph for Docker Compose rollback support",
+        max_sections=1,
+    )
+    plan = [
+        PlanItem(
+            id="item_1",
+            question="Can LangGraph support rollback and checkpointing?",
+            purpose="Decide whether the runtime is operable for a small team.",
+            search_query="langgraph checkpointing rollback docker compose",
+        )
+    ]
+    route = RetrievalRoute(
+        plan_item_id="item_1",
+        mode="hybrid",
+        reason="Need docs and repository evidence.",
+        selected_tools=["web_search", "mcp_tool"],
+        web_queries=["langgraph checkpointing rollback docker compose"],
+        min_evidence=1,
+        min_sources=1,
+    )
+    evidence = [
+        EvidenceItem(
+            title="LangChain Reference home page![LangChain Reference](/_next/image?url=%2Freference-docs.png&w=750&q=75)",
+            source="langchain-docs",
+            kind="web",
+            url="https://example.test/langgraph",
+            snippet="LangGraph documents checkpointing, time travel, and durable execution for rollback.",
+            content="Ask a question to get started Enter to send Shift+Enter new line Menu Auth Client",
+            score=0.92,
+            metadata={"plan_item_id": "item_1"},
+        )
+    ]
+    note = ResearchNote(
+        plan_item_id="item_1",
+        question=plan[0].question,
+        finding=(
+            "![LangChain Reference](/_next/image?url=%2Freference-docs.png) "
+            "LangGraph can support checkpointing and rollback review, but the team must verify "
+            "Docker Compose persistence before adoption. Ask a question to get started."
+        ),
+        evidence_titles=["LangChain Reference"],
+        confidence=0.82,
+    )
+
+    sections = copilot._build_sections(
+        request=request,
+        research_brief="Assess LangGraph operational fit.",
+        plan=plan,
+        retrieval_routes=[route],
+        evidence=evidence,
+        web_hits=evidence,
+        document_hits=[],
+        notes=[note],
+        search_queries=[
+            SearchQuery(
+                query="langgraph checkpointing rollback docker compose",
+                intent="Find docs",
+                plan_item_id="item_1",
+            )
+        ],
+    )
+
+    content = sections[0].content
+    assert "checkpointing and rollback" in content
+    assert "/_next/image" not in content
+    assert "Ask a question" not in content
+    assert "Shift+Enter" not in content
+    assert "Reference home page" not in content
+
+
+def test_report_sections_preserve_valid_source_links(tmp_path: Path):
+    provider = FixtureResearchModelProvider()
+    copilot = ResearchCopilot(
+        settings=AppSettings(storage_path=str(tmp_path / "linked-report.sqlite")),
+        model_provider=provider,
+        embedding_provider=provider,
+    )
+    request = ResearchRequest(topic="Evaluate LangGraph checkpoint docs", max_sections=1)
+    plan = [
+        PlanItem(
+            id="item_1",
+            question="Which checkpoint documentation supports rollback review?",
+            purpose="Keep useful citations visible in the report.",
+            search_query="langgraph checkpoint docs",
+        )
+    ]
+    route = RetrievalRoute(
+        plan_item_id="item_1",
+        mode="external",
+        reason="Need official docs.",
+        selected_tools=["web_search"],
+        web_queries=["langgraph checkpoint docs"],
+        min_evidence=1,
+        min_sources=1,
+    )
+    evidence = [
+        EvidenceItem(
+            title="LangGraph checkpoint docs",
+            source="official-docs",
+            kind="web",
+            url="https://docs.langchain.com/langgraph/concepts/persistence",
+            snippet="Official docs describe checkpointing for durable graph execution.",
+            score=0.91,
+            metadata={"plan_item_id": "item_1"},
+        )
+    ]
+    note = ResearchNote(
+        plan_item_id="item_1",
+        question=plan[0].question,
+        finding=(
+            "The [LangGraph persistence docs](https://docs.langchain.com/langgraph/concepts/persistence) "
+            "should remain visible because it is a useful citation, not navigation noise."
+        ),
+        evidence_titles=["LangGraph checkpoint docs"],
+        confidence=0.85,
+    )
+
+    sections = copilot._build_sections(
+        request=request,
+        research_brief="Assess citation rendering.",
+        plan=plan,
+        retrieval_routes=[route],
+        evidence=evidence,
+        web_hits=evidence,
+        document_hits=[],
+        notes=[note],
+        search_queries=[
+            SearchQuery(
+                query="langgraph checkpoint docs",
+                intent="Find official docs",
+                plan_item_id="item_1",
+            )
+        ],
+    )
+
+    content = sections[0].content
+    assert "[LangGraph persistence docs](https://docs.langchain.com/langgraph/concepts/persistence)" in content
+    assert "https://docs.langchain.com/langgraph/concepts/persistence" in content
+
+
 def test_build_sections_adds_team_constraint_coverage_when_constraints_exist(tmp_path: Path):
     provider = FixtureResearchModelProvider()
     copilot = ResearchCopilot(

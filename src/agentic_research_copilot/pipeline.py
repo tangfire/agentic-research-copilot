@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import re
 import uuid
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1908,21 +1909,94 @@ class ResearchCopilot:
     def _evidence_summary(self, citations: list[EvidenceItem]) -> str:
         snippets: list[str] = []
         for item in citations[:3]:
-            text = " ".join(
+            primary_text = " ".join(
                 part.strip()
-                for part in [item.title, item.snippet or "", item.content or ""]
+                for part in [item.title, item.snippet or ""]
                 if part and part.strip()
             )
+            fallback_text = item.content or ""
+            text = self._compact_report_text(primary_text or fallback_text, 220)
             if text:
-                snippets.append(text[:220].rstrip())
-        return " ".join(snippets)
+                snippets.append(text)
+        return "；".join(snippets)
 
     @staticmethod
     def _compact_report_text(value: object, max_chars: int) -> str:
-        text = " ".join(str(value or "").split())
+        text = ResearchCopilot._strip_report_noise(value)
+        text = " ".join(text.split())
         if len(text) <= max_chars:
             return text
         return text[: max_chars - 3].rstrip() + "..."
+
+    @staticmethod
+    def _strip_report_noise(value: object) -> str:
+        text = str(value or "")
+        if not text.strip():
+            return ""
+        text = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text)
+        text = re.sub(r"\[[^\]\n]{0,160}\]\(/_next/image\?[^)]*\)", " ", text)
+        text = re.sub(r"\[([^\]\n]{1,160})\]\(/[^)]*\)", r"\1", text)
+        text = re.sub(r"/_next/image\?\S+", " ", text)
+        text = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", text)
+        text = re.sub(r"[#*_]{1,3}", " ", text)
+        for phrase in (
+            "LangChain Assistant",
+            "LangChain Reference home page",
+            "Ask a question to get started",
+            "Enter to send",
+            "Shift+Enter",
+            "new line",
+            "Menu",
+            "Notifications",
+            "Notifi",
+        ):
+            text = text.replace(phrase, " ")
+        fragments = re.split(r"\n+|(?<=[。！？!?；;])\s+", text)
+        useful_keywords = (
+            "采用",
+            "不采用",
+            "建议",
+            "风险",
+            "约束",
+            "部署",
+            "回滚",
+            "恢复",
+            "证据",
+            "引用",
+            "运维",
+            "替代",
+            "可观测",
+            "checkpoint",
+            "docker",
+            "compose",
+            "sqlite",
+            "postgres",
+            "postgresql",
+            "rollback",
+            "langgraph",
+            "fastapi",
+            "license",
+            "release",
+            "issue",
+            "github",
+            "mcp",
+        )
+        cleaned_fragments: list[str] = []
+        for fragment in fragments:
+            fragment = " ".join(fragment.split()).strip(" -•|/，。；;:")
+            if not fragment:
+                continue
+            lower = fragment.lower()
+            if any(noise in lower for noise in ("/_next/", "![", "reference home page")):
+                continue
+            if len(fragment) > 260 and not any(keyword in lower for keyword in useful_keywords):
+                continue
+            cleaned_fragments.append(fragment)
+        if cleaned_fragments:
+            text = " ".join(cleaned_fragments)
+        text = re.sub(r"\s+([，。；：,.!?])", r"\1", text)
+        text = re.sub(r"\s{2,}", " ", text)
+        return text.strip(" ，。；;:-|")
 
     def _estimate_confidence(
         self,

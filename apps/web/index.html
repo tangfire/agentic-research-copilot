@@ -667,6 +667,12 @@
       align-items: start;
     }
 
+    .report-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     .report-title-row h2 {
       margin: 0;
       font-size: 18px;
@@ -723,6 +729,18 @@
       padding-left: 22px;
       display: grid;
       gap: 6px;
+    }
+
+    .report-sources a,
+    .report-section-body a {
+      color: var(--accent);
+      text-decoration: none;
+      word-break: break-word;
+    }
+
+    .report-sources a:hover,
+    .report-section-body a:hover {
+      text-decoration: underline;
     }
 
     .conversation-history {
@@ -805,6 +823,65 @@
       color: var(--bad);
     }
 
+    @media print {
+      @page {
+        margin: 16mm;
+      }
+
+      body.printing-report {
+        background: #fff;
+      }
+
+      body.printing-report .topbar,
+      body.printing-report .side,
+      body.printing-report .inspector,
+      body.printing-report .status-strip,
+      body.printing-report .composer,
+      body.printing-report .conversation-history,
+      body.printing-report .report-actions,
+      body.printing-report .message,
+      body.printing-report .next-step {
+        display: none !important;
+      }
+
+      body.printing-report .shell,
+      body.printing-report .layout,
+      body.printing-report .chat,
+      body.printing-report .timeline {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        background: #fff !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+      }
+
+      body.printing-report .timeline > :not(#reportTop) {
+        display: none !important;
+      }
+
+      body.printing-report .report {
+        width: 100% !important;
+        max-width: none !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+      }
+
+      body.printing-report .report-section {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        overflow: visible !important;
+      }
+
+      body.printing-report .report-section summary {
+        list-style: none;
+      }
+    }
+
     @media (max-width: 1180px) {
       .layout {
         grid-template-columns: 220px minmax(0, 1fr);
@@ -861,6 +938,7 @@
       <div class="settings">
         <a class="pill" href="/docs">API 文档</a>
         <button id="exportBtn" class="compact" title="导出当前会话" disabled>导出会话</button>
+        <button id="printPdfBtn" class="compact" title="下载当前报告 PDF" disabled>下载 PDF</button>
         <span id="apiStatus" class="pill warn">检查中</span>
       </div>
     </header>
@@ -951,6 +1029,7 @@
       newSessionBtn: document.getElementById("newSessionBtn"),
       refreshBtn: document.getElementById("refreshBtn"),
       exportBtn: document.getElementById("exportBtn"),
+      printPdfBtn: document.getElementById("printPdfBtn"),
     };
 
     const STATUS_LABELS = {
@@ -1063,16 +1142,74 @@
     }
 
     function renderTextParagraphs(value) {
-      const lines = String(value || "")
-        .split(/\n+/)
-        .map((line) => line.trim())
+      const lines = cleanReportText(value)
         .filter(Boolean);
       if (!lines.length) return "<p>暂无内容。</p>";
       return lines.map((line) => {
         const cleaned = line.replace(/^[-*]\s+/, "");
         const prefix = /^[-*]\s+/.test(line) ? "• " : "";
-        return `<p>${prefix}${escapeHtml(cleaned)}</p>`;
+        const field = cleaned.match(/^(问题|目标|结论|影响|证据|取证|查询|注意点|可继续追问|决策含义|团队约束覆盖清单)：\s*(.*)$/);
+        if (field) {
+          return `<p class="report-field"><strong>${escapeHtml(field[1])}：</strong>${renderInlineMarkdown(field[2])}</p>`;
+        }
+        return `<p>${escapeHtml(prefix)}${renderInlineMarkdown(cleaned)}</p>`;
       }).join("");
+    }
+
+    function cleanReportText(value) {
+      const raw = String(value || "");
+      const normalized = raw
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+        .replace(/\/_next\/image\?\S+/g, " ")
+        .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")
+        .replace(/[#*_]{1,3}/g, " ")
+        .replace(/LangChain Assistant|LangChain Reference home page|Ask a question to get started|Enter to send|Shift\+Enter|new line|Menu|Notifications|Notifi/g, " ");
+      return normalized
+        .split(/\n+/)
+        .map((line) => line.replace(/\s+/g, " ").trim())
+        .filter((line) => line && !/\/_next\/|!\[/i.test(line));
+    }
+
+    function safeHref(url) {
+      const text = String(url || "").trim();
+      if (!/^https?:\/\//i.test(text)) return "";
+      return text.replace(/[)\],.;。；，]+$/g, "");
+    }
+
+    function renderInlineMarkdown(value) {
+      const text = String(value || "");
+      const linkPattern = /\[([^\]\n]{1,160})\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:，。；：])/g;
+      let output = "";
+      let lastIndex = 0;
+      for (const match of text.matchAll(linkPattern)) {
+        output += escapeHtml(text.slice(lastIndex, match.index));
+        const markdownLabel = match[1];
+        const markdownUrl = match[2];
+        const bareUrl = match[3];
+        const href = safeHref(markdownUrl || bareUrl);
+        if (href) {
+          const label = markdownLabel || short(href, 64);
+          output += `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">${escapeHtml(label)}</a>`;
+        } else {
+          output += escapeHtml(match[0]);
+        }
+        lastIndex = match.index + match[0].length;
+      }
+      output += escapeHtml(text.slice(lastIndex));
+      return output;
+    }
+
+    function renderSourceEntry(source) {
+      const cleaned = cleanReportText(source).join(" ").trim();
+      const text = cleaned || String(source || "").trim();
+      if (!text) return "来源条目为空";
+      const match = text.match(/^(\[\d+\]\s*)?(.+?)(?:\s+-\s+(https?:\/\/\S+))$/);
+      if (!match) return renderInlineMarkdown(text);
+      const prefix = match[1] || "";
+      const labelText = match[2].trim();
+      const href = safeHref(match[3]);
+      if (!href) return renderInlineMarkdown(text);
+      return `${escapeHtml(prefix)}${escapeHtml(labelText)} <a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">打开来源</a>`;
     }
 
     function formatTime(value) {
@@ -1219,6 +1356,7 @@
         el.jobStatus.className = state.localActivity ? "pill warn" : "pill";
         el.confirmBtn.disabled = true;
         el.exportBtn.disabled = true;
+        el.printPdfBtn.disabled = true;
         return;
       }
       const status = bundle.session.status;
@@ -1240,6 +1378,7 @@
       }
       el.confirmBtn.disabled = status !== "awaiting_confirmation" || !bundle.plan_draft;
       el.exportBtn.disabled = false;
+      el.printPdfBtn.disabled = !(bundle.active_run && bundle.active_run.report);
     }
 
     function renderTimeline(bundle) {
@@ -1448,7 +1587,7 @@
           </div>
           <div class="observation-links">
             ${bundle.session && bundle.session.session_id ? `
-              <a class="compact-link primary-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events" target="_blank" rel="noreferrer">新标签查看会话事件</a>
+              <a class="compact-link primary-link" href="/v1/agent/sessions/${encodeURIComponent(bundle.session.session_id)}/events">查看会话事件</a>
             ` : ""}
             ${run && run.report ? `
               <button class="compact-link primary-link" type="button" data-scroll-report>回到报告</button>
@@ -1653,7 +1792,7 @@
       return `
         <section class="block">
           <h3>记忆管理</h3>
-          <p class="subtle">手动保存的约束、偏好和决策会写入本地记忆。项目记忆会同步进知识库。</p>
+          <p class="subtle">手动保存的约束、偏好和决策会写入本地 SQLite 记忆；项目约束会作为结构化上下文进入计划和评估，不再混进 RAG 语料。</p>
           <div class="memory-form">
             <textarea id="memoryInput" placeholder="保存团队约束、偏好或决策"></textarea>
             <div class="settings">
@@ -1772,6 +1911,9 @@
               <h2>${escapeHtml(report.title || "研究报告")}</h2>
               <span class="pill good">已完成</span>
             </div>
+            <div class="report-actions">
+              <button class="compact-link primary-link" type="button" data-print-report>下载 PDF</button>
+            </div>
             <p class="report-summary">${escapeHtml(report.summary || "报告已生成，请查看下方章节和来源。")}</p>
           </div>
           <div class="metric-grid">
@@ -1806,7 +1948,7 @@
               <summary>来源索引</summary>
               <div class="report-section-body">
                 <ol class="report-sources">
-                  ${sources.slice(0, 20).map((source) => `<li>${escapeHtml(source)}</li>`).join("")}
+                  ${sources.slice(0, 20).map((source) => `<li>${renderSourceEntry(source)}</li>`).join("")}
                 </ol>
               </div>
             </details>
@@ -1943,6 +2085,37 @@
       el.inspector.querySelectorAll("[data-scroll-report]").forEach((button) => {
         button.addEventListener("click", () => scrollToReport());
       });
+    }
+
+    function printReportPdf() {
+      const report = document.getElementById("reportTop");
+      if (!report) {
+        showError("还没有可下载的报告。请先完成一次研究。");
+        return;
+      }
+      const details = Array.from(report.querySelectorAll("details"));
+      const previousOpen = details.map((node) => node.open);
+      details.forEach((node) => { node.open = true; });
+      const oldTitle = document.title;
+      const title = sanitizeFilename(report.querySelector("h2")?.textContent || "research-report");
+      document.title = title || "research-report";
+      const cleanup = () => {
+        details.forEach((node, index) => { node.open = previousOpen[index]; });
+        document.body.classList.remove("printing-report");
+        document.title = oldTitle;
+        window.removeEventListener("afterprint", cleanup);
+      };
+      window.addEventListener("afterprint", cleanup);
+      document.body.classList.add("printing-report");
+      window.setTimeout(() => window.print(), 60);
+    }
+
+    function sanitizeFilename(value) {
+      return String(value || "research-report")
+        .replace(/[\\/:*?"<>|]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120);
     }
 
     function scrollToReport() {
@@ -2316,6 +2489,11 @@
     el.sendBtn.addEventListener("click", sendMessage);
     el.confirmBtn.addEventListener("click", confirmPlan);
     el.exportBtn.addEventListener("click", exportSession);
+    el.printPdfBtn.addEventListener("click", printReportPdf);
+    el.timeline.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-print-report]");
+      if (button) printReportPdf();
+    });
     el.refreshBtn.addEventListener("click", () => state.activeSessionId ? loadBundle(state.activeSessionId) : loadSessions());
     window.addEventListener("beforeunload", () => stopLiveStream(true));
     el.messageInput.addEventListener("keydown", (event) => {
