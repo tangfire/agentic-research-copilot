@@ -104,7 +104,6 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         temperature: float = 0.2,
         embedding_dimensions: int = 256,
         max_tokens: int = 4096,
-        reporter_max_tokens: int = 2048,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -114,7 +113,6 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
         self.temperature = temperature
         self.embedding_dimensions = max(32, embedding_dimensions)
         self.max_tokens = max(512, max_tokens)
-        self.reporter_max_tokens = max(512, reporter_max_tokens)
 
     def clarify_request(
         self,
@@ -405,14 +403,13 @@ class OpenAICompatibleResearchModelProvider(ResearchModelProvider):
                 "Open Deep Research pattern of synthesizing compressed findings into a "
                 "comprehensive citation-backed report. Return valid JSON only that conforms "
                 "to the supplied schema. Keep sections empty unless a short correction is essential. "
-                "Keep the JSON compact "
-                "and finish the object within the output budget. User-facing text should be "
+                "Keep the JSON compact and complete the object in one response. User-facing text should be "
                 "Simplified Chinese unless English is explicitly requested."
             ),
             user_payload=payload,
             schema=ReporterContract.model_json_schema(),
             response_model=ReporterContract,
-            max_tokens=self.reporter_max_tokens,
+            max_tokens=self.max_tokens,
         )
 
     def compress_source(
@@ -792,7 +789,6 @@ def build_model_provider(settings: Any) -> ResearchModelProvider:
         temperature=float(getattr(settings, "model_temperature", 0.2)),
         embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256)),
         max_tokens=int(getattr(settings, "model_max_tokens", 4096)),
-        reporter_max_tokens=int(getattr(settings, "model_reporter_max_tokens", 2048)),
     )
 
 
@@ -812,7 +808,6 @@ def build_embedding_provider(settings: Any, model_provider: ResearchModelProvide
             temperature=float(getattr(settings, "model_temperature", 0.2)),
             embedding_dimensions=int(getattr(settings, "embedding_dimensions", 256)),
             max_tokens=int(getattr(settings, "model_max_tokens", 4096)),
-            reporter_max_tokens=int(getattr(settings, "model_reporter_max_tokens", 2048)),
         )
     if provider_name == "model":
         return model_provider or build_model_provider(settings)

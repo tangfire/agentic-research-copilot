@@ -312,4 +312,4 @@ def test_reporter_compacts_context_before_model_call(monkeypatch):
     assert len(payload["sections"][0]["content"]) == 420
     assert len(payload["sections"][0]["source_summary"]) == 2
     assert len(payload["sections"][0]["citation_titles"]) == 3
-    assert captured["max_tokens"] == provider.reporter_max_tokens
+    assert captured["max_tokens"] == provider.max_tokens

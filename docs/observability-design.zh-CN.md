@@ -162,4 +162,4 @@ Reporter、Planner、Verifier 等模型调用都要求返回 JSON contract。不
 | `content_chars=0` | provider 没有返回可用文本，可能是 relay 或模型响应格式问题 |
 | `choice_count=0` | 响应没有可用 choice，优先检查 provider 兼容层 |
 
-Research Desk 对结构化输出做了有限的 provider-level repair，但产品主路径不依赖兜底：Reporter 会在请求前限制证据和章节草稿规模，并要求模型输出紧凑 JSON。这样首轮请求更有机会在预算内完成；repair 只负责应对偶发的兼容层格式差异，不能替代上下文和输出预算设计。
+Research Desk 对结构化输出做了有限的 provider-level repair，但产品主路径不依赖兜底：Reporter 会在请求前限制证据和章节草稿规模，并要求模型输出紧凑 JSON。这样首轮请求更有机会一次返回完整结构；repair 只负责应对偶发的兼容层格式差异，不能替代上下文和输出设计。

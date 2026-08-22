@@ -582,7 +582,7 @@ team constraints / repo / technical question
 
 2 分钟答法：
 
-> 一个真实例子是 Reporter 曾经因为上下文太大触发 `finish_reason=length`，表现成 `ReporterContract EOF`。我没有只加兜底，而是定位到首轮请求预算问题，把 Reporter 输入压缩到最多 8 条证据和 4 个章节草稿，增加 `finish_reason` 诊断和回归测试，并用真实 provider 验证首轮 `finish_reason=stop`。这比“失败后重试”更能说明工程问题是怎么被定位和修复的。
+> 一个真实例子是 Reporter 曾经因为上下文太大触发 `finish_reason=length`，表现成 `ReporterContract EOF`。我没有只加兜底，而是定位到首轮输入规模和结构化输出问题，把 Reporter 输入压缩到最多 8 条证据和 4 个章节草稿，增加 `finish_reason` 诊断和回归测试，并用真实 provider 验证首轮 `finish_reason=stop`。这比“失败后重试”更能说明工程问题是怎么被定位和修复的。
 
 对应 artifact：`src/agentic_research_copilot/providers.py`、`tests/test_providers.py`
 

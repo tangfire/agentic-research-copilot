@@ -76,7 +76,6 @@ class AppSettings(BaseModel):
     model_timeout_seconds: float = 30.0
     model_temperature: float = 0.2
     model_max_tokens: int = 4096
-    model_reporter_max_tokens: int = 2048
     embedding_provider: Literal["model", "openai_compatible"] = "model"
     embedding_base_url: str = ""
     embedding_api_key: str = ""
@@ -169,7 +168,6 @@ def load_settings() -> AppSettings:
         model_timeout_seconds=float(os.getenv("ARC_MODEL_TIMEOUT_SECONDS", "30")),
         model_temperature=float(os.getenv("ARC_MODEL_TEMPERATURE", "0.2")),
         model_max_tokens=int(os.getenv("ARC_MODEL_MAX_TOKENS", "4096")),
-        model_reporter_max_tokens=int(os.getenv("ARC_MODEL_REPORTER_MAX_TOKENS", "2048")),
         embedding_provider=os.getenv("ARC_EMBEDDING_PROVIDER", "model").lower(),
         embedding_base_url=os.getenv("ARC_EMBEDDING_BASE_URL", "").rstrip("/"),
         embedding_api_key=_first_env("ARC_EMBEDDING_API_KEY", "DASHSCOPE_API_KEY", "QWEN_API_KEY", "OPENAI_API_KEY"),
