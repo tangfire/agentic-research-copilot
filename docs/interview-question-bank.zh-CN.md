@@ -638,8 +638,137 @@ team constraints / repo / technical question
 
 > Agent 结构、Skill、MCP、tool loop、SSE 恢复思路、trace、evaluation、memory/RAG 边界、memory 压缩、ReAct / Plan-and-Execute / Orchestrator-Worker、Centralized MAS 这些都能用项目讲；进程线程协程、索引、语言数据结构、MySQL/Redis 一致性、OTel 细节属于通用基础和扩展设计，需要单独背，不能说项目已经完整实现企业级方案。
 
+### Q53: 面试官说“这是不是玩具项目”，怎么答？
+
+考察点：项目定位是否收束，能不能把 demo 讲成工程闭环。
+
+30 秒答法：
+
+> 我不会把它包装成通用 Agent 平台，也不会说它能替代 Codex。它是一个垂直场景的 Research Agent Harness：面向小团队做开源引入评审，从 workspace/team constraints、skill selection、plan confirmation，到 GitHub/Web/local evidence、三专家 worker、report、trace、evaluation、PDF/export，形成一条可复盘闭环。玩具项目通常只有 prompt 和一次回答，这个项目重点做的是状态、工具边界、可观测性和评测。
+
+2 分钟答法：
+
+> 我判断是不是玩具，会看三点：第一，有没有真实用户场景；第二，有没有从输入到输出的完整闭环；第三，失败后能不能定位和复盘。这个项目的场景是“开源技术采用评审”，不是泛化聊天；闭环包括 session、memory、skill、planner、human confirmation、tool loop、multi-agent workers、writer、verifier、constraint coverage 和 Langfuse trace；失败时可以看本地 event/trace、tool invocation、route decision 和 evaluation。它现在仍然是单用户本地 workbench，但工程骨架对齐的是工业界 agent runtime 关心的问题。
+
+诚实边界：
+
+> 它不是多租户 SaaS，不做桌面控制和代码执行沙箱，也不是 OpenHands/Codex 替代品。我的叙事是：我参考主流 agent harness，把一个研究工作流产品化成了有 session、tool policy、HITL、observability 和 eval 的垂直 research runtime。
+
+对应 artifact：`README.md`、`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/multi_agent_harness.py`、`src/agentic_research_copilot/pipeline.py`、`apps/web/index.html`
+
+### Q54: 和 DeepSeek Harness、pi-agent、OpenHands 这类项目比，你的项目差在哪、强在哪？
+
+考察点：是否知道主流 harness 的价值，不盲目碰瓷。
+
+30 秒答法：
+
+> 这些项目更偏通用 agent harness、工具生态、代码执行或沙箱控制；Research Desk 是垂直 research harness。我的项目不和它们比规模，而是学习它们的工程要素：session、provider abstraction、tool boundary、event/trace、eval、resume/replay，然后收束到开源引入评审这个闭环。
+
+2 分钟答法：
+
+> 通用 harness 的优势是工具生态和任务覆盖面，例如能接更多 tool、支持更复杂的 execution environment。我的项目的优势是场景更清楚：每次运行都围绕 repo/team constraints/adoption memo，能用 route precision、tool success、evidence utilization、constraint coverage 去评估。弱点是没有完整插件市场、没有真正 shell sandbox、没有多用户权限体系。面试时我会说这是有取舍的：为了秋招可讲清，我优先把研究闭环、证据账本和评测做扎实。
+
+回答策略：
+
+> 不要说“我也做了一个 OpenHands”。要说“我参考了它们的 harness 思想，但没有做通用 OS；我做的是一个能解释内部机制的 vertical agent runtime”。
+
+对应 artifact：`docs/research-desk-v3-architecture.zh-CN.md`、`docs/agent-maturity-pack.zh-CN.md`、`docs/observability-design.zh-CN.md`
+
+### Q55: 你的 Agent loop 到底是什么？是 ReAct、Plan-and-Execute，还是 Orchestrator-Worker？
+
+考察点：是否能把范式和项目结构对应起来。
+
+30 秒答法：
+
+> 项目主路径是 Plan-and-Execute + Orchestrator-Worker，不是纯 ReAct。外层是 clarify -> skill preflight -> plan -> human confirm -> research -> report -> verify/eval；内层每个专家 worker 有 bounded tool loop，按 plan item 选择 web/vector/MCP 工具，观察结果后更新 evidence ledger 和 gaps。
+
+2 分钟答法：
+
+> 纯 ReAct 适合开放探索，但容易短视、循环和工具乱用；这个项目的任务是技术采用评审，必须先有可确认计划和成功标准，所以外层采用 Plan-and-Execute。多 Agent 部分是 centralized orchestrator-worker：Planner/Supervisor 负责拆任务和路由，RepoSignalAgent、ArchitectureFitAgent、OpsRiskAgent 分别执行证据收集，Writer 合并，Verifier 检查引用、冲突和约束覆盖。内层工具循环借鉴 ReAct 的 observe/update，但加了预算、工具白名单和 trace。
+
+诚实边界：
+
+> 目前不是 decentralized debate，也不是 AutoGen 式长期多轮群聊。后续如果要增强，可以只在 evidence conflict 或 coverage 低时触发 Cross-Agent Review，而不是默认让 agent 互聊。
+
+对应 artifact：`src/agentic_research_copilot/graph_runtime.py`、`src/agentic_research_copilot/multi_agent_harness.py`、`src/agentic_research_copilot/pipeline.py`
+
+### Q56: Session 在这个项目里不是聊天记录吗？为什么值得讲？
+
+考察点：是否理解 agent state 和普通 chat history 的区别。
+
+30 秒答法：
+
+> Session 不是简单聊天记录，它绑定 workspace、messages、plan draft、active job/run、steps/events、memory、tool invocation、trace/eval 和 export bundle。这样研究任务可以从“对话”变成可追踪的长任务。
+
+2 分钟答法：
+
+> 普通 chat history 只能解释用户说了什么；agent session 还要解释系统现在处于什么阶段、用了哪些工具、哪些证据被采纳、为什么失败、能不能恢复或复盘。项目里 `AgentSession` 有 collecting/planning/awaiting_confirmation/researching/completed/failed 状态，`AgentRunStep` 和 `AgentEvent` 记录执行过程，SQLite 作为本地事实库，SSE/事件页给前端展示实时状态。这个设计对齐 LangGraph/OpenAI Agents SDK 这类框架里的 session/checkpoint/tracing 思想。
+
+对应 artifact：`src/agentic_research_copilot/schemas.py`、`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/server.py`
+
+### Q57: Tool、MCP、Skill、Agent 这几个概念怎么区分？
+
+考察点：概念边界是否清楚。
+
+30 秒答法：
+
+> Tool 是可执行原语，比如 web search、vector retrieval、GitHub MCP 查询；MCP 是把外部工具标准化暴露给 agent 的协议边界；Skill 是场景 playbook，告诉 agent 在某类任务里需要哪些输入、步骤和评价重点；Agent 是带角色、目标、状态和工具权限的执行单元。
+
+2 分钟答法：
+
+> 在项目里，`open_source_adoption_review` skill 先做 preflight，判断 repo、团队约束和成功标准是否足够；Planner 根据 skill 产出计划；三个专家 agent 根据职责执行工具循环；工具 registry 决定 web/vector/MCP 哪些可用、是否需要 token、是否需要审批。这样不会把所有能力都塞进一个 prompt，也不会让模型直接看到 token。
+
+对应 artifact：`skills/open_source_adoption_review/SKILL.md`、`src/agentic_research_copilot/tool_registry.py`、`src/agentic_research_copilot/multi_agent_harness.py`
+
+### Q58: 模型 provider 是怎么设计的？为什么不用某一个模型写死？
+
+考察点：provider abstraction、结构化输出和真实模型稳定性。
+
+30 秒答法：
+
+> 项目通过 provider abstraction 接 OpenAI-compatible API，可以换不同中转站或模型。业务层依赖结构化 contract，不直接依赖某个厂商 SDK；测试里用 fixture，真实 demo 用 real provider。
+
+2 分钟答法：
+
+> Agent runtime 最怕模型响应形态变化导致全链路崩。项目里 planner/reporter/verifier 都有 Pydantic contract，provider 负责请求和 structured output 解析；如果模型返回空、截断或非 JSON，会记录 finish_reason 和错误，而不是静默伪装成功。之前 Reporter EOF 的问题，就是通过缩小首轮输入、控制证据条数、保留 finish_reason 诊断解决的。面试时要强调：fixture 是 CI 稳定性，不是产品证明；真实效果看 real mode 和 demo bundle。
+
+对应 artifact：`src/agentic_research_copilot/providers.py`、`tests/test_providers.py`、`scripts/run_adoption_memo_experiment.py`
+
+### Q59: 怎么证明多 Agent 不是硬凑？
+
+考察点：职责拆分是否带来可测收益。
+
+30 秒答法：
+
+> 我不用“agent 数量”证明价值，而是用责任边界和指标证明。三个专家分别负责 repo signal、architecture fit、ops risk；Planner 不是每次全调度，而是根据任务动态路由；benchmark 看 route precision/recall、expected tool coverage、evidence utilization、constraint coverage。
+
+2 分钟答法：
+
+> 如果一个问题只问单个事实，单 Agent 足够；但开源引入评审同时要看仓库健康、架构适配、部署运维和团队约束。拆成三个 worker 后，证据归属更清楚：RepoSignalAgent 不应该臆测部署风险，OpsRiskAgent 不应该乱讲 license，ArchitectureFitAgent 负责和本地技术栈对齐。Writer 只合并，Verifier 只检查。这样面试官问“某类数据没出现在报告里，是工具没调、调失败，还是没被使用”，我可以从 route decision、tool invocation、evidence ledger 和 final report 追踪。
+
+如果被问能不能退化成单 Agent：
+
+> 可以，项目保留单 Agent baseline。我的答案是：能退化，但会损失责任隔离、证据归属和中间过程评测；所以主模式用三专家，baseline 用来对照。
+
+对应 artifact：`src/agentic_research_copilot/multi_agent_harness.py`、`src/agentic_research_copilot/benchmark.py`、`data/benchmarks/`
+
+### Q60: 这个项目如果继续产品化，下一步补什么？
+
+考察点：是否知道边界和优先级。
+
+30 秒答法：
+
+> 我不会继续堆功能。下一步优先是三件事：第一，扩大真实 provider demo bundle 和 labeled benchmark；第二，把 Langfuse/本地事件/PDF report 的展示继续打磨；第三，把 RAG 作为 MCP server 或可插拔工具边界收束清楚。
+
+2 分钟答法：
+
+> 生产化路线不是做成通用平台，而是加强开源引入评审闭环：更多真实 repo case、稳定的 route precision/recall、工具失败归因、引用质量、constraint coverage、可读 PDF 报告和可回放 demo bundle。安全上会继续坚持 token 在后端、agent 只看 tool schema，不做 destructive shell/file write。多用户、权限、计费、插件市场都不是当前秋招主线。
+
+对应 artifact：`docs/demo-script.zh-CN.md`、`docs/observability-design.zh-CN.md`、`docs/tool-loop-and-hitl.zh-CN.md`
+
 复习顺序：
 
 1. 先背 Q1-Q22，掌握项目主线。
 2. 再背 Q31-Q36，掌握后端协议和 agent 工程。
-3. 最后背 Q37-Q52，补基础题、MAS 范式和平台化追问。
+3. 再背 Q37-Q52，补基础题、MAS 范式和平台化追问。
+4. 面试前重点背 Q53-Q60，这是“防玩具质疑 / 对标主流 harness / 讲清工程闭环”的答辩区。

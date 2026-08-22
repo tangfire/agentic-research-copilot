@@ -282,6 +282,24 @@ Planner 仍然决定研究计划，底层 LangGraph workflow 仍然负责状态�
 
 > specialist 不是额外的聊天机器人，而是研究闭环中的责任分配和证据账本。它们从 plan item 出发，绑定工具和证据，最后把 coverage 和 conflict 交给 Verifier。没有证据就不能因为角色存在而算完成。
 
+## 8.1 面试官质疑“是不是玩具”时的三段式回答
+
+第一段先收束定位：
+
+> 这个项目不是通用 Agent OS，也不是 Codex 替代品，而是面向小型研发团队的开源引入评审 Research Agent Harness。它固定解决一个问题：输入 repo、技术问题和团队约束，输出带证据、trace、evaluation 和 constraint coverage 的技术采用 memo。
+
+第二段讲工程闭环：
+
+> 我实现的重点不是“让模型回答一句话”，而是把研究任务拆成可控制的链路：workspace memory 保存团队约束，skill 做场景 preflight，planner 生成可确认计划，用户确认后进入三专家 worker，工具调用通过 registry/policy 管理，Writer 合并报告，Verifier 检查引用和约束覆盖，最后通过本地事件、Langfuse trace、PDF/export 和 benchmark 复盘。
+
+第三段诚实讲边界：
+
+> 它还是单用户本地 workbench，没有多租户权限、插件市场和代码执行沙箱；这些我不会硬吹。秋招里我会强调它对齐的是工业界 agent runtime 的核心工程问题：session、tool boundary、provider abstraction、HITL、observability、evaluation 和 replay。
+
+如果面试官拿 DeepSeek Harness、pi-agent、OpenHands 这类项目对比，可以这样答：
+
+> 它们更偏通用 harness 或代码执行/工具生态，我的项目不比规模，而是比闭环清晰度。我的取舍是少做通用平台，多做一个垂直场景的完整 runtime：三专家路由、证据账本、团队约束覆盖、真实 provider demo 和可复盘报告。
+
 ## 7. 面试官可能追问的问题
 
 ### Q1：为什么需要 memory？
