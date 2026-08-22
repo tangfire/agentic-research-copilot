@@ -142,7 +142,7 @@ team constraints / repo / technical question
 
 30 秒答法：
 
-> 因为小团队每次都重复讲“我们是几个人、什么栈、怎么部署、不能接受什么风险”很浪费。我把这些抽成 project memory 和 workspace profile，后续 planning 就能自动注入。
+> 因为小团队每次都重复讲“我们是几个人、什么栈、怎么部署、不能接受什么风险”很浪费。我把这些抽成 project memory 和 workspace profile，后续会作为 structured context 自动注入 planning、report 和 constraint coverage，不需要用户每次复制 prompt。
 
 ### Q12: workspace 和 memory 有什么区别？
 
@@ -159,6 +159,24 @@ team constraints / repo / technical question
 30 秒答法：
 
 > 因为只存 memory 不代表存对了。我需要知道候选里哪些被接受、哪些被拒绝、为什么拒绝，这样才能评估 memory precision 和 recall proxy。
+
+### Q13-补充: project memory 为什么不进 RAG 向量库？
+
+考察点：是否能解释 memory / workspace / RAG 的边界，避免硬凑技术。
+
+30 秒答法：
+
+> 团队约束不是证据文档，而是控制面事实，所以不应该每轮都塞进 DocumentStore 做向量化。现在项目里 project memory 走 structured memory 注入，直接进入 planning、report 和 constraint coverage；RAG 只负责 README、架构文档、论文、上传文件这些需要语义检索的 evidence corpus。
+
+2 分钟答法：
+
+> 我最开始确实尝试过把 project memory 同步进 DocumentStore，但后来发现这会让边界变混：团队规模、部署限制、回滚要求本质上是权威约束，不是需要召回排序的材料。更合理的设计是分层：workspace/profile 保存显式团队配置，SQLite memory 保存从会话里抽取的长期约束，DocumentStore 只处理可检索文档。这样可以减少重复向量化，也能在面试里解释清楚：RAG 负责证据检索，memory 负责约束控制，constraint coverage 负责检查报告有没有落实这些约束。
+
+诚实边界：
+
+> 如果后续要支持“团队规范手册”“内部 ADR 文档”这类长文档，它们应该作为 document ingest 进入 RAG；但一句“5 人 Python/FastAPI，单机 Docker Compose，必须可回滚”不需要走向量库。
+
+对应 artifact：`src/agentic_research_copilot/agent.py`、`src/agentic_research_copilot/pipeline.py`、`docs/memory-and-constraint-eval.zh-CN.md`
 
 ## 5. 可观测性与回放
 
@@ -618,7 +636,7 @@ team constraints / repo / technical question
 
 30 秒答法：
 
-> Agent 结构、Skill、MCP、tool loop、SSE 恢复思路、trace、evaluation、memory 压缩、ReAct / Plan-and-Execute / Orchestrator-Worker、Centralized MAS 这些都能用项目讲；进程线程协程、索引、语言数据结构、MySQL/Redis 一致性、OTel 细节属于通用基础和扩展设计，需要单独背，不能说项目已经完整实现企业级方案。
+> Agent 结构、Skill、MCP、tool loop、SSE 恢复思路、trace、evaluation、memory/RAG 边界、memory 压缩、ReAct / Plan-and-Execute / Orchestrator-Worker、Centralized MAS 这些都能用项目讲；进程线程协程、索引、语言数据结构、MySQL/Redis 一致性、OTel 细节属于通用基础和扩展设计，需要单独背，不能说项目已经完整实现企业级方案。
 
 复习顺序：
 

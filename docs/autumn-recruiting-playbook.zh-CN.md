@@ -148,7 +148,7 @@ Memory 分三层：
 
 可以讲：
 
-> 我借鉴 Mem0 的 memory 分层，但没有直接依赖 Mem0。因为这个项目是学习和面试项目，我更想自己实现一版最小闭环，能讲清楚 memory 是怎么进入 planning 和 retrieval 的。
+> 我借鉴 Mem0 的 memory 分层，但没有直接依赖 Mem0。因为这个项目是学习和面试项目，我更想自己实现一版最小闭环，能讲清楚 memory 是怎么进入 planning、report 和 constraint coverage 的；真正需要语义检索的本地资料才进入 DocumentStore。
 
 ### 4.4 Tool Loop 和 Tool Policy
 
@@ -288,7 +288,7 @@ Planner 仍然决定研究计划，底层 LangGraph workflow 仍然负责状态�
 
 答：
 
-> 技术决策不是孤立问题。比如同一个库，对大公司和 5 人小团队的结论可能不一样。memory 让团队约束稳定进入 planning 和 retrieval，而不是靠用户每次手写 prompt。
+> 技术决策不是孤立问题。比如同一个库，对大公司和 5 人小团队的结论可能不一样。memory 让团队约束稳定进入 planning、report 和 constraint coverage，而不是靠用户每次手写 prompt；真正需要语义检索的本地资料才进入 DocumentStore。
 
 ### Q2：为什么需要图结构？
 
